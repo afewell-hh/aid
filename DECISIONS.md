@@ -40,6 +40,25 @@ highest-value on pure-function, zero-I/O code — exactly what the topology kern
 
 If the spike fails any criterion: fall back to pure Go or Rust for the kernel.
 
+**Spike outcome (resolved 2026-06-07 — issue #5 / PR #19): PASS. MoonBit is confirmed
+for the kernel.** Evidence in `spikes/moonbit-port-proof/README.md`, independently
+reviewed (issue #20). Gate-by-gate:
+- ✅ `moon prove` verified the port-non-overlap invariant in **~0.6s** (< 30s). A
+  negative control confirmed the solver genuinely rejects a false claim (not a no-op).
+- ✅ MoonBit-produced WASM callable from Go via `wasmtime-go`: cold-start **~2ms**
+  (< 500ms), per-call **~7.6µs** (< 10ms). Validated via the **core-wasm** path; the
+  full Component-Model boundary (canonical-ABI marshalling of the richer `aid:core`
+  types) is deferred to Phase 3.
+- ⚠️ MoonBit 1.0 stdlib compatibility is **unverifiable until 1.0 ships**; the spike
+  used only `Int` arithmetic + the proof DSL (low churn risk). Re-verify at 1.0.
+- ✅ Proof syntax documented for another agent (maintenance guide in the spike README).
+
+**Material consequence:** `moon prove` requires **Why3 1.7.2 + an SMT solver (Z3)**,
+which are not bundled with the MoonBit toolchain. They are now provisioned and
+documented in `DEVELOPMENT.md`; folding them into CI/setup and adding a `moon prove`
+stdout-parsing gate (its exit code is unreliable) is tracked in **#21**, a
+**prerequisite for Phase 8** (#7).
+
 ---
 
 ## D3: Rust for wiring YAML export and NetBox REST adapter
