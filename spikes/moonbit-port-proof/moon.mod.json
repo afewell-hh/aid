@@ -1,0 +1,6 @@
+{
+  "name": "aid/spike/port-proof",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "Feasibility spike: MoonBit port-allocation proof + Go/wasmtime runtime (AID issue #5)"
+}

@@ -1,0 +1,9 @@
+{
+  "proof-enabled": true,
+  "link": {
+    "wasm": {
+      "exports": ["allocate", "non_overlap_holds"],
+      "export-memory-name": "memory"
+    }
+  }
+}
