@@ -1,0 +1,475 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aid.opencompute.org/schema/topology-plan-v1.json",
+  "title": "AID Topology Plan v1",
+  "description": "Canonical, user-authored topology plan for the AI Infrastructure Designer (AID). A plan declares a hardware catalog (recursive DeviceClass templates), one or more switching fabrics, and the plan entries (groups of devices with quantity, role, and wiring intent) that AID consumes to calculate switch counts, derive bills of materials, validate topology constraints, and export wiring artifacts. Authored as YAML; validated as JSON against this schema. Property names use snake_case; the equivalent WIT contract (package aid:core@0.1.0) uses kebab-case for the same fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "customer_name", "status", "device_catalog", "fabric_domains", "entries"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable plan identifier (kebab-case). Unique across an AID deployment. Maps to topology-plan.id in WIT.",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable plan name. Maps to topology-plan.name.",
+      "minLength": 1
+    },
+    "customer_name": {
+      "type": "string",
+      "description": "Name of the customer or project this plan is designed for. Maps to topology-plan.customer-name.",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "description": "Lifecycle status of the plan. Maps to topology-plan.status (plan-status enum).",
+      "enum": ["draft", "review", "approved", "exported"]
+    },
+    "device_catalog": {
+      "type": "array",
+      "description": "Normalized hardware catalog. Every DeviceClass referenced anywhere in the plan (by device_class_id) must appear here exactly once. Maps to topology-plan.device-catalog.",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/device_class" }
+    },
+    "fabric_domains": {
+      "type": "array",
+      "description": "Independently-wired switching fabrics in this plan. Maps to topology-plan.fabric-domains.",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/fabric_domain" }
+    },
+    "entries": {
+      "type": "array",
+      "description": "Plan entries: groups of identical devices with plan-specific quantity, role, and wiring intent. Maps to topology-plan.entries.",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/plan_entry" }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "description": "A stable, kebab-case identifier reference.",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "minLength": 1
+    },
+    "attribute": {
+      "type": "object",
+      "description": "An arbitrary vendor-specific key/value attribute. A list of these is used instead of a map (WIT has no native map type). Maps to types.attribute.",
+      "additionalProperties": false,
+      "required": ["key", "value"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Attribute name (interpret by key convention).",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "description": "Attribute value, always a string; interpret by key convention."
+        }
+      }
+    },
+    "port_spec": {
+      "type": "object",
+      "description": "A network port on a device (NIC port or switch port). Maps to types.port-spec.",
+      "additionalProperties": false,
+      "required": ["port_id", "speed_gbps", "cage_type", "medium"],
+      "properties": {
+        "port_id": {
+          "type": "string",
+          "description": "Identifier of this port within its device, e.g. \"p0\".",
+          "minLength": 1
+        },
+        "speed_gbps": {
+          "type": "integer",
+          "description": "Native port speed in gigabits per second. Must be a positive integer.",
+          "minimum": 1
+        },
+        "cage_type": {
+          "type": "string",
+          "description": "Physical cage/connector type. Maps to types.cage-type.",
+          "enum": ["osfp", "qsfp112", "qsfp28", "sfp28", "rj45"]
+        },
+        "medium": {
+          "type": "string",
+          "description": "Physical transmission medium. Maps to types.medium.",
+          "enum": ["optical", "dac", "aoc", "copper"]
+        }
+      }
+    },
+    "sub_component": {
+      "type": "object",
+      "description": "A child DeviceClass entry on a parent DeviceClass, referenced by id (not embedded) to keep the catalog normalized and acyclic. Maps to types.sub-component.",
+      "additionalProperties": false,
+      "required": ["slot_id", "device_class_id", "quantity_per_parent"],
+      "properties": {
+        "slot_id": {
+          "type": "string",
+          "description": "Slot identifier, unique within the parent DeviceClass, e.g. \"nic-fe\", \"gpu\", \"xcvr\".",
+          "minLength": 1
+        },
+        "device_class_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Id of the child DeviceClass in device_catalog. Existence in the catalog is checked by AID semantic validation, not this schema."
+        },
+        "quantity_per_parent": {
+          "type": "integer",
+          "description": "How many of this child DeviceClass are present per single parent unit. Must be a positive integer; zero or fractional counts are a modeling error.",
+          "minimum": 1
+        }
+      }
+    },
+    "device_class": {
+      "type": "object",
+      "description": "A reusable hardware template. Any component (server, switch, NIC, transceiver, GPU board, PDU) is a DeviceClass. Recursive composition is expressed through sub_components, which reference other catalog entries by id. Maps to types.device-class.",
+      "additionalProperties": false,
+      "required": ["id", "name", "slug", "category"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Stable DeviceClass identifier, unique within the catalog. Maps to device-class.id."
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable device name, e.g. \"AS-4126GS GPU Server\".",
+          "minLength": 1
+        },
+        "slug": {
+          "$ref": "#/$defs/identifier",
+          "description": "Kebab-case unique slug for the DeviceClass. Maps to device-class.slug."
+        },
+        "category": {
+          "type": "string",
+          "description": "User-defined category, e.g. \"compute\", \"network\", \"nic\", \"transceiver\". Free-form; not an enum.",
+          "minLength": 1
+        },
+        "manufacturer": {
+          "type": "string",
+          "description": "Optional manufacturer name.",
+          "minLength": 1
+        },
+        "part_number": {
+          "type": "string",
+          "description": "Optional vendor part number.",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional free-text description of the device."
+        },
+        "attributes": {
+          "type": "array",
+          "description": "Arbitrary key/value attributes (vendor-specific specs). Defaults to empty.",
+          "items": { "$ref": "#/$defs/attribute" }
+        },
+        "ports": {
+          "type": "array",
+          "description": "Network ports on this device (for NICs and switches). Defaults to empty.",
+          "items": { "$ref": "#/$defs/port_spec" }
+        },
+        "sub_components": {
+          "type": "array",
+          "description": "Child DeviceClass instances composing this device, with per-parent quantities. BOM derivation walks this tree recursively. Defaults to empty.",
+          "items": { "$ref": "#/$defs/sub_component" }
+        }
+      }
+    },
+    "fabric_domain": {
+      "type": "object",
+      "description": "A named, independently-wired switching fabric. References its switch plan entries by id rather than embedding them. Maps to types.fabric-domain.",
+      "additionalProperties": false,
+      "required": ["fabric_id", "fabric_name", "fabric_class", "topology_mode", "switch_entry_ids"],
+      "properties": {
+        "fabric_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Stable fabric identifier, unique within the plan."
+        },
+        "fabric_name": {
+          "type": "string",
+          "description": "Human-readable fabric name, e.g. \"frontend\", \"backend\".",
+          "minLength": 1
+        },
+        "fabric_class": {
+          "type": "string",
+          "description": "Whether the fabric is centrally managed by the Hedgehog control plane or unmanaged. Maps to types.fabric-class.",
+          "enum": ["managed", "unmanaged"]
+        },
+        "topology_mode": {
+          "type": "string",
+          "description": "Topology family of this fabric. Maps to types.topology-mode.",
+          "enum": ["clos", "mesh"]
+        },
+        "switch_entry_ids": {
+          "type": "array",
+          "description": "Ids of the switch-role plan entries that belong to this fabric. For mesh fabrics this list must contain exactly 2 or 3 entries (each switch is its own entry); see ALGORITHMS.md Algorithm 5. That switch-role membership and entry existence are checked by AID semantic validation.",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "allow_oversubscription": {
+          "type": "boolean",
+          "description": "When true, suppresses the oversubscription warning for this fabric (DECISIONS.md D11). Oversubscription is never a blocking error. Defaults to false."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "topology_mode": { "const": "mesh" } },
+            "required": ["topology_mode"]
+          },
+          "then": {
+            "properties": {
+              "switch_entry_ids": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 3
+              }
+            }
+          }
+        }
+      ]
+    },
+    "breakout_option": {
+      "type": "object",
+      "description": "A breakout option for a switch port zone, e.g. one physical 400G port broken out into four logical 100G ports. Maps to types.breakout-option.",
+      "additionalProperties": false,
+      "required": ["logical_ports", "logical_speed_gbps"],
+      "properties": {
+        "logical_ports": {
+          "type": "integer",
+          "description": "Number of logical ports produced from each physical port. Must be a positive integer.",
+          "minimum": 1
+        },
+        "logical_speed_gbps": {
+          "type": "integer",
+          "description": "Speed of each logical port in gigabits per second. Must be a positive integer.",
+          "minimum": 1
+        }
+      }
+    },
+    "switch_port_zone": {
+      "type": "object",
+      "description": "A named port-allocation region on a switch plan entry. Maps to types.switch-port-zone.",
+      "additionalProperties": false,
+      "required": ["zone_id", "zone_name", "zone_type", "port_range", "priority", "allocation"],
+      "properties": {
+        "zone_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Stable zone identifier, unique within the plan."
+        },
+        "zone_name": {
+          "type": "string",
+          "description": "Human-readable zone name, e.g. \"server-access\", \"spine-uplink\".",
+          "minLength": 1
+        },
+        "zone_type": {
+          "type": "string",
+          "description": "Role of this zone. Maps to types.zone-type.",
+          "enum": ["server", "uplink", "mesh", "peer", "session", "oob"]
+        },
+        "port_range": {
+          "type": "string",
+          "description": "Physical port range expression. Supports a single port (\"5\"), a contiguous range (\"1-48\"), and a stepped/breakout range (\"1-32:2\"). The step suffix after ':' denotes breakout grouping; full breakout math is applied by AID.",
+          "pattern": "^[0-9]+(-[0-9]+)?(:[0-9]+)?$"
+        },
+        "breakout": {
+          "$ref": "#/$defs/breakout_option",
+          "description": "Optional breakout option applied to ports in this zone."
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Allocation priority; lower numbers are allocated first. Zero is allowed (highest priority).",
+          "minimum": 0
+        },
+        "allocation": {
+          "type": "string",
+          "description": "Strategy for ordering port allocation within the zone. Maps to types.allocation-strategy.",
+          "enum": ["sequential", "interleaved", "spaced"]
+        },
+        "transceiver_intent_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Optional id of a transceiver DeviceClass expected in this zone. Catalog existence is checked by AID semantic validation."
+        },
+        "peer_zone_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Optional id of a target/peer zone (for uplink-type zones). Existence and pairing are checked by AID semantic validation."
+        }
+      }
+    },
+    "plan_connection": {
+      "type": "object",
+      "description": "A connection from a specific NIC sub-component port to a switch port zone. Owned by a server plan entry. Maps to types.plan-connection.",
+      "additionalProperties": false,
+      "required": ["connection_id", "nic_slot_id", "port_index", "ports_per_connection", "connection_type", "distribution", "target_zone_id", "speed_gbps", "port_type"],
+      "properties": {
+        "connection_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Stable connection identifier, unique within the entry."
+        },
+        "nic_slot_id": {
+          "type": "string",
+          "description": "References a sub_component.slot_id on the entry's DeviceClass, identifying which NIC this connection uses. Existence is checked by AID semantic validation.",
+          "minLength": 1
+        },
+        "port_index": {
+          "type": "integer",
+          "description": "Zero-based port index on the referenced NIC's ports list. Zero is valid (first port).",
+          "minimum": 0
+        },
+        "ports_per_connection": {
+          "type": "integer",
+          "description": "Number of physical ports consumed by this connection, e.g. 1 for unbundled, 2 for a LAG. Must be a positive integer.",
+          "minimum": 1
+        },
+        "connection_type": {
+          "type": "string",
+          "description": "How the connection is bundled/redundant. Maps to types.connection-type.",
+          "enum": ["unbundled", "bundled", "mclag", "eslag"]
+        },
+        "distribution": {
+          "type": "string",
+          "description": "How the connection is distributed across switch instances. Maps to types.distribution.",
+          "enum": ["same-switch", "alternating", "rail-optimized"]
+        },
+        "target_zone_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Id of the switch_port_zone this connection targets. Existence is checked by AID semantic validation."
+        },
+        "speed_gbps": {
+          "type": "integer",
+          "description": "Connection speed in gigabits per second. Must be a positive integer.",
+          "minimum": 1
+        },
+        "rail": {
+          "type": "integer",
+          "description": "Optional zero-based GPU rail index, used only with rail-optimized distribution.",
+          "minimum": 0
+        },
+        "port_type": {
+          "type": "string",
+          "description": "Logical port purpose. Maps to types.port-type.",
+          "enum": ["data", "ipmi", "pxe"]
+        },
+        "transceiver_intent_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Optional id of the transceiver DeviceClass expected on this port. Catalog existence is checked by AID semantic validation."
+        }
+      }
+    },
+    "redundancy": {
+      "type": "object",
+      "description": "Optional redundancy configuration for a switch plan entry. Maps to the types.redundancy variant (none | mclag | eslag).",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Redundancy scheme. \"none\" needs no switch_count; \"mclag\" requires an even switch_count >= 2; \"eslag\" requires a switch_count from 2 to 4.",
+          "enum": ["none", "mclag", "eslag"]
+        },
+        "switch_count": {
+          "type": "integer",
+          "description": "Number of switches participating in the redundancy group. Constraints depend on type (see below).",
+          "minimum": 2
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "type": { "const": "mclag" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["switch_count"],
+            "properties": {
+              "switch_count": {
+                "type": "integer",
+                "minimum": 2,
+                "multipleOf": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "type": { "const": "eslag" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["switch_count"],
+            "properties": {
+              "switch_count": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "plan_entry": {
+      "type": "object",
+      "description": "A group of identical devices in the plan. Plan-specific concerns (quantity, role, wiring intent) live here; the hardware template lives in the catalog and is referenced by device_class_id. Field applicability depends on role: switch roles use fabric_id, override_quantity, topology_mode, redundancy, port_zones; the server role uses connections. Role-based field applicability is enforced by AID semantic validation, not this schema. Maps to types.plan-entry.",
+      "additionalProperties": false,
+      "required": ["entry_id", "device_class_id", "quantity", "role"],
+      "properties": {
+        "entry_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Stable entry identifier, unique within the plan."
+        },
+        "device_class_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Id of the DeviceClass in device_catalog this entry instantiates. Existence is checked by AID semantic validation."
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "How many instances of the DeviceClass are in this entry. For switch entries this may be superseded by override_quantity or a calculated value. Must be a positive integer.",
+          "minimum": 1
+        },
+        "role": {
+          "type": "string",
+          "description": "Role of the devices in this entry. Maps to types.plan-role.",
+          "enum": ["server", "spine", "server-leaf", "border-leaf", "oob-leaf", "hhg"]
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional label override used by naming templates, e.g. \"gpu-servers\".",
+          "minLength": 1
+        },
+        "fabric_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Switch-specific: id of the fabric this switch entry belongs to. Existence is checked by AID semantic validation."
+        },
+        "override_quantity": {
+          "type": "integer",
+          "description": "Switch-specific: explicit switch count that overrides the calculated quantity. Must be a positive integer.",
+          "minimum": 1
+        },
+        "topology_mode": {
+          "type": "string",
+          "description": "Switch-specific: topology mode for this switch entry. Maps to types.topology-mode.",
+          "enum": ["clos", "mesh"]
+        },
+        "redundancy": {
+          "$ref": "#/$defs/redundancy",
+          "description": "Switch-specific: optional redundancy configuration (MCLAG/ESLAG)."
+        },
+        "port_zones": {
+          "type": "array",
+          "description": "Switch-specific: named port-allocation zones on this switch entry. Defaults to empty.",
+          "items": { "$ref": "#/$defs/switch_port_zone" }
+        },
+        "connections": {
+          "type": "array",
+          "description": "Server-specific: connection intent from this server's NIC ports to switch port zones. Defaults to empty.",
+          "items": { "$ref": "#/$defs/plan_connection" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "fixture": "mclag-odd-count",
+  "expected_valid": false,
+  "reason": "MCLAG redundancy requires an even switch_count of at least 2; this entry sets switch_count to 3 (odd). See DOMAIN_MODEL.md FabricDomain invariants (MCLAG switch count is even and >= 2).",
+  "schema_path_or_keyword": "multipleOf",
+  "expected_validator_error": {
+    "instancePath": "/entries/0/redundancy/switch_count",
+    "schemaPath": "#/$defs/redundancy/allOf/0/then/properties/switch_count/multipleOf",
+    "keyword": "multipleOf",
+    "params": { "multipleOf": 2 },
+    "message": "must be multiple of 2"
+  }
+}

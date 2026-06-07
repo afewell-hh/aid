@@ -1,0 +1,60 @@
+# Valid fixture: non-server recursive BOM.
+# A switch DeviceClass carries transceiver sub-components, exercising the
+# recursive BOM traversal on a non-server device to guard against
+# server-first modeling. No connections are defined; this fixture targets
+# the BOM path, not wiring. Expected counts in ../switch-bom/expected.json.
+id: switch-bom
+name: Switch BOM Reference
+customer_name: Reference Lab
+status: draft
+
+device_catalog:
+  - id: leaf-switch-800g
+    name: Reference 64-port 800G Leaf Switch
+    slug: leaf-switch-800g
+    category: network
+    manufacturer: Reference
+    part_number: REF-SW-800
+    attributes:
+      - key: rack_units
+        value: "2"
+    ports:
+      - port_id: e1
+        speed_gbps: 800
+        cage_type: osfp
+        medium: optical
+    sub_components:
+      - slot_id: xcvr
+        device_class_id: osfp-800g-xcvr
+        quantity_per_parent: 64
+
+  - id: osfp-800g-xcvr
+    name: OSFP 800G Transceiver
+    slug: osfp-800g-xcvr
+    category: transceiver
+    manufacturer: Reference
+    part_number: REF-XCVR-800
+
+fabric_domains:
+  - fabric_id: bom-fabric
+    fabric_name: bom-fabric
+    fabric_class: managed
+    topology_mode: clos
+    switch_entry_ids:
+      - leaf-switches
+
+entries:
+  - entry_id: leaf-switches
+    device_class_id: leaf-switch-800g
+    quantity: 2
+    role: server-leaf
+    fabric_id: bom-fabric
+    override_quantity: 2
+    topology_mode: clos
+    port_zones:
+      - zone_id: leaf-server
+        zone_name: server-access
+        zone_type: server
+        port_range: "1-64"
+        priority: 0
+        allocation: sequential

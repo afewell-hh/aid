@@ -1,0 +1,51 @@
+# Invalid fixture: a mesh fabric with FOUR switch entries.
+# A mesh fabric must list exactly 2 or 3 switch entries (ALGORITHMS.md
+# Algorithm 5; schema enforces it via an if/then maxItems on switch_entry_ids).
+# This plan is otherwise schema-valid; the sole violation is the mesh size.
+id: mesh-four-switch
+name: Invalid Four-Switch Mesh
+customer_name: Reference Lab
+status: draft
+
+device_catalog:
+  - id: mesh-switch
+    name: Reference Mesh Switch
+    slug: mesh-switch
+    category: network
+
+fabric_domains:
+  - fabric_id: converged
+    fabric_name: converged
+    fabric_class: managed
+    topology_mode: mesh
+    switch_entry_ids:
+      - mesh-switch-a
+      - mesh-switch-b
+      - mesh-switch-c
+      - mesh-switch-d
+
+entries:
+  - entry_id: mesh-switch-a
+    device_class_id: mesh-switch
+    quantity: 1
+    role: server-leaf
+    fabric_id: converged
+    topology_mode: mesh
+  - entry_id: mesh-switch-b
+    device_class_id: mesh-switch
+    quantity: 1
+    role: server-leaf
+    fabric_id: converged
+    topology_mode: mesh
+  - entry_id: mesh-switch-c
+    device_class_id: mesh-switch
+    quantity: 1
+    role: server-leaf
+    fabric_id: converged
+    topology_mode: mesh
+  - entry_id: mesh-switch-d
+    device_class_id: mesh-switch
+    quantity: 1
+    role: server-leaf
+    fabric_id: converged
+    topology_mode: mesh

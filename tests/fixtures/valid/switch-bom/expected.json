@@ -1,0 +1,32 @@
+{
+  "fixture": "switch-bom",
+  "expected_valid": true,
+  "device_count": 2,
+  "cable_count": 0,
+  "per_fabric_switch_counts": {
+    "bom-fabric": {
+      "server-leaf": 2,
+      "total": 2
+    }
+  },
+  "bom_totals": {
+    "leaf-switches": {
+      "plan_quantity": 2,
+      "per_unit": {
+        "leaf-switch-800g": 1,
+        "osfp-800g-xcvr": 64
+      },
+      "fleet": {
+        "leaf-switch-800g": 2,
+        "osfp-800g-xcvr": 128
+      }
+    }
+  },
+  "calculation_notes": [
+    "Baselines are hand-derived from ALGORITHMS.md; no generated tooling was used.",
+    "This fixture has no server entries and no connections; it exists to prove recursive BOM works on a non-server DeviceClass (a switch with transceiver sub-components).",
+    "Device count = switch instances only = override_quantity(2) = 2. per_fabric_switch_counts.bom-fabric.server-leaf = 2.",
+    "Cable count = 0: no connections, no spine entries, so no cables are derived. Wiring is intentionally out of scope for this BOM-focused fixture.",
+    "BOM (Algorithm 6, recursive DeviceClass traversal on a non-server root): leaf-switch-800g per unit = the switch itself x1 plus osfp-800g-xcvr x64 (one transceiver sub-component slot at quantity_per_parent 64). Fleet = per_unit x plan_quantity(2): osfp-800g-xcvr 64 x 2 = 128."
+  ]
+}
