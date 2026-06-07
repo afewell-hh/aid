@@ -251,3 +251,46 @@ Bootstrap 5 is what NetBox itself uses, so replicating its look is straightforwa
 with the same framework. Users familiar with NetBox will find AID's UI immediately
 recognizable. Bootstrap 5 is mature, well-documented, and requires zero build tooling
 for basic use (single CSS + JS bundle).
+
+---
+
+## D16: Kernel WASM boundary uses JSON-over-linear-memory for the MVP; WIT/Component-Model is the end-state
+
+**Decision:** Kernel-side WASM components realize their WIT interface across the wasm
+boundary as **UTF-8 JSON over linear memory** for the MVP (Phases 3–6). The
+`topology-calculator` component exports `alloc`/`dealloc` plus
+`calculate(ptr,len) -> (ptr,len)` and `validate(ptr,len) -> (ptr,len)`, where the payload
+is JSON of `topology-plan` in and JSON of `result<calc-output, calc-error>` out. The WIT
+interface in `wit/` remains the **contract of record and the type source of truth**; the
+full WASM Component Model **canonical ABI is the documented end-state**, to migrate to once
+tooling matures (targeted during/after Phase 6).
+
+**Rationale:**
+- D8 mandates that every boundary is *expressed as a WIT interface*; it does not mandate a
+  specific wire encoding. JSON-over-memory and the canonical ABI are two realizations of the
+  same WIT contract.
+- The Phase 7 spike (D2 outcome, issue #5) documented that the full Component-Model path was
+  never exercised and hit real tooling friction: MoonBit emits core wasm;
+  `wasm-tools component embed` rejects the `wasm-gc` target; `wasmtime-go`'s component API is
+  newer/unproven. Front-loading canonical-ABI marshalling of deeply nested
+  records/lists/variants/options onto the critical-path kernel phase is the wrong risk.
+- JSON-over-memory is simple, debuggable, language-agnostic, reversible, and unblocks Phase 6
+  (Go hosting) without waiting on Component-Model maturity.
+
+**Consequences:**
+- This is an explicit, recorded **deviation from a strict (canonical-ABI) reading of D8**.
+  D8 still holds as the boundary-contract principle; D16 records the MVP wire encoding.
+- The wasm export signatures (`calculate(ptr,len) -> (ptr,len)`) are **not** the WIT-canonical
+  signatures: the component implements a JSON proxy of the WIT interface, not its canonical
+  ABI. The WIT remains the logical contract and the type source.
+- Boundary compile-time type-safety is traded for simplicity — mitigated by validating input
+  JSON against `schema/topology-plan-v1.json` at the ingress/test layer and returning
+  `calc-error::invalid-plan` on malformed input. The **pure kernel takes typed input only**;
+  wire (de)serialization lives at the boundary edge.
+- Field naming: input JSON follows the **user-facing plan schema** (`schema/topology-plan-v1.json`,
+  `snake_case`), which is what plan YAML/JSON uses; the WIT (`kebab-case`) defines the logical
+  type shapes that `kernel/src/types.mbt` mirrors (see the Phase 3 type-sourcing decision).
+- Migration path: when Component-Model tooling matures (post-Phase-6), replace only the thin
+  (de)serialization edge with `wit-bindgen`-generated canonical ABI. The WIT contract and the
+  kernel's internal typed functions are unchanged.
+- Approved as the Phase 3 architecture sign-off (issue #6, kernel architecture note).
