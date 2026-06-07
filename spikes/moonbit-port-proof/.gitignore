@@ -1,0 +1,6 @@
+# MoonBit build / proof outputs (regenerate with build.sh, moon test, moon prove)
+_build/
+target/
+
+# Go test binaries
+*.test
