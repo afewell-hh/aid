@@ -1,0 +1,13 @@
+{
+  "fixture": "mesh-four-switch",
+  "expected_valid": false,
+  "reason": "A mesh fabric must list exactly 2 or 3 switch entries; this fabric lists 4. See ALGORITHMS.md Algorithm 5 (mesh switch count must be 2 or 3).",
+  "schema_path_or_keyword": "maxItems",
+  "expected_validator_error": {
+    "instancePath": "/fabric_domains/0/switch_entry_ids",
+    "schemaPath": "#/allOf/0/then/properties/switch_entry_ids/maxItems",
+    "keyword": "maxItems",
+    "params": { "limit": 3 },
+    "message": "must NOT have more than 3 items"
+  }
+}

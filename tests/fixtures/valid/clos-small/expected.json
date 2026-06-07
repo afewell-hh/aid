@@ -1,0 +1,58 @@
+{
+  "fixture": "clos-small",
+  "expected_valid": true,
+  "device_count": 7,
+  "cable_count": 24,
+  "per_fabric_switch_counts": {
+    "frontend": {
+      "server-leaf": 2,
+      "spine": 1,
+      "total": 3
+    }
+  },
+  "bom_totals": {
+    "gpu-servers": {
+      "plan_quantity": 4,
+      "per_unit": {
+        "server-chassis": 1,
+        "h100-gpu": 8,
+        "connectx-7-nic": 2,
+        "osfp-400g-xcvr": 2
+      },
+      "fleet": {
+        "server-chassis": 4,
+        "h100-gpu": 32,
+        "connectx-7-nic": 8,
+        "osfp-400g-xcvr": 8
+      }
+    },
+    "server-leafs": {
+      "plan_quantity": 2,
+      "per_unit": {
+        "leaf-switch": 1
+      },
+      "fleet": {
+        "leaf-switch": 2
+      }
+    },
+    "spines": {
+      "plan_quantity": 1,
+      "per_unit": {
+        "spine-switch": 1
+      },
+      "fleet": {
+        "spine-switch": 1
+      }
+    }
+  },
+  "calculation_notes": [
+    "Baselines are hand-derived from ALGORITHMS.md; no generated tooling was used.",
+    "Device count = servers + leaves + spines = 4 + 2 + 1 = 7.",
+    "Leaf count (Algorithm 1): demand = server_count(4) x ports_per_connection across the two server connections = 4 servers x 2 ports = 8 logical ports into the leaf-server zone (port_range 1-48, no breakout, capacity 48, uplink_reservation 0). ceil(8 / 48) = 1, raised to 2 by the 'alternating distribution => leaf_count >= 2' constraint. override_quantity: 2 in plan.yaml matches this derivation.",
+    "Spine count (Algorithm 2): total_leaf_uplink_demand = leaf_count(2) x uplinks_per_leaf(8, from leaf-uplink zone 49-56) = 16. spine_fabric_port_capacity = 32 (spine-fabric zone 1-32). ceil(16 / 32) = 1. override_quantity: 1 in plan.yaml matches this derivation.",
+    "Server-to-leaf cables: each of 4 servers has 2 unbundled single-port data connections = 8 cables.",
+    "Leaf-to-spine cables: total leaf uplink ports = leaf_count(2) x uplinks_per_leaf(8) = 16 cables, all landing on the single spine (16 <= 32 spine ports).",
+    "Cable count total = 8 server-to-leaf + 16 leaf-to-spine = 24.",
+    "BOM (Algorithm 6, recursive DeviceClass traversal): gpu-server per unit = chassis x1, h100-gpu x8, connectx-7-nic x2, and osfp-400g-xcvr x2 (2 NICs x 1 transceiver each, recursed). Fleet = per_unit x plan_quantity(4). leaf-switch and spine-switch have no sub_components, so each contributes only itself (fleet = plan_quantity)."
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "fixture": "mesh-two-switch",
+  "expected_valid": true,
+  "device_count": 4,
+  "cable_count": 6,
+  "per_fabric_switch_counts": {
+    "converged": {
+      "server-leaf": 2,
+      "total": 2
+    }
+  },
+  "bom_totals": {
+    "mesh-servers": {
+      "plan_quantity": 2,
+      "per_unit": {
+        "cx7-single-nic": 1,
+        "qsfp112-200g-xcvr": 1
+      },
+      "fleet": {
+        "cx7-single-nic": 2,
+        "qsfp112-200g-xcvr": 2
+      }
+    },
+    "mesh-switch-a": {
+      "plan_quantity": 1,
+      "per_unit": {
+        "mesh-switch": 1
+      },
+      "fleet": {
+        "mesh-switch": 1
+      }
+    },
+    "mesh-switch-b": {
+      "plan_quantity": 1,
+      "per_unit": {
+        "mesh-switch": 1
+      },
+      "fleet": {
+        "mesh-switch": 1
+      }
+    }
+  },
+  "calculation_notes": [
+    "Baselines are hand-derived from ALGORITHMS.md; no generated tooling was used.",
+    "A mesh fabric lists each switch as its own plan entry, so the 2-switch mesh uses entries mesh-switch-a and mesh-switch-b (override_quantity 1 each). per_fabric_switch_counts.converged.server-leaf = 2.",
+    "Device count = mesh servers + mesh switches = 2 + 2 = 4.",
+    "Mesh cables (Algorithm 5, 2-switch mesh): cables_per_pair = total_logical_mesh_ports_per_switch. Each switch's mesh zone (port_range 33-36, no breakout) has 4 logical ports, so the single switch pair is wired with 4 mesh cables.",
+    "Server-to-switch cables: 2 servers x 1 unbundled single-port data connection = 2 cables.",
+    "Cable count total = 4 mesh + 2 server-to-switch = 6.",
+    "BOM (Algorithm 6): mesh-server per unit = cx7-single-nic x1 and qsfp112-200g-xcvr x1 (1 NIC x 1 transceiver, recursed). Fleet = per_unit x plan_quantity(2). mesh-switch has no sub_components, so each switch entry contributes only itself."
+  ]
+}
