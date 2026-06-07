@@ -78,11 +78,11 @@ possible output target among several. The NetBox adapter calls the REST API only
 
 ---
 
-## D6: Server class is the atomic BOM unit
+## D6: BOM derivation is plan-time, not inventory-time
 
 **Decision:** The BOM is derived from the plan model at plan time, not from generated
-inventory after a database write. `ServerClass.bom()` returns the per-server BOM with
-no database queries. Fleet totals are `per_server_count × server_class.quantity`.
+inventory after a database write. `DeviceClass.bom()` returns the per-unit BOM with
+no database queries. Fleet totals are `per_unit_count × plan_entry.quantity`.
 
 **Rationale:** A pre-sales topology design tool must be able to produce a procurement
 BOM before any hardware is ordered or any database is populated. The predecessor tool's
@@ -92,18 +92,17 @@ with the tool's use case.
 
 ---
 
-## D7: ServerConnection is owned by ServerNIC, not ServerClass
+## D7: PlanConnection is owned by PlanEntry via NIC slot reference
 
-**Decision:** `ServerConnection` records have `ServerNIC` as their owning parent
-(cascade-owned). `ServerClass` owns `ServerNIC` instances, which in turn own their
-connections. The connection ownership hierarchy matches physical reality.
+**Decision:** `PlanConnection` records are owned by their `PlanEntry` and reference a
+specific NIC sub-component by its `slot_id` within the parent `DeviceClass`. The
+connection ownership hierarchy matches physical reality.
 
-**Rationale:** A cable plugs into a port on a NIC card, not directly into a "server class."
-The correct aggregate boundary is: `ServerClass → ServerNIC → ServerConnection`. This
-makes `ServerNIC.connections` a natural query and enables `ServerNIC.bom()` to return
-the transceiver BOM for its own ports. The previous model had connections owned by
-ServerClass and only referencing the NIC, which blurred ownership and made BOM
-derivation awkward.
+**Rationale:** A cable plugs into a port on a NIC card. The NIC is a sub-component of
+the device class (a `SubComponent` with a `slot_id`). `PlanConnection` references the
+slot to identify which NIC the port belongs to. This keeps connection ownership at the
+plan-entry level (where quantity lives) while preserving the NIC as a named structural
+element. See D13 for the full DeviceClass model.
 
 ---
 
@@ -169,3 +168,67 @@ was never released. AID's users have no prior relationship with HNP.
 that shaped AID's correctness. This is a development-side relationship. From a user
 perspective, AID is the original and authoritative tool. Referencing an unreleased
 internal predecessor adds confusion with no benefit to users.
+
+---
+
+## D13: Generic recursive DeviceClass composite — no server-first special casing
+
+**Decision:** AID's hardware model uses a single `DeviceClass` type as the universal
+building block. Any hardware component — server, switch, NIC, GPU, PDU, rack unit,
+transceiver, cable — is a `DeviceClass`. Sub-components are expressed as
+`SubComponent { slot_id, device_class, quantity_per_parent }` entries on a parent
+`DeviceClass`. There is no `ServerClass`, `SwitchProfile`, `ServerNIC`, or
+`ServerComponent` as distinct top-level types.
+
+**BOM derivation** is a recursive traversal: `DeviceClass.bom(quantity)` walks
+sub-components depth-first, multiplying quantities at each level. Per-unit and
+fleet totals are both produced without any database access.
+
+**Rationale:** The original model treated "server class" as the root of the BOM
+hierarchy, with `ServerComponent`, `ServerNIC`, and `ServerNIC.connections` as
+server-specific nested types. This was an antipattern: a switch also has transceivers,
+a rack has PDUs, a NIC is simultaneously an independent object and a child of a server.
+Forcing servers as the root excluded other hardware categories from proper BOM modeling
+and made the model structurally incorrect. A generic recursive composite cleanly handles
+all cases: a server is a `DeviceClass` that has NIC sub-components; a NIC is a
+`DeviceClass` that may have transceiver sub-components; BOM is just recursion.
+
+**Topology-specific concerns** (quantity, role, connections, port zones) live in
+`PlanEntry` and `PlanConnection`, which reference `DeviceClass` instances but are
+separate from the hardware model itself.
+
+---
+
+## D14: MoonBit compiled to JavaScript for the frontend GUI
+
+**Decision:** AID's web frontend is implemented in MoonBit compiled to JavaScript.
+MoonBit's `moon build --target js` produces a JavaScript bundle. The Go API server
+serves the HTML shell, static assets, and REST endpoints. Bootstrap 5 provides the CSS
+framework for visual styling.
+
+**Rationale:** MoonBit can compile to both WASM and JavaScript — the same language
+covers the calculation kernel (WASM) and the frontend UI (JS). This eliminates the
+Python/Django requirement while keeping the team in a single strongly-typed language
+for all non-adapter code. The WASM component model boundary means the calculation
+kernel could optionally run client-side in a future release (the browser can host
+WASM). Bootstrap 5 is the CSS framework used by NetBox, which provides the desired
+visual appearance without reimplementing a design system.
+
+**Implementation:** The Go server exposes a REST API. MoonBit-compiled JS calls the
+API for all data and renders the UI. No server-side HTML rendering is required — the
+Go server is a pure API backend. Bootstrap 5 is loaded from a bundled static asset,
+not a CDN, to support air-gapped deployments.
+
+---
+
+## D15: Bootstrap 5 for NetBox-style visual appearance
+
+**Decision:** AID's GUI uses Bootstrap 5 as its CSS framework, configured with the
+same color palette and component choices as NetBox (dark nav, card-based layout, table
+views with row actions, form-based create/edit flows).
+
+**Rationale:** The design goal is "NetBox-like appearance without Django/Python."
+Bootstrap 5 is what NetBox itself uses, so replicating its look is straightforward
+with the same framework. Users familiar with NetBox will find AID's UI immediately
+recognizable. Bootstrap 5 is mature, well-documented, and requires zero build tooling
+for basic use (single CSS + JS bundle).

@@ -2,15 +2,19 @@
 
 ## Design Principles
 
-- **Server class is the atomic BOM unit.** A fleet of N identical servers has exactly
-  N times the per-server BOM. The per-server BOM is always derivable without any
-  database queries.
-- **NIC is a first-class owned component.** A NIC card lives on a server class (owned,
-  composition). A NIC port makes a connection to a switch zone (association).
+- **DeviceClass is the universal hardware building block.** Any hardware component —
+  server, switch, NIC, GPU board, memory DIMM, storage drive, transceiver, PDU, rack
+  unit — is a `DeviceClass`. There is no server-specific or switch-specific root type.
+- **Composition via recursive sub-components.** A `DeviceClass` may contain other
+  `DeviceClass` instances as named sub-components with per-parent quantities. BOM
+  derivation is a recursive traversal at plan time with no database.
 - **Topology is an explicit graph.** The design output is a labeled bipartite graph —
   it is not reconstructed from database tags at export time.
-- **Fabric is a first-class aggregate.** A fabric owns its switch classes and enforces
-  its topology-mode invariants internally.
+- **Fabric is a first-class aggregate.** A fabric owns its switch plan entries and
+  enforces its topology-mode invariants internally.
+- **Plan-specific concerns live in PlanEntry, not DeviceClass.** Quantity, role,
+  connections, and port zones are plan-level data. `DeviceClass` is a reusable hardware
+  template with no plan-specific state.
 
 ---
 
@@ -26,15 +30,93 @@ TopologyPlan {
   name: string
   customer_name: string
   status: Draft | Review | Approved | Exported
-  server_classes: ServerClass[]
+  entries: PlanEntry[]     // every device in the plan (servers, switches)
   fabric_domains: FabricDomain[]
+  device_catalog: DeviceClass[]  // registered hardware templates
   naming_templates: NamingTemplate[]
 }
 ```
 
+---
+
+### DeviceClass (universal hardware template)
+
+Represents any class of hardware component. Reusable across plans and contexts.
+
+```
+DeviceClass {
+  id: DeviceClassId
+  name: string             // e.g. "AS-4126GS GPU Server", "ConnectX-7 OSFP NIC"
+  slug: string             // kebab-case unique identifier
+  category: string         // user-defined: "compute", "network", "nic", "transceiver", etc.
+  manufacturer: string?
+  part_number: string?
+  description: string?
+  attributes: Attribute[]  // arbitrary key-value pairs (vendor-specific specs, etc.)
+  ports: PortSpec[]        // network ports on this device (for NICs, switches)
+  sub_components: SubComponent[]  // child DeviceClass instances
+}
+
+Attribute {
+  key: string
+  value: string            // always a string; interpret by key convention
+}
+
+PortSpec {
+  port_id: string          // e.g. "p0", "p1"
+  speed_gbps: int
+  cage_type: OSFP | QSFP112 | QSFP28 | SFP28 | RJ45
+  medium: Optical | DAC | AOC | Copper
+}
+
+SubComponent {
+  slot_id: string          // unique within parent (e.g. "nic-fe", "gpu-board", "dimm-0")
+  device_class: DeviceClass
+  quantity_per_parent: int
+}
+```
+
+**Example — GPU server with nested sub-components:**
+
+```
+DeviceClass: AS-4126GS ComputeGPU Server
+  sub_components:
+    slot_id: "chassis"      → DeviceClass: AS-4126GS Barebone        qty: 1
+    slot_id: "nic-fe"       → DeviceClass: ConnectX-7 OSFP NIC       qty: 2
+      sub_components:
+        slot_id: "xcvr"     → DeviceClass: OSFP 400G Transceiver     qty: 1 (per NIC)
+    slot_id: "nic-be"       → DeviceClass: BlueField-3 DPU           qty: 1
+    slot_id: "gpu"          → DeviceClass: H100 SXM GPU Board        qty: 8
+    slot_id: "dimm"         → DeviceClass: 64GB DDR5 DIMM            qty: 24
+
+DeviceClass: DS5000 Leaf Switch
+  sub_components:
+    slot_id: "xcvr"         → DeviceClass: OSFP 800G Transceiver     qty: 64
+```
+
+**BOM derivation (recursive, plan-time, no database):**
+
+```
+DeviceClassBOM {
+  device_class: DeviceClass
+  plan_quantity: int           // from PlanEntry.quantity
+  line_items: BOMLineItem[]    // one per sub_component, depth-first
+}
+
+BOMLineItem {
+  path: string[]               // e.g. ["nic-fe", "xcvr"]
+  device_class: DeviceClass
+  quantity_per_parent: int
+  quantity_per_unit: int       // product of all qty_per_parent up the tree
+  fleet_quantity: int          // quantity_per_unit × plan_quantity
+}
+```
+
+---
+
 ### FabricDomain
 
-A named, independently-wired switching fabric. Enforces its own topology-mode invariants.
+A named, independently-wired switching fabric. Enforces topology-mode invariants.
 
 ```
 FabricDomain {
@@ -42,58 +124,50 @@ FabricDomain {
   fabric_name: string           // e.g. "frontend", "backend", "scale-out"
   fabric_class: Managed | Unmanaged
   topology_mode: Clos | Mesh
-  switch_classes: SwitchClass[]
+  switch_entries: PlanEntry[]   // must be switch-role entries
 }
 
 Invariants:
 - Mesh fabric: switch count ∈ {2, 3}
-- All non-spine classes in a Clos fabric share topology_mode
+- All non-spine switch entries in a Clos fabric share topology_mode
 - MCLAG switch count is even and >= 2
 - ESLAG switch count is 2–4
 ```
 
-### SwitchClass
+---
 
-A group of identical switches within a fabric.
+### PlanEntry (plan-specific use of a DeviceClass)
+
+Represents a group of identical devices within the topology plan.
+Quantity, role, and wiring intent all live here, not in `DeviceClass`.
 
 ```
-SwitchClass {
-  switch_class_id: SwitchClassId
-  fabric_domain: FabricDomain   // owned by
-  hedgehog_role: Spine | ServerLeaf | BorderLeaf
-  switch_profile: SwitchProfile  // replaces NetBox DeviceType + DeviceTypeExtension
-  override_quantity: int?
-  calculated_quantity: int?       // written by kernel
-  topology_mode: Clos | Mesh
+PlanEntry {
+  entry_id: EntryId
+  device_class: DeviceClass    // what kind of device
+  quantity: int                // how many instances in this plan
+  role: PlanRole               // Server | Spine | ServerLeaf | BorderLeaf | OOBLeaf | HHG
+  label: string?               // override for naming templates (e.g. "gpu-servers")
+  // Switch-specific (only when role ∈ {Spine, ServerLeaf, BorderLeaf, OOBLeaf}):
+  fabric_domain: FabricDomain?
+  override_quantity: int?      // explicit override; else quantity is calculated
+  topology_mode: Clos | Mesh?
   redundancy: MCLAGConfig? | ESLAGConfig?
   port_zones: SwitchPortZone[]
+  // Server-specific (when role == Server):
+  connections: PlanConnection[]
 }
 
-effective_quantity = override_quantity ?? calculated_quantity ?? 0
+PlanRole = Server | Spine | ServerLeaf | BorderLeaf | OOBLeaf | HHG
+
+effective_quantity = override_quantity ?? calculated_quantity ?? quantity
 ```
 
-### SwitchProfile (replaces DeviceType + DeviceTypeExtension)
-
-The switch hardware specification. Not a live database object — a plain data record.
-
-```
-SwitchProfile {
-  profile_id: ProfileId
-  slug: string              // e.g. "celestica-ds5000"
-  model: string
-  manufacturer: string
-  native_port_speed_gbps: int
-  total_ports: int
-  supported_breakouts: BreakoutOption[]
-  mclag_capable: bool
-  hedgehog_profile_name: string
-  hhfab_role_tags: string[]
-}
-```
+---
 
 ### SwitchPortZone
 
-A named allocation region on a switch class.
+A named allocation region on a switch plan entry.
 
 ```
 SwitchPortZone {
@@ -104,112 +178,36 @@ SwitchPortZone {
   breakout_option: BreakoutOption?
   priority: int                // lower = allocate first
   allocation_strategy: Sequential | Interleaved | Spaced
-  transceiver_intent: TransceiverSpec?
+  transceiver_intent: DeviceClass?  // a transceiver DeviceClass expected in this zone
+  peer_zone: SwitchPortZone?        // target zone for uplink-type zones
 }
 ```
 
-### ServerClass (aggregate root for server hardware)
+---
 
-Owns the complete hardware specification for one server type.
+### PlanConnection
 
-```
-ServerClass {
-  server_class_id: ServerClassId
-  server_class_name: string
-  category: GPU | Storage | Infrastructure
-  quantity: int               // PRIMARY INPUT — all switch math derives from this
-  components: ServerComponent[]  // barebone, GPU board, CPU, memory, drive, accessory
-  nics: ServerNIC[]           // NIC cards installed in this server class
-}
-
-bom() → ServerClassBOM       // derived, no DB required
-fleet_bom() → ServerClassBOM // bom() scaled by quantity
-```
-
-### ServerComponent
-
-A hardware component in the server BOM. Not a NIC (NICs are separate).
+A named connection from a specific NIC sub-component port to a switch port zone.
 
 ```
-ServerComponent {
-  component_type: Barebone | GPUBoard | CPU | MemoryDIMM | StorageDrive | Accessory
-  quantity_per_server: int
-  part_number: string?
-  manufacturer: string?
-  model_description: string
-}
-```
-
-### ServerNIC (owns its connections)
-
-A NIC card installed in a server class. Owns the port connections that use it.
-
-```
-ServerNIC {
-  nic_id: NICId              // e.g. "nic-fe", "nic-be0"
-  server_class: ServerClass  // owned by
-  module_spec: ModuleSpec    // port count, speed, cage type, etc.
-  connections: ServerConnection[]  // owned by this NIC
-}
-```
-
-### ServerConnection
-
-A named connection from a NIC port to a switch port zone.
-
-```
-ServerConnection {
+PlanConnection {
   connection_id: ConnectionId
-  nic: ServerNIC              // owned by
-  port_index: int             // zero-based port index on NIC
+  nic_slot_id: string          // references SubComponent.slot_id on the device_class
+  port_index: int              // zero-based port index on the NIC's PortSpec list
   ports_per_connection: int
   connection_type: Unbundled | Bundled | MCLAG | ESLAG
   distribution: SameSwitch | Alternating | RailOptimized
   target_zone: SwitchPortZone
   speed_gbps: int
-  rail: int?                  // for rail-optimized distribution
+  rail: int?                   // for RailOptimized distribution
   port_type: Data | IPMI | PXE
-  transceiver_intent: TransceiverSpec?
+  transceiver_intent: DeviceClass?  // expected transceiver DeviceClass on this port
 }
 ```
 
-### ModuleSpec (replaces dcim.ModuleType)
-
-Hardware specification for a NIC or transceiver. Not a live database object.
-
-```
-ModuleSpec {
-  spec_id: SpecId
-  model: string
-  manufacturer: string
-  port_count: int
-  port_speed_gbps: int
-  cage_type: OSFP | QSFP112 | QSFP28 | SFP28 | RJ45
-  medium: Optical | DAC | AOC | Copper
-  reach_class: string?
-  attribute_data: map[string, any]  // vendor-specific transceiver attributes
-}
-```
-
-### ServerClassBOM
-
-Derived from a ServerClass. Derivable at plan time with no database.
-
-```
-ServerClassBOM {
-  server_class_id: ServerClassId
-  per_server: BOMLineItem[]
-  fleet_quantity: int          // server_class.quantity
-  fleet_total: BOMLineItem[]   // per_server scaled by fleet_quantity
-}
-
-BOMLineItem {
-  section: Barebone | GPUBoard | CPU | Memory | Drive | NIC | Transceiver | Accessory
-  part_number: string?
-  description: string
-  quantity_per_unit: int
-}
-```
+The `nic_slot_id` references a `SubComponent.slot_id` on the parent `DeviceClass`. For
+example, if the server DeviceClass has `slot_id: "nic-fe"`, a connection with
+`nic_slot_id: "nic-fe"` refers to the ConnectX-7 NIC in that slot.
 
 ---
 
@@ -223,14 +221,14 @@ TopologyIR {
   nodes: TopologyNode[]
   edges: TopologyEdge[]
   fabrics: FabricSummary[]
-  boms: ServerClassBOM[]
+  boms: DeviceClassBOM[]       // one per PlanEntry
   validation: ValidationResult
 }
 
 TopologyNode {
   name: string
   node_type: Server | Switch | Spine
-  device_class_id: string   // ServerClass.server_class_id or SwitchClass.switch_class_id
+  device_class_id: DeviceClassId
   fabric: string?
   hedgehog_role: string?
   instance_index: int
@@ -245,8 +243,8 @@ TopologyEdge {
   zone: string
   breakout_index: int?
   connection_type: string
-  port_a: string           // physical port name on node_a
-  port_b: string           // physical port name on node_b
+  port_a: string               // physical port name on node_a
+  port_b: string               // physical port name on node_b
 }
 
 FabricSummary {
@@ -254,7 +252,7 @@ FabricSummary {
   switch_count: int
   total_server_bandwidth_gbps: int
   total_spine_bandwidth_gbps: int
-  oversubscription_ratio: float   // > 1.0 triggers WARNING
+  oversubscription_ratio: float    // > 1.0 triggers WARNING
 }
 
 ValidationResult {
@@ -270,15 +268,18 @@ ValidationResult {
 
 ```
 TopologyPlan
+  ├── DeviceClass catalog (0..N)       ← hardware templates; reused across entries
+  │     └── SubComponent (0..N)        ← nested DeviceClass with qty_per_parent
+  │           └── SubComponent ...     ← recursive; arbitrarily deep
   ├── FabricDomain (1..N)
-  │     └── SwitchClass (1..N)
-  │           └── SwitchPortZone (1..N)
-  └── ServerClass (1..N)
-        ├── ServerComponent (0..N)   ← new: barebone, GPU, CPU, DIMM, drive
-        └── ServerNIC (1..N)
-              └── ServerConnection (1..N) → SwitchPortZone
+  │     └── (references PlanEntry)
+  └── PlanEntry (1..N)                 ← plan-specific: qty, role, connections
+        ├── device_class → DeviceClass  (reference, not ownership)
+        ├── SwitchPortZone (0..N)      ← switch entries only
+        └── PlanConnection (0..N)      ← server entries only
+              └── nic_slot_id → SubComponent.slot_id (reference)
 ```
 
-The key structural difference from earlier designs: `ServerConnection` is owned by
-`ServerNIC`, not by `ServerClass`. This matches physical reality (a cable plugs into
-a NIC port) and makes `ServerNIC.bom()` and `ServerNIC.connections` natural queries.
+The key distinction: `DeviceClass` is a reusable hardware template (owned by the catalog).
+`PlanEntry` is a plan-specific instantiation (owned by `TopologyPlan`). BOM derivation
+walks `DeviceClass.sub_components` recursively, scaled by `PlanEntry.quantity`.

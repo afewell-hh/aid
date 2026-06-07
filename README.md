@@ -11,8 +11,9 @@ fabrics or published to an inventory management system.
 
 - **Topology calculation**: derive switch counts, port allocations, and fabric wiring from
   server inventory inputs — no manual switch sizing required
-- **BOM derivation**: produce a complete, per-server-class bill of materials including
-  chassis, CPUs, memory, drives, NICs, and transceivers, scalable to fleet quantities
+- **BOM derivation**: produce a complete, hierarchical bill of materials for any device
+  class in the plan — servers, switches, NICs, transceivers, or any nested sub-component
+  — scalable to fleet quantities while preserving per-unit breakdown at every level
 - **Wiring export**: generate per-fabric wiring YAML validated against the hhfab CLI
 - **Topology validation**: enforce mesh, Clos, and dual-plane constraints; report
   oversubscription ratios per fabric tier
@@ -29,7 +30,10 @@ fabrics or published to an inventory management system.
 ## Architecture Overview
 
 ```
-aid CLI (Go)
+Browser / Desktop
+  └── aid-ui (MoonBit → JS + Bootstrap 5)  ← NetBox-style GUI
+           ↕ REST API
+aid CLI (Go) / aid-server (Go)
   ├── plan YAML → topology-calculator.wasm (MoonBit)  ← formal verification
   │                       ↓ TopologyIR
   ├── hhfab-adapter.wasm (Rust)   → wiring YAML per fabric
@@ -45,9 +49,10 @@ The topology calculation kernel is implemented in MoonBit with formally verified
 | Layer | Language | Reason |
 |-------|----------|--------|
 | Topology calculation kernel | MoonBit | Formal verification, WASM-native, agentic-first |
+| Frontend UI | MoonBit → JavaScript + Bootstrap 5 | NetBox-style appearance, no Python/Django |
 | Wiring YAML adapter | Rust | serde_yaml, cargo-component, mature WASM ecosystem |
 | NetBox REST adapter | Rust or Go | reqwest / net/http, no ORM required |
-| CLI, plan storage, orchestration | Go | cobra/viper, wasmtime-go, fast binary distribution |
+| CLI, API server, orchestration | Go | cobra/viper, wasmtime-go, fast binary distribution |
 
 ## Supported Topology Families
 
@@ -60,12 +65,12 @@ The topology calculation kernel is implemented in MoonBit with formally verified
 ## Key Inputs
 
 A topology plan YAML describes:
-- Server classes (quantity, category, GPU count)
-- Per-server NIC inventory (NIC id, module type, port count, speed)
-- Per-NIC connection intent (target fabric, distribution mode, breakout)
-- Switch classes (fabric, role, topology mode, port zones)
+- Device classes (any hardware: servers, switches, NICs, transceivers — each with arbitrary
+  attributes and nested sub-components at defined per-parent quantities)
+- Per-device connection intent (target fabric, distribution mode, breakout)
+- Fabric domains (fabric name, topology mode, switch roles, port zones)
 
-AID derives everything else: switch counts, port assignments, wiring, BOM.
+AID derives everything else: switch counts, port assignments, wiring, hierarchical BOM.
 
 ## Status
 

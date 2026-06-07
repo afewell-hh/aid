@@ -4,11 +4,11 @@
 
 ### MoonBit — Topology Calculation Kernel
 
-**Used for:** `topology-calculator` WASM component, `bom-adapter` WASM component
+**Used for:** `topology-calculator` WASM component, `bom-adapter` WASM component, `aid-ui` frontend
 
 **Why MoonBit:**
 - First-class formal verification via `moon prove` (Z3 SMT backend, built into standard toolchain)
-- WASM-native: MoonBit's primary compile target is WebAssembly
+- Dual compile targets: `--target wasm` for the calculation kernel, `--target js` for the frontend
 - Native WASM Component Model support (WIT bindgen tooling provided)
 - "Agentic-first" design: strong typing and explicit contracts help LLMs generate correct proofs
 - Smallest WASM binary output of any general-purpose language
@@ -17,7 +17,7 @@
 - Port allocation non-overlap (no logical port allocated twice)
 - Allocation completeness (total allocated == total demanded)
 - Switch count lower bound (effective_quantity >= ceil(demand/capacity))
-- BOM scaling (fleet_count == per_server_count × quantity)
+- BOM scaling (fleet_count == per_unit_count × quantity, at each level of the DeviceClass tree)
 - Mesh constraint (switch count ∈ {2, 3})
 - MCLAG even-count
 
@@ -57,7 +57,7 @@
 
 ### Go — CLI, Orchestration, and Storage
 
-**Used for:** `aid` CLI, plan YAML read/write, SQLite state, WASM component hosting
+**Used for:** `aid` CLI, `aid serve` REST API server, plan YAML read/write, SQLite state, WASM component hosting
 
 **Why Go:**
 - `cobra` + `viper`: the strongest CLI tooling ecosystem for this type of tool
@@ -65,14 +65,45 @@
 - `wasmtime-go`: official Go bindings for the Wasmtime WASM runtime
 - `mattn/go-sqlite3`: SQLite for local generated-state storage
 - Fast compile-test loop for orchestration and I/O code
-- Net/http is sufficient for NetBox REST calls if a full Rust adapter is overkill
+- `net/http` serves the frontend static assets and REST API from the same binary
 
 **What Go handles in AID:**
 - `aid plan create/validate/diff` — YAML plan I/O
 - `aid topology calc/bom/export` — orchestrate WASM components and route output
 - `aid publish netbox` — POST topology to NetBox via REST
+- `aid serve` — REST API + static asset server for the web frontend
 - Local state database (last IR hash, generation timestamps)
 - Configuration management (`~/.aid/config.yaml`)
+
+---
+
+### MoonBit → JavaScript — Web Frontend
+
+**Used for:** `aid-ui` — the browser-based GUI
+
+**Compile target:** `moon build --target js` produces a JavaScript bundle that runs in any
+modern browser. This is a separate MoonBit module from the WASM kernel — it uses the same
+language but a different compilation target.
+
+**Architecture:**
+- MoonBit JS bundle handles all UI logic: rendering, state management, API calls
+- Calls the Go REST API (`aid serve`) for all data — no direct computation in the browser
+- No JavaScript framework dependency — MoonBit compiles to idiomatic JS
+- Bootstrap 5 (bundled CSS + JS, not CDN) provides the visual framework
+
+**Why not a separate JS framework (React, Svelte, etc.):**
+- Keeping the frontend in MoonBit eliminates a second language from the stack
+- MoonBit's type system applies equally to frontend logic — the same data types used
+  in the kernel WIT interfaces can be reused in the UI layer
+- The design goal is NetBox-like appearance, not a sophisticated single-page app;
+  Bootstrap 5 + MoonBit JS is sufficient
+
+**Risks to manage:**
+- MoonBit's JS target is newer than its WASM target — verify API surface stability
+- MoonBit JS ecosystem has no npm interop; all UI primitives must be implemented
+  in MoonBit or called via `extern` FFI from the JS runtime
+- Bootstrap 5 component JavaScript (dropdowns, modals) is vanilla JS — compatible
+  with MoonBit's JS output
 
 ---
 
@@ -94,7 +125,7 @@ wit/
   world.wit                 # top-level world definition
   topology-calculator.wit   # inputs/outputs for the calculation kernel
   hhfab-adapter.wit         # TopologyIR → wiring YAML
-  bom-adapter.wit           # ServerClassBOM[] → CSV/JSON
+  bom-adapter.wit           # DeviceClassBOM[] → CSV/JSON
   netbox-adapter.wit        # TopologyIR + config → NetBox publish result
 ```
 
@@ -112,6 +143,7 @@ other directly — the CLI orchestrates all inter-component data flow.
 | Adapters | Rust | `cargo test` | Unit tests, golden file tests |
 | CLI + integration | Go | `go test` | Integration tests using fixture YAML files |
 | Behavioral contract | Go | `go test` | Acceptance tests: fixture YAML → expected IR counts |
+| Frontend | MoonBit JS | `moon test` | Component unit tests; visual review against Bootstrap 5 reference |
 
 **Fixture YAML as behavioral contract:**
 The topology plan YAML files from the reference architecture catalog
@@ -119,7 +151,7 @@ The topology plan YAML files from the reference architecture catalog
 AID must produce correct:
 - device count, interface count, cable count
 - per-fabric switch counts
-- BOM totals per server class
+- BOM totals per device class (hierarchical)
 - valid wiring YAML (hhfab validate)
 
 These counts are the ground truth derived from the HNP reference implementation and

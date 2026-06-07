@@ -12,7 +12,7 @@ is approved. Phases 1–5 can proceed in parallel where dependencies allow.
 **Deliverable:**
 - `wit/topology-calculator.wit`: full input/output type definitions for the kernel
 - `wit/hhfab-adapter.wit`: `TopologyIR` → wiring YAML interface
-- `wit/bom-adapter.wit`: `ServerClassBOM[]` → CSV/JSON interface
+- `wit/bom-adapter.wit`: `DeviceClassBOM[]` → CSV/JSON interface
 - `wit/netbox-adapter.wit`: `TopologyIR` + config → publish result interface
 
 **Exit gate:**
@@ -72,18 +72,19 @@ is approved. Phases 1–5 can proceed in parallel where dependencies allow.
 
 **Deliverable:**
 - `bom-adapter/` package (MoonBit or Rust)
-- `ServerClass.bom()` → `ServerClassBOM` (per-server)
-- `ServerClass.fleet_bom()` → `ServerClassBOM` (scaled by quantity)
-- CSV output with per-server and fleet-total columns
+- `DeviceClass.bom(quantity)` → `DeviceClassBOM` recursive traversal (per-unit and fleet totals)
+- CSV output: per-device-class section with sub-component tree, per-unit column, fleet-total column
 - JSON output matching `wit/bom-adapter.wit`
-- Test: given the reference GPU server BOM (from fixture), verify fleet totals are quantity × per-server
+- Test: given the reference GPU server (from fixture), verify fleet totals are quantity × per-unit
+  at every level (server, NIC, transceiver)
 
 **Exit gate:**
-- Per-server BOM is identical regardless of fleet quantity
-- Fleet total = per-server × quantity (formally verified or test-proven for all fixture server classes)
+- Per-unit BOM is identical regardless of fleet quantity
+- Fleet total = per-unit × quantity at each tree level (formally verified or test-proven)
+- A switch device class with transceiver sub-components produces a correct BOM as a non-server example
 - CSV output is human-reviewable and matches manual calculation from fixture input
 
-**Read first:** `DOMAIN_MODEL.md` (ServerClassBOM section), `ALGORITHMS.md` (Algorithm 6)
+**Read first:** `DOMAIN_MODEL.md` (DeviceClass and DeviceClassBOM sections), `ALGORITHMS.md` (Algorithm 6)
 
 ---
 
@@ -120,12 +121,42 @@ Connection (unbundled / bundled / mclag / eslag / fabric / mesh variants)
   - `aid export wiring <file> [--fabric <name>]`
 - Local SQLite state: tracks last IR hash per plan file, flags plan-changed since last calc
 - `~/.aid/config.yaml` for NetBox URL, token, default site
+- `aid serve [--port 8080]` — REST API server stub (endpoints stubbed, fully implemented in Phase 6b)
 
 **Exit gate:**
 - Golden path: `aid topology calc fixture.yaml && aid export wiring fixture.yaml --fabric backend`
   produces a wiring YAML that passes `hhfab validate`
 - `aid plan validate` gives a human-readable error for every constraint violation
 - Single-binary distribution: `go build -o aid ./cmd/aid`
+
+---
+
+## Phase 6b — Web Frontend (MoonBit → JavaScript + Bootstrap 5)
+
+**Goal:** Ship a browser-based GUI that emulates NetBox's visual style. Depends on Phase 6 API stub.
+
+**Deliverable:**
+- `ui/` MoonBit module compiled to JavaScript (`moon build --target js`)
+- `aid serve` fully implements REST endpoints consumed by the frontend:
+  - `GET/POST /api/plans` — plan list and create
+  - `GET/PUT/DELETE /api/plans/:id` — plan detail and edit
+  - `POST /api/plans/:id/calc` — trigger topology calculation
+  - `GET /api/plans/:id/bom` — BOM as JSON
+  - `GET /api/plans/:id/wiring/:fabric` — wiring YAML download
+- Bootstrap 5 bundled in `ui/static/` (no CDN dependency)
+- UI surfaces: plan list, plan detail (fabrics + device classes + BOM summary + validation),
+  device class editor, connection intent editor, wiring export trigger
+
+**Visual standard:** Match NetBox's Bootstrap 5 appearance — dark navbar, card layout,
+table views with row actions, badge-based status indicators.
+
+**Exit gate:**
+- Plan list, plan detail, and topology calc trigger work end-to-end in a browser
+- BOM view shows per-unit and fleet-total for a multi-level device class (server → NIC → transceiver)
+- `aid serve` binary passes `go test` for all REST endpoint handlers
+- Air-gapped test: run with no internet access; all assets load from bundled static files
+
+**Read first:** `ARCHITECTURE.md` (Layer 5), `DECISIONS.md` (D14, D15), `TECH_STACK.md` (MoonBit → JS section)
 
 ---
 
@@ -196,9 +227,7 @@ No other phases are blocked by this outcome.
 - `schema/topology-plan-v1.json` published to a separate `aid-schemas` repository (Apache 2.0)
 - `algorithms/` folder: written documentation of the 8 algorithms in `ALGORITHMS.md`
   with formal mathematical notation and proofs of key properties
-- `aid-topology-core` PyPI package: pure Python reference implementations of the algorithms
-  (for OCP members not using Go/Rust/MoonBit)
-- OCP technical note: server-driven switch quantity formula
+- OCP technical note: server-driven switch quantity formula and DeviceClass composite BOM model
 
 **Read first:** `DECISIONS.md` (D10, D12)
 
@@ -213,11 +242,14 @@ Phase 1 (WIT)
     │                                ├── Phase 4 (BOM)
     │                                └── Phase 5 (hhfab)
     │                                        │
-    └───────────────────────────── Phase 6 (CLI) ── Phase 9 (NetBox)
-                                                         └── Phase 10 (OCP)
+    └───────────────────────────── Phase 6 (CLI) ── Phase 6b (Frontend)
+                                        │                │
+                                        └── Phase 9 (NetBox)
+                                                    └── Phase 10 (OCP)
 ```
 
 Phases 2–5 can proceed in parallel after Phase 1 completes.
 Phase 6 depends on 3, 4, 5.
-Phase 9 depends on 6.
+Phase 6b depends on Phase 6 (REST API stub).
+Phase 9 depends on Phase 6.
 Phase 10 depends on all previous phases.

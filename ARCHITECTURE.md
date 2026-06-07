@@ -14,12 +14,13 @@
 4. **Formal verification for hard invariants.** The topology kernel carries machine-checked
    proofs for its correctness properties. If the proof fails, the build fails.
 
-5. **Server class is the atomic BOM unit.** All hardware quantities are derived from
-   per-server-class specifications, not from post-generation inventory reads.
+5. **DeviceClass is the atomic BOM unit.** Any hardware component — server, switch, NIC,
+   transceiver — is a `DeviceClass` with optional sub-components. BOM derivation is
+   recursive traversal at plan time, not post-generation inventory reads.
 
 ---
 
-## Four-Layer Architecture
+## Five-Layer Architecture
 
 ### Layer 1 — Topology Calculation Kernel (MoonBit WASM component)
 
@@ -30,7 +31,7 @@ Inputs (via WIT):
 
 Outputs (via WIT):
 - `TopologyIR` — the complete topology as a typed graph
-- `ServerClassBOM[]` — bill of materials per server class
+- `DeviceClassBOM[]` — hierarchical bill of materials per plan entry (recursive)
 - `ValidationResult` — constraint violations, warnings (oversubscription ratio per fabric)
 
 Contains:
@@ -39,14 +40,14 @@ Contains:
 - Clos wiring distribution (alternating, rail-optimized, same-switch)
 - Mesh pair enumeration and inter-switch link assignment
 - Breakout option selection
-- BOM derivation (per-server-class, scalable to fleet quantities)
+- BOM derivation (recursive DeviceClass traversal, per-unit and fleet totals)
 - Constraint validation (topology mode rules, MCLAG/ESLAG counts, oversubscription)
 
 Formally verified properties (`moon prove`):
 - Port non-overlap: no logical port is allocated to more than one connection
 - Allocation completeness: total allocated ports == total demanded ports
 - Switch count lower bound: effective_quantity >= ceil(demand / capacity) for each zone
-- BOM scaling: fleet_count(component) == per_server_count × server_class.quantity
+- BOM scaling: fleet_count(component) == per_unit_count × plan_entry.quantity (at each level)
 - Mesh constraint: mesh switch count ∈ {2, 3}
 - MCLAG even-count: MCLAG switch count is even and >= 2
 
@@ -63,9 +64,10 @@ Zero imports from NetBox, Django, filesystem, or HTTP.
 - Validates output structure before returning
 
 #### bom-adapter (MoonBit or Rust WASM component)
-- Input: `ServerClassBOM[]` + plan metadata
+- Input: `DeviceClassBOM[]` + plan metadata
 - Output: BOM CSV and/or JSON
-- Format: per-server-class sections with per-unit and fleet-total quantities
+- Format: per-device-class sections with per-unit and fleet-total quantities, nested by
+  sub-component tree
 - No NetBox reads — BOM is derived entirely from the plan model
 
 ### Layer 3 — I/O Adapters (Rust or Go)
@@ -102,6 +104,30 @@ aid publish netbox plan.yaml --netbox-url https://... --token ...
 - Reads plan YAML, passes to topology-calculator.wasm
 - Routes TopologyIR to appropriate adapters based on subcommand
 - Returns human-readable output for terminal use
+- Optionally runs as `aid serve` to expose a REST API for the web frontend
+
+### Layer 5 — Web Frontend (MoonBit → JavaScript + Bootstrap 5)
+
+**Responsibility:** Browser-based GUI for creating, viewing, and managing topology plans.
+Emulates NetBox's visual appearance using Bootstrap 5.
+
+Architecture:
+- MoonBit compiled to JavaScript (`moon build --target js`) for all frontend logic
+- Go API server (`aid serve`) provides REST endpoints — the frontend calls only this
+- Bootstrap 5 (bundled, not CDN) for card-based layout, tables, forms, dark nav
+- No server-side HTML rendering — Go is a pure API backend
+
+UI surfaces:
+- **Plan list**: table view of all topology plans with status badges
+- **Plan detail**: card-based view showing fabric domains, device classes, port zones,
+  BOM summary, and validation results
+- **Device class editor**: create/edit device classes with sub-component nesting
+- **Connection intent editor**: per-NIC connection records with zone assignment
+- **BOM view**: hierarchical BOM per device class with fleet totals
+- **Wiring export**: trigger export, download wiring YAML per fabric
+
+The frontend is optional — all AID functionality is accessible via `aid` CLI without
+running `aid serve`. The GUI is an additional surface on top of the same Go API.
 
 ---
 
@@ -170,7 +196,7 @@ The netbox-adapter maps `TopologyIR` to NetBox REST API objects:
 | Node (Switch) | dcim.Device | POST /api/dcim/devices/ |
 | Node (Server) | dcim.Device | POST /api/dcim/devices/ |
 | Edge (cable) | dcim.Cable | POST /api/dcim/cables/ |
-| ServerNIC | dcim.Module | POST /api/dcim/modules/ |
+| SubComponent (NIC) | dcim.Module | POST /api/dcim/modules/ |
 
 Custom fields (`aid_plan_id`, `aid_fabric`, `aid_zone`) are stamped on generated objects
 for plan-scoped cleanup and re-export. The adapter creates these fields on first use.
