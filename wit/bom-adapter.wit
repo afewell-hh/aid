@@ -1,0 +1,40 @@
+package aid:core@0.1.0;
+
+/// Layer 2 — BOM export adapter (MoonBit or Rust WASM component).
+///
+/// Consumes `device-class-bom[]` ONLY (as produced by the calculator). It must
+/// never query NetBox or any database — the BOM is derived entirely from the
+/// plan model at plan time (see DECISIONS D6).
+interface bom-adapter {
+  use types.{device-class-bom};
+
+  enum bom-format {
+    csv,
+    json,
+  }
+
+  record bom-options {
+    format: bom-format,
+    /// Include fleet totals (per-unit columns are always present).
+    include-fleet-totals: bool,
+  }
+
+  /// Rendered BOM. `content` is CSV text or JSON text per `format`.
+  record bom-output {
+    format: bom-format,
+    content: string,
+  }
+
+  variant bom-error {
+    /// No BOM lines to render.
+    empty-bom,
+    /// A BOM was structurally invalid (e.g. negative/zero quantities).
+    invalid-bom(string),
+    /// Unexpected internal failure.
+    internal(string),
+  }
+
+  /// Render one or more device-class BOMs to a single CSV or JSON document.
+  export-bom: func(boms: list<device-class-bom>, options: bom-options)
+    -> result<bom-output, bom-error>;
+}
