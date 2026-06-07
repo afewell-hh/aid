@@ -1,0 +1,185 @@
+{
+  "id": "clos-small",
+  "name": "Small Clos Reference",
+  "customer_name": "Reference Lab",
+  "status": "draft",
+  "device_catalog": [
+    {
+      "id": "gpu-server",
+      "name": "Reference GPU Server",
+      "slug": "gpu-server",
+      "category": "compute",
+      "manufacturer": "Reference",
+      "part_number": "REF-GPU-1",
+      "description": "2-NIC GPU server used as the recursive BOM example.",
+      "sub_components": [
+        {
+          "slot_id": "chassis",
+          "device_class_id": "server-chassis",
+          "quantity_per_parent": 1
+        },
+        {
+          "slot_id": "gpu",
+          "device_class_id": "h100-gpu",
+          "quantity_per_parent": 8
+        },
+        {
+          "slot_id": "nic-fe",
+          "device_class_id": "connectx-7-nic",
+          "quantity_per_parent": 2
+        }
+      ]
+    },
+    {
+      "id": "server-chassis",
+      "name": "Reference Server Barebone",
+      "slug": "server-chassis",
+      "category": "chassis"
+    },
+    {
+      "id": "h100-gpu",
+      "name": "H100 SXM GPU Board",
+      "slug": "h100-gpu",
+      "category": "gpu"
+    },
+    {
+      "id": "connectx-7-nic",
+      "name": "ConnectX-7 OSFP NIC",
+      "slug": "connectx-7-nic",
+      "category": "nic",
+      "ports": [
+        {
+          "port_id": "p0",
+          "speed_gbps": 400,
+          "cage_type": "osfp",
+          "medium": "optical"
+        },
+        {
+          "port_id": "p1",
+          "speed_gbps": 400,
+          "cage_type": "osfp",
+          "medium": "optical"
+        }
+      ],
+      "sub_components": [
+        {
+          "slot_id": "xcvr",
+          "device_class_id": "osfp-400g-xcvr",
+          "quantity_per_parent": 1
+        }
+      ]
+    },
+    {
+      "id": "osfp-400g-xcvr",
+      "name": "OSFP 400G Transceiver",
+      "slug": "osfp-400g-xcvr",
+      "category": "transceiver"
+    },
+    {
+      "id": "leaf-switch",
+      "name": "Reference 56-port Leaf Switch",
+      "slug": "leaf-switch",
+      "category": "network"
+    },
+    {
+      "id": "spine-switch",
+      "name": "Reference 32-port Spine Switch",
+      "slug": "spine-switch",
+      "category": "network"
+    }
+  ],
+  "fabric_domains": [
+    {
+      "fabric_id": "frontend",
+      "fabric_name": "frontend",
+      "fabric_class": "managed",
+      "topology_mode": "clos",
+      "switch_entry_ids": [
+        "server-leafs",
+        "spines"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "entry_id": "gpu-servers",
+      "device_class_id": "gpu-server",
+      "quantity": 4,
+      "role": "server",
+      "label": "gpu-servers",
+      "connections": [
+        {
+          "connection_id": "fe-p0",
+          "nic_slot_id": "nic-fe",
+          "port_index": 0,
+          "ports_per_connection": 1,
+          "connection_type": "unbundled",
+          "distribution": "alternating",
+          "target_zone_id": "leaf-server",
+          "speed_gbps": 400,
+          "port_type": "data",
+          "transceiver_intent_id": "osfp-400g-xcvr"
+        },
+        {
+          "connection_id": "fe-p1",
+          "nic_slot_id": "nic-fe",
+          "port_index": 1,
+          "ports_per_connection": 1,
+          "connection_type": "unbundled",
+          "distribution": "alternating",
+          "target_zone_id": "leaf-server",
+          "speed_gbps": 400,
+          "port_type": "data",
+          "transceiver_intent_id": "osfp-400g-xcvr"
+        }
+      ]
+    },
+    {
+      "entry_id": "server-leafs",
+      "device_class_id": "leaf-switch",
+      "quantity": 2,
+      "role": "server-leaf",
+      "fabric_id": "frontend",
+      "override_quantity": 2,
+      "topology_mode": "clos",
+      "port_zones": [
+        {
+          "zone_id": "leaf-server",
+          "zone_name": "server-access",
+          "zone_type": "server",
+          "port_range": "1-48",
+          "priority": 0,
+          "allocation": "sequential"
+        },
+        {
+          "zone_id": "leaf-uplink",
+          "zone_name": "spine-uplink",
+          "zone_type": "uplink",
+          "port_range": "49-56",
+          "priority": 1,
+          "allocation": "sequential",
+          "peer_zone_id": "spine-fabric"
+        }
+      ]
+    },
+    {
+      "entry_id": "spines",
+      "device_class_id": "spine-switch",
+      "quantity": 1,
+      "role": "spine",
+      "fabric_id": "frontend",
+      "override_quantity": 1,
+      "topology_mode": "clos",
+      "port_zones": [
+        {
+          "zone_id": "spine-fabric",
+          "zone_name": "leaf-fabric",
+          "zone_type": "uplink",
+          "port_range": "1-32",
+          "priority": 0,
+          "allocation": "sequential"
+        }
+      ]
+    }
+  ]
+}

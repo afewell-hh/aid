@@ -1,0 +1,16 @@
+{
+  "fixture": "mesh-four-switch",
+  "expected_valid": false,
+  "note": "Kernel-level SEMANTIC baseline (issue #6). The sibling expected-error.json is the SCHEMA-level (ajv) baseline and is intentionally left unchanged; the kernel independently catches this via Algorithm 5 validation.",
+  "kernel_validation": {
+    "is_valid": false,
+    "errors": [
+      {
+        "code": "MESH_SWITCH_COUNT",
+        "severity": "error",
+        "message": "Mesh fabric 'converged' lists 4 switch entries; a mesh fabric must have exactly 2 or 3 switches (ALGORITHMS.md Algorithm 5).",
+        "fabric_id": "converged"
+      }
+    ]
+  }
+}

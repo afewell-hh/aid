@@ -1,0 +1,62 @@
+{
+  "id": "mesh-four-switch",
+  "name": "Invalid Four-Switch Mesh",
+  "customer_name": "Reference Lab",
+  "status": "draft",
+  "device_catalog": [
+    {
+      "id": "mesh-switch",
+      "name": "Reference Mesh Switch",
+      "slug": "mesh-switch",
+      "category": "network"
+    }
+  ],
+  "fabric_domains": [
+    {
+      "fabric_id": "converged",
+      "fabric_name": "converged",
+      "fabric_class": "managed",
+      "topology_mode": "mesh",
+      "switch_entry_ids": [
+        "mesh-switch-a",
+        "mesh-switch-b",
+        "mesh-switch-c",
+        "mesh-switch-d"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "entry_id": "mesh-switch-a",
+      "device_class_id": "mesh-switch",
+      "quantity": 1,
+      "role": "server-leaf",
+      "fabric_id": "converged",
+      "topology_mode": "mesh"
+    },
+    {
+      "entry_id": "mesh-switch-b",
+      "device_class_id": "mesh-switch",
+      "quantity": 1,
+      "role": "server-leaf",
+      "fabric_id": "converged",
+      "topology_mode": "mesh"
+    },
+    {
+      "entry_id": "mesh-switch-c",
+      "device_class_id": "mesh-switch",
+      "quantity": 1,
+      "role": "server-leaf",
+      "fabric_id": "converged",
+      "topology_mode": "mesh"
+    },
+    {
+      "entry_id": "mesh-switch-d",
+      "device_class_id": "mesh-switch",
+      "quantity": 1,
+      "role": "server-leaf",
+      "fabric_id": "converged",
+      "topology_mode": "mesh"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "mclag-odd-count",
+  "name": "Invalid Odd MCLAG Count",
+  "customer_name": "Reference Lab",
+  "status": "draft",
+  "device_catalog": [
+    {
+      "id": "leaf-switch",
+      "name": "Reference Leaf Switch",
+      "slug": "leaf-switch",
+      "category": "network"
+    }
+  ],
+  "fabric_domains": [
+    {
+      "fabric_id": "frontend",
+      "fabric_name": "frontend",
+      "fabric_class": "managed",
+      "topology_mode": "clos",
+      "switch_entry_ids": [
+        "server-leafs"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "entry_id": "server-leafs",
+      "device_class_id": "leaf-switch",
+      "quantity": 3,
+      "role": "server-leaf",
+      "fabric_id": "frontend",
+      "topology_mode": "clos",
+      "redundancy": {
+        "type": "mclag",
+        "switch_count": 3
+      },
+      "port_zones": [
+        {
+          "zone_id": "leaf-server",
+          "zone_name": "server-access",
+          "zone_type": "server",
+          "port_range": "1-48",
+          "priority": 0,
+          "allocation": "sequential"
+        }
+      ]
+    }
+  ]
+}
