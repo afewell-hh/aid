@@ -30,39 +30,41 @@ see `TECH_STACK.md`.
 
 ## Current Local Readiness
 
-Captured on this machine for Issue #2 (foundation readiness). These reflect one developer
-workstation, not a CI baseline — re-run the verify commands in your own environment.
+First captured for Issue #2 (foundation readiness); the four missing tools were then
+provisioned under Issue #15 (Backlog Step 01a). These reflect one developer workstation,
+not a CI baseline — re-run the verify commands in your own environment. All four newly
+provisioned tools are **user-local** installs (no system-wide changes, no sudo).
 
 | Tool | Status | Reported version |
 |------|--------|------------------|
 | Go | ✅ present | `go1.21.5 linux/amd64` |
 | Rust / Cargo | ✅ present | `cargo 1.90.0` |
-| cargo-component | ❌ missing | `error: no such command: component` |
-| MoonBit (`moon`) | ❌ missing | `moon: command not found` |
-| wasm-tools | ❌ missing | `wasm-tools: command not found` |
-| wit-bindgen | ❌ missing | `wit-bindgen: command not found` |
+| cargo-component | ✅ present | `cargo-component-component 0.21.1` |
+| MoonBit (`moon`) | ✅ present | `moon 0.1.20260529` (moonc `v0.9.3`) |
+| wasm-tools | ✅ present | `wasm-tools 1.251.0` |
+| wit-bindgen | ✅ present | `wit-bindgen-cli 0.57.1` |
 | hhfab | ✅ present | `v0.43.1` (fabric API `v0.96.2`) |
 
 ### Exact commands and results
 
 ```text
+$ moon --version
+moon 0.1.20260529 (3e1c753 2026-05-29) ~/.moon/bin/moon
+
+$ wasm-tools --version
+wasm-tools 1.251.0
+
+$ wit-bindgen --version
+wit-bindgen-cli 0.57.1
+
+$ cargo component --version
+cargo-component-component 0.21.1
+
 $ go version
 go version go1.21.5 linux/amd64
 
 $ cargo --version
 cargo 1.90.0 (840b83a10 2025-07-30)
-
-$ cargo component --version
-error: no such command: `component`
-
-$ moon --version
-moon: command not found
-
-$ wasm-tools --version
-wasm-tools: command not found
-
-$ wit-bindgen --version
-wit-bindgen: command not found
 
 $ hhfab versions
 INF Hedgehog Fabricator version=v0.43.1
@@ -70,42 +72,68 @@ INF No configuration found file=fab.yaml action="Showing release versions"
 # fabric API/agent/ctl: v0.96.2 (full output elided)
 ```
 
+Smoke checks (`moon help`, `wasm-tools --help`, `wit-bindgen --help`,
+`cargo component --help`) all exit `0`. `wit-bindgen --help` lists the `moonbit`
+subcommand and `wasm-tools --help` lists `validate` — the two commands the Phase 1
+exit gate depends on.
+
+### Installation method (Issue #15)
+
+All four tools were installed with official upstream commands, user-local, no sudo:
+
+```bash
+# MoonBit toolchain → installs to ~/.moon/bin (requires git)
+curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+
+# Bytecode Alliance tools → installs to ~/.cargo/bin (needs C toolchain + OpenSSL)
+cargo install --locked wasm-tools
+cargo install wit-bindgen-cli
+cargo install cargo-component --locked
+```
+
+PATH persistence for non-interactive shells (so future agents/CI resolve the tools):
+- `~/.cargo/env` is already sourced from both `~/.bashrc` and `~/.profile` (rustup default),
+  so `~/.cargo/bin` is on PATH for login and non-login shells.
+- The MoonBit installer adds `~/.moon/bin` to `~/.bashrc` only, which Ubuntu's `~/.bashrc`
+  skips for non-interactive shells. Issue #15 therefore also appends
+  `export PATH="$HOME/.moon/bin:$PATH"` to `~/.profile` so login shells resolve `moon`.
+
+Reproducibility note: `wit-bindgen-cli` is installed without `--locked` because that is the
+official upstream command, and upstream states the CLI is not yet stable — pin the recorded
+version (`0.57.1`) when reproducing. A future CI/workstation-setup ticket can convert these
+steps into a provisioning script.
+
 ---
 
-## Toolchain Gaps and the Phases They Block
+## Toolchain Coverage by Phase
 
-Per project policy, missing tools are **documented, not installed** — installation requires
-explicit project-lead approval. Each gap below is mapped to the earliest phase it blocks.
+As of Issue #15, the validation toolchain is fully provisioned locally. Each tool and the
+work it enables:
 
-- **wasm-tools — blocks Phase 1 (WIT Interface Design).**
-  Phase 1's exit gate requires `wasm-tools validate` on every WIT file. WIT files can be
-  *authored* without it, but the Phase 1 verification step cannot complete until it is
-  installed. Also needed to compose/validate components in Phases 3 and 5.
+- **wasm-tools** (`1.251.0`) — `wasm-tools validate` for the Phase 1 WIT exit gate; WASM
+  component compose/validate in Phases 3 and 5.
 
-- **wit-bindgen — blocks Phase 1 (WIT Interface Design).**
-  Phase 1's exit gate requires `wit-bindgen moonbit` to generate valid scaffolding from the
-  WIT files. Required again for bindings in Phases 3, 5, and 9.
+- **wit-bindgen** (`0.57.1`) — `wit-bindgen moonbit` scaffolding for the Phase 1 exit gate;
+  bindings for Phases 3, 5, and 9. Upstream marks the CLI unstable — pin the version.
 
-- **MoonBit (`moon`) — blocks the pulled-forward feasibility spike (Backlog Step 04 /
-  roadmap Phase 7) and Phase 3 (kernel), plus Phases 4, 6b, and 8.**
-  The MoonBit formal-verification feasibility spike is the earliest work it blocks. It
-  also participates in the Phase 1 exit gate (MoonBit bindgen scaffolding). The kernel,
-  BOM adapter (if MoonBit), JS frontend, and all `moon prove` formal-verification work
-  cannot proceed without it.
+- **MoonBit (`moon` `0.1.20260529`, moonc `v0.9.3`)** — the pulled-forward feasibility spike
+  (Backlog Step 04 / roadmap Phase 7), the topology kernel (Phase 3), BOM adapter (Phase 4),
+  JS frontend (Phase 6b), `moon prove` proofs (Phase 8), and the MoonBit half of the Phase 1
+  exit gate.
 
-- **cargo-component — blocks Phase 5 (hhfab adapter), and Phase 9 if NetBox adapter is Rust.**
-  Rust source can be written and unit-tested with the present Cargo, but building the
-  adapters as WASM components requires `cargo-component`.
+- **cargo-component** (`0.21.1`) — building Rust crates as WASM components for Phase 5 (hhfab
+  adapter) and Phase 9 (if the NetBox adapter is Rust).
+
+> Tooling is necessary but not sufficient. Having these tools installed does **not** make any
+> phase ready to start out of order — backlog dependency order (contracts → fixtures → kernel
+> → adapters → CLI/API → frontend) still gates the work.
 
 ### Phase 1 readiness summary
 
-Phase 1 (the immediate next phase) is **partially unblocked**: WIT interface design and
-authoring can begin now using the already-settled `DOMAIN_MODEL.md` types. However, the
-**Phase 1 exit gate cannot be fully satisfied** until `wasm-tools`, `wit-bindgen`, and
-`moon` are installed, because the gate requires WIT validation and MoonBit bindgen
-scaffolding.
+Phase 1 (WIT interface design) is now **toolchain-unblocked**: WIT authoring can proceed,
+and the Phase 1 exit gate (`wasm-tools validate` plus `wit-bindgen moonbit` scaffolding) can
+be fully satisfied with the locally installed tools. No tooling gap remains for Phase 1.
 
-Installed Go and `hhfab` are useful for later validation, but they do not make later
-backlog steps ready to start. Backlog order still applies: CLI/API, frontend, and export
-work remain blocked until their contract, fixture, kernel, and adapter dependencies are
-approved.
+Later backlog steps remain gated by their own dependencies, not by tooling: CLI/API,
+frontend, and export work stay blocked until their contract, fixture, kernel, and adapter
+prerequisites are approved.
