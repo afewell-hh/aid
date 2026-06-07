@@ -258,11 +258,26 @@ interface types {
   // Bill of materials (recursive DeviceClass traversal, plan-time)
   // ----------------------------------------------------------------------
 
+  /// A flat, non-recursive identity snapshot of a `device-class`, carried in
+  /// BOM output so the BOM adapter can render human-reviewable CSV/JSON
+  /// (names, slugs, categories, vendor part numbers) from `device-class-bom[]`
+  /// alone — without consuming `topology-plan` or looking up the catalog.
+  /// It deliberately omits the recursive `sub-components`, `ports`, and
+  /// `attributes` fields, so it cannot reintroduce a cycle. See `wit/README.md`.
+  record device-class-summary {
+    id: device-class-id,
+    name: string,
+    slug: string,
+    category: string,
+    manufacturer: option<string>,
+    part-number: option<string>,
+  }
+
   /// One resolved BOM line, flattened from the recursive sub-component tree.
   record bom-line-item {
     /// Slot path from the root device class, e.g. ["nic-fe", "xcvr"].
     path: list<string>,
-    device-class-id: device-class-id,
+    device-class: device-class-summary,
     quantity-per-parent: u32,
     /// Product of quantity-per-parent along the path (per root unit).
     quantity-per-unit: u32,
@@ -273,7 +288,7 @@ interface types {
   /// BOM for one plan entry's device class. Per-unit values are independent of
   /// fleet size; fleet values scale by `plan-quantity`.
   record device-class-bom {
-    device-class-id: device-class-id,
+    device-class: device-class-summary,
     entry-id: entry-id,
     plan-quantity: u32,
     line-items: list<bom-line-item>,

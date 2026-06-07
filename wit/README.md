@@ -102,7 +102,22 @@ world bom-adapter-component          { export bom-adapter; }
    `result<_, variant>` with a typed error (`calc-error`, `hhfab-error`,
    `bom-error`) — no raw-string-only failure channel.
 
-7. **Minor additions beyond `DOMAIN_MODEL.md`, for round-tripping:**
+7. **BOM carries a `device-class-summary` snapshot, not an ID or the full
+   `device-class`.** `device-class-bom` and `bom-line-item` each embed a
+   `device-class-summary` (`id`, `name`, `slug`, `category`, `manufacturer`,
+   `part-number`). This keeps the BOM adapter input **self-contained**: it can
+   render human-reviewable CSV/JSON (`ROADMAP.md` Phase 4) from
+   `device-class-bom[]` alone, without consuming `topology-plan` or looking up
+   the catalog — preserving the adapter boundary. `DOMAIN_MODEL.md` models
+   `DeviceClassBOM.device_class` / `BOMLineItem.device_class` as the full
+   `DeviceClass`; the summary is a flat projection of its identity fields,
+   deliberately omitting `sub-components`, `ports`, and `attributes` so it
+   stays non-recursive and cannot reintroduce a cycle. Quantities (not the
+   recursive structure) are what the BOM needs, and those live on
+   `bom-line-item`. No plan metadata is added to `bom-options`/`export-bom`:
+   the summary fields cover the per-device-class sections the adapter renders.
+
+8. **Minor additions beyond `DOMAIN_MODEL.md`, for round-tripping:**
    `device-class-bom.entry-id` (maps a BOM back to its originating plan entry),
    `topology-node.node-id` and the id-based edges (item 1), and
    `topology-ir.metadata` (`plan-metadata`, matching the `metadata` field of the
@@ -119,7 +134,7 @@ world bom-adapter-component          { export bom-adapter; }
 | `SwitchPortZone`, port range / breakout / allocation | `switch-port-zone`, `port-range` (string), `breakout-option`, `allocation-strategy`, `zone-type` |
 | `PlanConnection`, connection / distribution / port-type enums | `plan-connection`, `connection-type`, `distribution`, `port-type` |
 | `TopologyIR`, `TopologyNode`, `TopologyEdge`, `FabricSummary` | `topology-ir`, `topology-node`, `topology-edge`, `fabric-summary` (+ `node-type`, `plan-metadata`) |
-| `DeviceClassBOM`, `BOMLineItem` | `device-class-bom`, `bom-line-item` |
+| `DeviceClassBOM`, `BOMLineItem` (`.device_class`) | `device-class-bom`, `bom-line-item` (each carries a `device-class-summary`) |
 | `ValidationResult`, `ValidationIssue` | `validation-result`, `validation-issue`, `issue-severity` |
 | hhfab export options / result | `hhfab-options`, `hhfab-output`, `wiring-document`, `hhfab-error` |
 | BOM export options / result | `bom-options`, `bom-output`, `bom-format`, `bom-error` |
