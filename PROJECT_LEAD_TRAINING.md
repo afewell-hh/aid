@@ -68,7 +68,7 @@ Before planning any work, a new lead must read these in order:
 
 1. `README.md` — what AID is and does
 2. `DECISIONS.md` — settled architectural decisions
-3. `ARCHITECTURE.md` — 4-layer architecture, WASM component model
+3. `ARCHITECTURE.md` — five-layer architecture, WASM component model
 4. `DOMAIN_MODEL.md` — target domain classes and ownership hierarchy
 5. `TECH_STACK.md` — MoonBit/Rust/Go stack and why
 6. `ALGORITHMS.md` — the 8 core topology algorithms
@@ -129,8 +129,8 @@ The lead must understand these boundaries well enough to catch scope violations:
 
 **Layer 1 — topology-calculator.wasm (MoonBit)**
 - Pure computation: no I/O, no filesystem, no HTTP
-- Input: `TopologyPlan` dataclass tree
-- Output: `TopologyIR` + `ServerClassBOM[]` + `ValidationResult`
+- Input: `TopologyPlan` typed tree (`DeviceClass` catalog, `PlanEntry`, `FabricDomain`)
+- Output: `TopologyIR` + `DeviceClassBOM[]` + `ValidationResult`
 - Formally verified invariants: see `DECISIONS.md` D2
 - If a proposed change requires this layer to do I/O, it is wrong
 
@@ -148,6 +148,12 @@ The lead must understand these boundaries well enough to catch scope violations:
 - User-facing commands
 - Hosts WASM components via `wasmtime-go`
 - Reads plan YAML, writes output files
+- Optionally runs as `aid serve` to expose the REST API for the web frontend
+
+**Layer 5 — Web frontend (MoonBit → JavaScript + Bootstrap 5)**
+- Browser GUI that emulates NetBox's visual appearance (see `DECISIONS.md` D14, D15)
+- MoonBit compiled to JavaScript (`moon build --target js`); calls the Go REST API only
+- Optional — all functionality remains available via the `aid` CLI without it
 
 The WIT interfaces in `wit/` define every layer boundary. No component should call another
 component directly — all orchestration goes through the CLI.
@@ -356,8 +362,8 @@ AID uses robust QA, not just "tests pass":
 3. **Formal verification**: kernel invariants must be verified by `moon prove`. A proof
    that no longer holds after a kernel change is a blocking failure.
 
-4. **BOM correctness**: for each fixture, verify fleet BOM totals equal per-server counts
-   scaled by quantity. This must be automated.
+4. **BOM correctness**: for each fixture, verify fleet BOM totals equal per-unit counts
+   (recursive `DeviceClass` traversal) scaled by `PlanEntry.quantity`. This must be automated.
 
 5. **Honest reporting**: if something was not run, say so. If a result depends on local
    state, say so. If there is residual risk, name it.

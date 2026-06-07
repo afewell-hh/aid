@@ -36,7 +36,7 @@ leaf_count = ceil(
 - `leaf_count` is clamped to [2, 4] when ESLAG redundancy is required
 
 **Multiple connection types targeting the same zone:**
-When multiple server classes target the same zone at different speeds, compute
+When multiple groups of servers target the same zone at different speeds, compute
 `leaf_count` for each (zone, speed) pair independently and take the maximum:
 ```
 leaf_count = max over all (zone, speed) pairs of:
@@ -84,7 +84,7 @@ switch_index = (rail × servers_per_domain) + floor(server_index / servers_per_d
 ```
 
 **Variables:**
-- `server_index`: 0-based index of the server instance within its server class
+- `server_index`: 0-based index of the server instance within its plan entry
 - `port_index`: 0-based port index on the NIC
 - `total_rails`: total number of GPU rails in the plan (from server connection `rail` fields)
 - `ports_per_switch_zone`: logical ports per zone per switch instance
@@ -129,37 +129,53 @@ Must be even — validated as a hard constraint. Each of the 3 pairs gets equal 
 
 ---
 
-## Algorithm 6: BOM Scaling
+## Algorithm 6: BOM Scaling (Recursive DeviceClass Traversal)
 
-The server class is the atomic BOM unit. Fleet quantities are always a multiple of the
-per-server specification.
+`DeviceClass` is the atomic BOM unit. Any hardware component — server, switch, NIC,
+transceiver, GPU board, PDU — is a `DeviceClass` that may contain other `DeviceClass`
+instances as `SubComponent { slot_id, device_class, quantity_per_parent }` entries. BOM
+derivation is a depth-first traversal of the sub-component tree at plan time, with no
+database access (see `DECISIONS.md` D6 and D13). There is no server-specific root type.
+
+For each node in the tree, quantities multiply down the path from the root device class:
 
 ```
-fleet_count(component) = per_server_count(component) × server_class.quantity
+quantity_per_unit(node) = product of quantity_per_parent for every edge from the root to node
+fleet_quantity(node)    = quantity_per_unit(node) × plan_entry.quantity
 ```
 
-For a BOM line item to be valid, `per_server_count` must be a positive integer.
-Fractional components (e.g. "0.5 CPUs per server") are a modeling error.
+`quantity_per_unit` of the root device class is 1. For every BOM line item to be valid,
+each `quantity_per_parent` must be a positive integer. Fractional sub-component counts
+(e.g. "0.5 CPUs per parent") are a modeling error.
 
-**Example:**
+**Example — GPU server device class, plan quantity = 16:**
 ```
-ServerClass: ComputeGPU, quantity=16
-  Per-server:
-    Barebone chassis: 1
-    GPU board:        1
-    CPU (2-socket):   2
-    DIMM (24-slot):   24
-    NVMe drive:       2
-    ConnectX-7 NIC:   8
-    BlueField-3 DPU:  1
+DeviceClass: ComputeGPU Server        plan_quantity = 16
+  sub_components (quantity_per_parent):
+    chassis  → AS-4126GS Barebone     1
+    gpu      → H100 SXM GPU Board      8
+    cpu      → 2-socket CPU            2
+    dimm     → 64GB DDR5 DIMM         24
+    nvme     → NVMe drive              2
+    nic-fe   → ConnectX-7 NIC          8
+      sub_components:
+        xcvr → OSFP 400G Transceiver   1   (per NIC)
+    nic-be   → BlueField-3 DPU         1
 
-Fleet totals:
-    Barebone chassis: 16
-    CPU:              32
-    DIMM:             384
-    ConnectX-7 NIC:   128
-    BlueField-3 DPU:  16
+Per-unit (quantity_per_unit) and fleet (× 16) totals:
+    Barebone chassis:        1   →    16
+    H100 SXM GPU Board:      8   →   128
+    CPU:                     2   →    32
+    64GB DDR5 DIMM:         24   →   384
+    NVMe drive:              2   →    32
+    ConnectX-7 NIC:          8   →   128
+    OSFP 400G Transceiver:   8   →   128   (8 NICs × 1 transceiver each, recursed)
+    BlueField-3 DPU:         1   →    16
 ```
+
+A switch `DeviceClass` with transceiver sub-components derives its BOM by the same
+recursion — there is no server-specific special case. See `DOMAIN_MODEL.md`
+(`DeviceClassBOM`, `BOMLineItem`) for the output structure.
 
 ---
 

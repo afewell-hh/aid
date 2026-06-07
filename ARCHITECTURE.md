@@ -27,7 +27,8 @@
 **Responsibility:** Given a `TopologyPlan` input, produce a `TopologyIR` output.
 
 Inputs (via WIT):
-- `TopologyPlan` — server classes, NICs, connections, switch classes, port zones
+- `TopologyPlan` — device catalog (`DeviceClass` with nested sub-components), plan
+  entries (`PlanEntry`), connections (`PlanConnection`), fabric domains, port zones
 
 Outputs (via WIT):
 - `TopologyIR` — the complete topology as a typed graph
