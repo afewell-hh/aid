@@ -86,8 +86,10 @@ explicit project-lead approval. Each gap below is mapped to the earliest phase i
   Phase 1's exit gate requires `wit-bindgen moonbit` to generate valid scaffolding from the
   WIT files. Required again for bindings in Phases 3, 5, and 9.
 
-- **MoonBit (`moon`) — blocks Phase 3 (kernel) first, and Phases 4, 6b, 7, 8.**
-  Also participates in the Phase 1 exit gate (MoonBit bindgen scaffolding). The kernel,
+- **MoonBit (`moon`) — blocks the pulled-forward feasibility spike (Backlog Step 04 /
+  roadmap Phase 7) and Phase 3 (kernel), plus Phases 4, 6b, and 8.**
+  The MoonBit formal-verification feasibility spike is the earliest work it blocks. It
+  also participates in the Phase 1 exit gate (MoonBit bindgen scaffolding). The kernel,
   BOM adapter (if MoonBit), JS frontend, and all `moon prove` formal-verification work
   cannot proceed without it.
 
@@ -101,8 +103,9 @@ Phase 1 (the immediate next phase) is **partially unblocked**: WIT interface des
 authoring can begin now using the already-settled `DOMAIN_MODEL.md` types. However, the
 **Phase 1 exit gate cannot be fully satisfied** until `wasm-tools`, `wit-bindgen`, and
 `moon` are installed, because the gate requires WIT validation and MoonBit bindgen
-scaffolding. Recommend installing those three before Phase 1 review, or splitting Phase 1
-into an authoring sub-step (unblocked) and a validation sub-step (blocked on tooling).
+scaffolding.
 
-Phases that are tooling-ready today: anything depending only on **Go** (6/6b orchestration
-scaffolding) and the **hhfab** behavioral-contract check are runnable now.
+Installed Go and `hhfab` are useful for later validation, but they do not make later
+backlog steps ready to start. Backlog order still applies: CLI/API, frontend, and export
+work remain blocked until their contract, fixture, kernel, and adapter dependencies are
+approved.
