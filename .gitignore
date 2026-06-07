@@ -1,0 +1,9 @@
+# AID repository ignore rules.
+# Per-package build output (e.g. MoonBit `_build/`, Go test binaries) is handled
+# by each package's own .gitignore (see spikes/moonbit-port-proof/.gitignore).
+
+# Local scratch / artifacts kept out of version control
+/gitignored/
+
+# Environment / secrets
+.env
