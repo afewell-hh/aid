@@ -1,0 +1,383 @@
+package aid:core@0.1.0;
+
+/// Shared domain, intermediate-representation (IR), BOM, and validation types
+/// for the AID core component contracts.
+///
+/// Design rule: WIT records cannot be recursive and cross-record cycles are
+/// avoided. The hardware model is therefore a *normalized catalog* — every
+/// `device-class` lives once in `topology-plan.device-catalog`, and all
+/// parent/child and cross-entity links are expressed as string-backed IDs
+/// (see `device-class-id`, `entry-id`, `zone-id`, …). See `wit/README.md`.
+interface types {
+  // ----------------------------------------------------------------------
+  // Identifiers (string-backed, stable references)
+  // ----------------------------------------------------------------------
+  type plan-id = string;
+  type device-class-id = string;
+  type entry-id = string;
+  type fabric-id = string;
+  type zone-id = string;
+  type node-id = string;
+  type edge-id = string;
+  type connection-id = string;
+
+  // ----------------------------------------------------------------------
+  // DeviceClass — universal recursive hardware/BOM unit (normalized catalog)
+  // ----------------------------------------------------------------------
+
+  /// Arbitrary vendor-specific key/value attribute. A list of these is used
+  /// instead of a map, since WIT has no native map type.
+  record attribute {
+    key: string,
+    value: string,
+  }
+
+  enum cage-type {
+    osfp,
+    qsfp112,
+    qsfp28,
+    sfp28,
+    rj45,
+  }
+
+  enum medium {
+    optical,
+    dac,
+    aoc,
+    copper,
+  }
+
+  /// A network port on a device (NIC port, switch port).
+  record port-spec {
+    port-id: string,
+    speed-gbps: u32,
+    cage: cage-type,
+    medium: medium,
+  }
+
+  /// A child entry on a parent `device-class`. References the child by id
+  /// (`device-class-id`) rather than embedding it, which breaks the otherwise
+  /// recursive DeviceClass -> SubComponent -> DeviceClass cycle.
+  record sub-component {
+    slot-id: string,
+    device-class-id: device-class-id,
+    quantity-per-parent: u32,
+  }
+
+  /// A reusable hardware template. Any component — server, switch, NIC,
+  /// transceiver, GPU board, PDU — is a `device-class`. Recursive composition
+  /// is expressed through `sub-components` (id references into the catalog).
+  record device-class {
+    id: device-class-id,
+    name: string,
+    slug: string,
+    category: string,
+    manufacturer: option<string>,
+    part-number: option<string>,
+    description: option<string>,
+    attributes: list<attribute>,
+    ports: list<port-spec>,
+    sub-components: list<sub-component>,
+  }
+
+  // ----------------------------------------------------------------------
+  // Fabric
+  // ----------------------------------------------------------------------
+  enum fabric-class {
+    managed,
+    unmanaged,
+  }
+
+  enum topology-mode {
+    clos,
+    mesh,
+  }
+
+  /// A named, independently-wired switching fabric. References its switch
+  /// plan entries by id to avoid embedding (and duplicating) `plan-entry`.
+  record fabric-domain {
+    fabric-id: fabric-id,
+    fabric-name: string,
+    fabric-class: fabric-class,
+    topology-mode: topology-mode,
+    switch-entry-ids: list<entry-id>,
+  }
+
+  // ----------------------------------------------------------------------
+  // Switch port zones
+  // ----------------------------------------------------------------------
+  enum zone-type {
+    server,
+    uplink,
+    mesh,
+    peer,
+    session,
+    oob,
+  }
+
+  enum allocation-strategy {
+    sequential,
+    interleaved,
+    spaced,
+  }
+
+  /// A breakout option for a zone, e.g. one physical 400G port broken out
+  /// into four logical 100G ports.
+  record breakout-option {
+    logical-ports: u32,
+    logical-speed-gbps: u32,
+  }
+
+  /// A named allocation region on a switch plan entry. `peer-zone-id` is an
+  /// optional id reference (not an embedded zone) to avoid a zone<->zone cycle.
+  record switch-port-zone {
+    zone-id: zone-id,
+    zone-name: string,
+    zone-type: zone-type,
+    /// Physical port range expression, e.g. "1-48" or "1-32:2".
+    port-range: string,
+    breakout: option<breakout-option>,
+    priority: u32,
+    allocation: allocation-strategy,
+    transceiver-intent-id: option<device-class-id>,
+    peer-zone-id: option<zone-id>,
+  }
+
+  // ----------------------------------------------------------------------
+  // Connections
+  // ----------------------------------------------------------------------
+  enum connection-type {
+    unbundled,
+    bundled,
+    mclag,
+    eslag,
+  }
+
+  enum distribution {
+    same-switch,
+    alternating,
+    rail-optimized,
+  }
+
+  enum port-type {
+    data,
+    ipmi,
+    pxe,
+  }
+
+  /// A connection from a specific NIC sub-component port to a switch port
+  /// zone. `nic-slot-id` references a `sub-component.slot-id` on the entry's
+  /// device class; `target-zone-id` references a `switch-port-zone` by id.
+  record plan-connection {
+    connection-id: connection-id,
+    nic-slot-id: string,
+    port-index: u32,
+    ports-per-connection: u32,
+    connection-type: connection-type,
+    distribution: distribution,
+    target-zone-id: zone-id,
+    speed-gbps: u32,
+    rail: option<u32>,
+    port-type: port-type,
+    transceiver-intent-id: option<device-class-id>,
+  }
+
+  // ----------------------------------------------------------------------
+  // Plan entries
+  // ----------------------------------------------------------------------
+  enum plan-role {
+    server,
+    spine,
+    server-leaf,
+    border-leaf,
+    oob-leaf,
+    hhg,
+  }
+
+  record mclag-config {
+    switch-count: u32,
+  }
+
+  record eslag-config {
+    switch-count: u32,
+  }
+
+  /// Optional redundancy configuration for a switch plan entry.
+  variant redundancy {
+    none,
+    mclag(mclag-config),
+    eslag(eslag-config),
+  }
+
+  /// A group of identical devices in the plan. Plan-specific concerns
+  /// (quantity, role, wiring intent) live here; the hardware template lives
+  /// in the catalog and is referenced by `device-class-id`.
+  ///
+  /// Field applicability depends on `role`:
+  ///   - switch roles use `fabric-id`, `override-quantity`, `topology-mode`,
+  ///     `redundancy`, `port-zones`.
+  ///   - server role uses `connections`.
+  /// Inapplicable list fields are empty; inapplicable options are `none`.
+  record plan-entry {
+    entry-id: entry-id,
+    device-class-id: device-class-id,
+    quantity: u32,
+    role: plan-role,
+    label: option<string>,
+    // switch-specific
+    fabric-id: option<fabric-id>,
+    override-quantity: option<u32>,
+    topology-mode: option<topology-mode>,
+    redundancy: redundancy,
+    port-zones: list<switch-port-zone>,
+    // server-specific
+    connections: list<plan-connection>,
+  }
+
+  enum plan-status {
+    draft,
+    review,
+    approved,
+    exported,
+  }
+
+  /// Root aggregate and the input to the topology calculator.
+  record topology-plan {
+    id: plan-id,
+    name: string,
+    customer-name: string,
+    status: plan-status,
+    /// Normalized hardware catalog; every device class referenced by id
+    /// anywhere in the plan must appear here exactly once.
+    device-catalog: list<device-class>,
+    fabric-domains: list<fabric-domain>,
+    entries: list<plan-entry>,
+  }
+
+  // ----------------------------------------------------------------------
+  // Bill of materials (recursive DeviceClass traversal, plan-time)
+  // ----------------------------------------------------------------------
+
+  /// A flat, non-recursive identity snapshot of a `device-class`, carried in
+  /// BOM output so the BOM adapter can render human-reviewable CSV/JSON
+  /// (names, slugs, categories, vendor part numbers) from `device-class-bom[]`
+  /// alone — without consuming `topology-plan` or looking up the catalog.
+  /// It deliberately omits the recursive `sub-components`, `ports`, and
+  /// `attributes` fields, so it cannot reintroduce a cycle. See `wit/README.md`.
+  record device-class-summary {
+    id: device-class-id,
+    name: string,
+    slug: string,
+    category: string,
+    manufacturer: option<string>,
+    part-number: option<string>,
+  }
+
+  /// One resolved BOM line, flattened from the recursive sub-component tree.
+  record bom-line-item {
+    /// Slot path from the root device class, e.g. ["nic-fe", "xcvr"].
+    path: list<string>,
+    device-class: device-class-summary,
+    quantity-per-parent: u32,
+    /// Product of quantity-per-parent along the path (per root unit).
+    quantity-per-unit: u32,
+    /// quantity-per-unit * plan-quantity.
+    fleet-quantity: u32,
+  }
+
+  /// BOM for one plan entry's device class. Per-unit values are independent of
+  /// fleet size; fleet values scale by `plan-quantity`.
+  record device-class-bom {
+    device-class: device-class-summary,
+    entry-id: entry-id,
+    plan-quantity: u32,
+    line-items: list<bom-line-item>,
+  }
+
+  // ----------------------------------------------------------------------
+  // Validation
+  // ----------------------------------------------------------------------
+  enum issue-severity {
+    error,
+    warning,
+  }
+
+  /// A single validation finding. Optional id fields locate the issue without
+  /// embedding the referenced objects.
+  record validation-issue {
+    severity: issue-severity,
+    code: string,
+    message: string,
+    entry-id: option<entry-id>,
+    fabric-id: option<fabric-id>,
+    zone-id: option<zone-id>,
+  }
+
+  /// Errors block generation; warnings (e.g. oversubscription) do not.
+  record validation-result {
+    is-valid: bool,
+    errors: list<validation-issue>,
+    warnings: list<validation-issue>,
+  }
+
+  // ----------------------------------------------------------------------
+  // TopologyIR — pure calculator output, stable handoff to export adapters
+  // ----------------------------------------------------------------------
+  enum node-type {
+    server,
+    switch,
+    spine,
+  }
+
+  record topology-node {
+    node-id: node-id,
+    name: string,
+    node-type: node-type,
+    device-class-id: device-class-id,
+    fabric: option<string>,
+    hedgehog-role: option<string>,
+    instance-index: u32,
+  }
+
+  /// A planned cable. Endpoints are node *ids* (not embedded nodes) to keep
+  /// the IR an acyclic, normalized graph.
+  record topology-edge {
+    edge-id: edge-id,
+    node-a-id: node-id,
+    node-b-id: node-id,
+    speed-gbps: u32,
+    fabric: string,
+    zone: string,
+    breakout-index: option<u32>,
+    connection-type: string,
+    port-a: string,
+    port-b: string,
+  }
+
+  record fabric-summary {
+    fabric-name: string,
+    switch-count: u32,
+    total-server-bandwidth-gbps: u64,
+    total-spine-bandwidth-gbps: u64,
+    /// > 1.0 should be surfaced as a warning (see DECISIONS D11).
+    oversubscription-ratio: f64,
+  }
+
+  /// Small descriptive header carried with the IR.
+  record plan-metadata {
+    plan-id: plan-id,
+    plan-name: string,
+    customer-name: string,
+  }
+
+  /// The typed, labeled topology graph. This is the stable artifact the hhfab
+  /// adapter consumes. BOMs and validation are returned alongside the IR by
+  /// the calculator (see `topology-calculator.calc-output`) rather than
+  /// embedded here, so adapters take only what they need. See `wit/README.md`.
+  record topology-ir {
+    metadata: plan-metadata,
+    nodes: list<topology-node>,
+    edges: list<topology-edge>,
+    fabrics: list<fabric-summary>,
+  }
+}

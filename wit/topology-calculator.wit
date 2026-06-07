@@ -1,0 +1,40 @@
+package aid:core@0.1.0;
+
+/// Layer 1 — the pure topology calculation kernel (MoonBit WASM component).
+///
+/// Pure computation only: no filesystem, HTTP, database, or NetBox I/O. Given a
+/// `topology-plan`, it produces the topology graph, the recursive BOMs, and the
+/// validation result. Domain-level problems (e.g. mesh with 4 switches, MCLAG
+/// odd count) are reported as `validation-result` data, NOT as `calc-error`.
+/// `calc-error` is reserved for inputs the kernel cannot process at all.
+interface topology-calculator {
+  use types.{topology-plan, topology-ir, device-class-bom, validation-result};
+
+  /// Bundled calculator output. `ir` is the stable handoff for the hhfab
+  /// adapter; `boms` feed the BOM adapter; `validation` carries errors and
+  /// warnings. They are returned together rather than embedded in the IR.
+  record calc-output {
+    ir: topology-ir,
+    boms: list<device-class-bom>,
+    validation: validation-result,
+  }
+
+  /// Failures that prevent producing any output. Constraint violations that
+  /// are expressible as data belong in `validation-result`, not here.
+  variant calc-error {
+    /// The plan was structurally unusable (e.g. catalog reference to an
+    /// unknown device-class-id, malformed range expression).
+    invalid-plan(string),
+    /// Unexpected internal failure.
+    internal(string),
+  }
+
+  /// Validate and calculate the full topology from a plan. A returned
+  /// `calc-output` may still carry blocking `validation.errors`; callers must
+  /// inspect `validation.is-valid` before exporting.
+  calculate: func(plan: topology-plan) -> result<calc-output, calc-error>;
+
+  /// Validate a plan without producing the full IR/BOMs. Convenience for
+  /// fast plan-edit feedback; never returns `calc-error` for domain issues.
+  validate: func(plan: topology-plan) -> result<validation-result, calc-error>;
+}
