@@ -1,0 +1,6 @@
+{
+  "name": "aid/kernel",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "AID topology calculation kernel (Phase 3, pure MoonBit) — issue #6"
+}

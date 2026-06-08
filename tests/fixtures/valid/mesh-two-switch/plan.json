@@ -1,0 +1,145 @@
+{
+  "id": "mesh-two-switch",
+  "name": "Two-Switch Mesh Reference",
+  "customer_name": "Reference Lab",
+  "status": "draft",
+  "device_catalog": [
+    {
+      "id": "mesh-server",
+      "name": "Reference Mesh Server",
+      "slug": "mesh-server",
+      "category": "compute",
+      "sub_components": [
+        {
+          "slot_id": "nic-fe",
+          "device_class_id": "cx7-single-nic",
+          "quantity_per_parent": 1
+        }
+      ]
+    },
+    {
+      "id": "cx7-single-nic",
+      "name": "ConnectX-7 Single-Port NIC",
+      "slug": "cx7-single-nic",
+      "category": "nic",
+      "ports": [
+        {
+          "port_id": "p0",
+          "speed_gbps": 200,
+          "cage_type": "qsfp112",
+          "medium": "dac"
+        }
+      ],
+      "sub_components": [
+        {
+          "slot_id": "xcvr",
+          "device_class_id": "qsfp112-200g-xcvr",
+          "quantity_per_parent": 1
+        }
+      ]
+    },
+    {
+      "id": "qsfp112-200g-xcvr",
+      "name": "QSFP112 200G Transceiver",
+      "slug": "qsfp112-200g-xcvr",
+      "category": "transceiver"
+    },
+    {
+      "id": "mesh-switch",
+      "name": "Reference Mesh Switch",
+      "slug": "mesh-switch",
+      "category": "network"
+    }
+  ],
+  "fabric_domains": [
+    {
+      "fabric_id": "converged",
+      "fabric_name": "converged",
+      "fabric_class": "managed",
+      "topology_mode": "mesh",
+      "switch_entry_ids": [
+        "mesh-switch-a",
+        "mesh-switch-b"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "entry_id": "mesh-servers",
+      "device_class_id": "mesh-server",
+      "quantity": 2,
+      "role": "server",
+      "label": "mesh-servers",
+      "connections": [
+        {
+          "connection_id": "fe-p0",
+          "nic_slot_id": "nic-fe",
+          "port_index": 0,
+          "ports_per_connection": 1,
+          "connection_type": "unbundled",
+          "distribution": "same-switch",
+          "target_zone_id": "a-server",
+          "speed_gbps": 200,
+          "port_type": "data",
+          "transceiver_intent_id": "qsfp112-200g-xcvr"
+        }
+      ]
+    },
+    {
+      "entry_id": "mesh-switch-a",
+      "device_class_id": "mesh-switch",
+      "quantity": 1,
+      "role": "server-leaf",
+      "fabric_id": "converged",
+      "override_quantity": 1,
+      "topology_mode": "mesh",
+      "port_zones": [
+        {
+          "zone_id": "a-server",
+          "zone_name": "server-access",
+          "zone_type": "server",
+          "port_range": "1-32",
+          "priority": 0,
+          "allocation": "sequential"
+        },
+        {
+          "zone_id": "a-mesh",
+          "zone_name": "mesh-link",
+          "zone_type": "mesh",
+          "port_range": "33-36",
+          "priority": 1,
+          "allocation": "sequential",
+          "peer_zone_id": "b-mesh"
+        }
+      ]
+    },
+    {
+      "entry_id": "mesh-switch-b",
+      "device_class_id": "mesh-switch",
+      "quantity": 1,
+      "role": "server-leaf",
+      "fabric_id": "converged",
+      "override_quantity": 1,
+      "topology_mode": "mesh",
+      "port_zones": [
+        {
+          "zone_id": "b-server",
+          "zone_name": "server-access",
+          "zone_type": "server",
+          "port_range": "1-32",
+          "priority": 0,
+          "allocation": "sequential"
+        },
+        {
+          "zone_id": "b-mesh",
+          "zone_name": "mesh-link",
+          "zone_type": "mesh",
+          "port_range": "33-36",
+          "priority": 1,
+          "allocation": "sequential",
+          "peer_zone_id": "a-mesh"
+        }
+      ]
+    }
+  ]
+}

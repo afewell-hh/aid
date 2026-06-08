@@ -1,0 +1,3 @@
+# MoonBit build output (regenerate with `moon build` / `moon test`)
+_build/
+target/

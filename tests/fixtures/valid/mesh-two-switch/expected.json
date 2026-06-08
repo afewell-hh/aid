@@ -48,5 +48,12 @@
     "Server-to-switch cables: 2 servers x 1 unbundled single-port data connection = 2 cables.",
     "Cable count total = 4 mesh + 2 server-to-switch = 6.",
     "BOM (Algorithm 6): mesh-server per unit = cx7-single-nic x1 and qsfp112-200g-xcvr x1 (1 NIC x 1 transceiver, recursed). Fleet = per_unit x plan_quantity(2). mesh-switch has no sub_components, so each switch entry contributes only itself."
-  ]
+  ],
+  "oversubscription": {
+    "converged": {
+      "applicable": false,
+      "oversubscription_ratio": 0.0,
+      "note": "N/A (DECISIONS.md D17): a mesh fabric has no spine/uplink tier; the mesh/peer zone as the uplink analog is a documented follow-up. Reported as 0.0 = N/A."
+    }
+  }
 }
