@@ -188,9 +188,12 @@ Per-unit (quantity_per_unit) and fleet (× 16) totals:
     BlueField-3 DPU:         1   →    16
 ```
 
-A switch `DeviceClass` with transceiver sub-components derives its BOM by the same
-recursion — there is no server-specific special case. See `DOMAIN_MODEL.md`
-(`DeviceClassBOM`, `BOMLineItem`) for the output structure.
+A switch `DeviceClass` with transceiver sub-components derives its BOM by the **same
+recursion** as any other device class: the quantity multiplication is uniform and there is
+no server-specific *type* or recursion path (D13). The only role-dependent step is **root
+inclusion** (above): a switch-role entry emits its root SKU as a line item, a server-role
+entry does not. See `DOMAIN_MODEL.md` (`DeviceClassBOM`, `BOMLineItem`) for the output
+structure.
 
 ---
 
