@@ -294,3 +294,45 @@ tooling matures (targeted during/after Phase 6).
   (de)serialization edge with `wit-bindgen`-generated canonical ABI. The WIT contract and the
   kernel's internal typed functions are unchanged.
 - Approved as the Phase 3 architecture sign-off (issue #6, kernel architecture note).
+
+---
+
+## D17: Oversubscription is computed from explicitly-declared leaf UPLINK zones, not inferred
+
+**Decision:** The oversubscription ratio (`ALGORITHMS.md` Algorithm 7) is
+`total_server_bandwidth / total_uplink_bandwidth`, where the denominator is the bandwidth
+of each leaf switch class's **explicitly declared UPLINK port zone** (`zone_type = uplink`):
+`sum over leaf classes of (leaf_count × uplink_zone_logical_ports × uplink_speed)`. AID
+never infers which ports are uplinks, and does **not** use the spine's total fabric-port
+capacity as the denominator.
+
+**Rationale:**
+- **There is no universal rule for which ports a switch uses as uplinks.** It varies
+  switch-to-switch and is a human design choice. Example: a Celestica DS5000 has
+  64×800G + 2×25G ports, but operators typically designate ~32×800G as uplinks and call
+  that 1:1, ignoring the 25G ports — a convention, not a derivable fact. The uplink set
+  must therefore come from an explicit per-leaf-class declaration, not a heuristic.
+- This yields the **leaf-tier downlink:uplink** ratio, which is the contention metric that
+  matters operationally and that AI/ML RDMA collectives are sensitive to (D11).
+- It makes Algorithm 7's own `ratio = 1.0 ⇔ non-blocking` semantics exact (server access
+  bandwidth == leaf uplink bandwidth), which the literal
+  `spine_count × spine_fabric_port_capacity` denominator broke whenever the spine is
+  over-provisioned (e.g. clos-small: 1 spine of 32 fabric ports terminating only 16 leaf
+  uplinks, because you cannot buy half a spine — literal form gives 0.25, the declared
+  leaf-uplink form gives the correct 0.5).
+
+**Consequences:**
+- Algorithm 7's denominator wording is amended from `spine_count × spine_fabric_port_capacity`
+  to the declared leaf-uplink-zone bandwidth (already available from Algorithm 2's
+  leaf-uplink computation). The kernel computes it from leaf entries' UPLINK zones, not
+  spine entries.
+- **Each leaf switch class is expected to declare an UPLINK port zone** identifying its
+  uplink-to-spine ports. A leaf class with no UPLINK zone has no computable oversubscription
+  for that fabric → reported as **N/A** (a future validation may warn on a leaf class that
+  lacks one).
+- **Mesh** fabrics have no spine; the mesh/peer zone is the uplink analog. Mesh
+  oversubscription is a documented **follow-up** — for now mesh fabrics report N/A.
+- Fixture baselines (Phase 3, issue #6): `clos-small` frontend = **0.5** (3200 / 6400);
+  `mesh-two-switch` and `switch-bom` = **N/A** (no spine/uplink tier). These are pinned into
+  the fixtures' `expected.json` as the lead-approved baseline addition.
+- Decided with the project owner during the Phase 3 GREEN review (issue #6).
