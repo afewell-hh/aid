@@ -148,6 +148,21 @@ fleet_quantity(node)    = quantity_per_unit(node) × plan_entry.quantity
 each `quantity_per_parent` must be a positive integer. Fractional sub-component counts
 (e.g. "0.5 CPUs per parent") are a modeling error.
 
+**Root inclusion is role-dependent.** Whether the root `DeviceClass` itself appears as a
+BOM line item depends on the owning `PlanEntry.role`:
+- **Server-role entries omit the root.** An assembled server is not itself a procurement
+  line item — you buy its chassis, GPUs, NICs, and transceivers, not the assembly. The BOM
+  lists the recursive sub-components only. (This is why the GPU-server example below lists
+  the chassis/GPU/NIC/transceiver but not "ComputeGPU Server".)
+- **Switch-role entries include the root.** A switch is itself a purchasable SKU, so the
+  switch `DeviceClass` appears as a line item (`quantity_per_unit = 1`) alongside its
+  sub-components (e.g. transceivers).
+
+This rule is fixed by the behavioral contract in `tests/fixtures/` (e.g. `clos-small`
+omits the `gpu-server` root but includes `leaf-switch`/`spine-switch`; `switch-bom`
+includes the `leaf-switch-800g` root). Decided as the Phase 3 kernel architecture sign-off
+(issue #6).
+
 **Example — GPU server device class, plan quantity = 16:**
 ```
 DeviceClass: ComputeGPU Server        plan_quantity = 16
@@ -173,9 +188,12 @@ Per-unit (quantity_per_unit) and fleet (× 16) totals:
     BlueField-3 DPU:         1   →    16
 ```
 
-A switch `DeviceClass` with transceiver sub-components derives its BOM by the same
-recursion — there is no server-specific special case. See `DOMAIN_MODEL.md`
-(`DeviceClassBOM`, `BOMLineItem`) for the output structure.
+A switch `DeviceClass` with transceiver sub-components derives its BOM by the **same
+recursion** as any other device class: the quantity multiplication is uniform and there is
+no server-specific *type* or recursion path (D13). The only role-dependent step is **root
+inclusion** (above): a switch-role entry emits its root SKU as a line item, a server-role
+entry does not. See `DOMAIN_MODEL.md` (`DeviceClassBOM`, `BOMLineItem`) for the output
+structure.
 
 ---
 
