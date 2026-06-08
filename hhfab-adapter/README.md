@@ -26,6 +26,9 @@ hhfab-adapter/
   tests/
     unit.rs     # edge -> Connection mapping per variant; no-empty-ecmp rule
     validate.rs # per-fixture: export_wiring -> `hhfab validate` (acceptance)
+    wasm_abi.rs # JSON-over-linear-memory ABI smoke test (proves the boundary)
+    golden.rs   # snapshot regression for the emitted wiring YAML
+    golden/     # committed wiring YAML snapshots (UPDATE_GOLDEN=1 to refresh)
     testdata/   # vendored topology-ir JSON (regenerate via tools/gen-ir.sh)
   tools/
     ir-gen/     # MoonBit generator: runs aid/kernel calculate() (additive)
@@ -35,10 +38,14 @@ hhfab-adapter/
 ## Build & test
 
 ```sh
-cargo test                       # native: unit + acceptance (shells out to hhfab)
-cargo build --target wasm32-unknown-unknown --release   # component artifact
+cargo build --release --target wasm32-unknown-unknown   # component artifact
+cargo test                       # unit + acceptance (hhfab validate) + golden + wasm ABI smoke
+UPDATE_GOLDEN=1 cargo test --test golden   # refresh golden snapshots after an intended change
 hhfab-adapter/tools/gen-ir.sh    # regenerate vendored IR test data
 ```
+
+`tests/wasm_abi.rs` builds the wasm artifact on demand if it isn't present, so a
+bare `cargo test` exercises the JSON-over-memory boundary too.
 
 ## CRDs emitted
 
