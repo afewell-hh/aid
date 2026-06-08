@@ -80,8 +80,13 @@ component orchestration are implemented in Go.
 
 **Rationale:** Go's `cobra`/`viper` ecosystem is the strongest for CLI tooling. Go
 compiles to a single static binary, simplifying distribution. `wasmtime-go` provides
-the WASM component host. `mattn/go-sqlite3` covers local state storage. Go is faster
+the WASM component host. SQLite covers local state storage. Go is faster
 to iterate on than Rust for I/O-heavy orchestration code.
+
+**Refinement (Phase 6 sign-off, issue #10): the SQLite driver is `modernc.org/sqlite`
+(pure-Go, cgo-free), not the originally-named `mattn/go-sqlite3`.** `mattn/go-sqlite3`
+requires cgo, which undercuts this decision's own single-static-binary goal; the pure-Go
+driver preserves it. Same SQLite storage, cleaner distribution.
 
 ---
 
