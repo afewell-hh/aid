@@ -1,0 +1,106 @@
+apiVersion: wiring.githedgehog.com/v1beta1
+kind: VLANNamespace
+metadata:
+  name: default
+spec:
+  ranges:
+  - from: 1000
+    to: 2999
+---
+apiVersion: vpc.githedgehog.com/v1beta1
+kind: IPv4Namespace
+metadata:
+  name: default
+spec:
+  subnets:
+  - 10.0.0.0/16
+---
+apiVersion: wiring.githedgehog.com/v1beta1
+kind: SwitchGroup
+metadata:
+  name: empty
+spec: {}
+---
+apiVersion: wiring.githedgehog.com/v1beta1
+kind: Switch
+metadata:
+  name: mesh-switch-a-0
+spec:
+  boot:
+    mac: 0c:20:12:3c:da:31
+  description: mesh-switch-a-0
+  profile: vs
+  role: server-leaf
+---
+apiVersion: wiring.githedgehog.com/v1beta1
+kind: Switch
+metadata:
+  name: mesh-switch-b-0
+spec:
+  boot:
+    mac: 0c:20:12:fd:40:5b
+  description: mesh-switch-b-0
+  profile: vs
+  role: server-leaf
+---
+apiVersion: wiring.githedgehog.com/v1beta1
+kind: Server
+metadata:
+  name: mesh-servers-0
+spec:
+  description: mesh-servers-0
+---
+apiVersion: wiring.githedgehog.com/v1beta1
+kind: Server
+metadata:
+  name: mesh-servers-1
+spec:
+  description: mesh-servers-1
+---
+apiVersion: wiring.githedgehog.com/v1beta1
+kind: Connection
+metadata:
+  name: mesh-servers-0--unbundled--mesh-switch-a-0
+spec:
+  unbundled:
+    link:
+      server:
+        port: mesh-servers-0/enp2s1
+      switch:
+        port: mesh-switch-a-0/E1/1
+---
+apiVersion: wiring.githedgehog.com/v1beta1
+kind: Connection
+metadata:
+  name: mesh-servers-1--unbundled--mesh-switch-a-0
+spec:
+  unbundled:
+    link:
+      server:
+        port: mesh-servers-1/enp2s1
+      switch:
+        port: mesh-switch-a-0/E1/2
+---
+apiVersion: wiring.githedgehog.com/v1beta1
+kind: Connection
+metadata:
+  name: mesh-switch-a-0--mesh--mesh-switch-b-0
+spec:
+  mesh:
+    links:
+    - leaf1:
+        port: mesh-switch-a-0/E1/3
+      leaf2:
+        port: mesh-switch-b-0/E1/1
+    - leaf1:
+        port: mesh-switch-a-0/E1/4
+      leaf2:
+        port: mesh-switch-b-0/E1/2
+    - leaf1:
+        port: mesh-switch-a-0/E1/5
+      leaf2:
+        port: mesh-switch-b-0/E1/3
+    - leaf1:
+        port: mesh-switch-a-0/E1/6
+      leaf2:
+        port: mesh-switch-b-0/E1/4

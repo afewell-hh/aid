@@ -1,0 +1,371 @@
+{
+  "metadata": {
+    "plan_id": "clos-small",
+    "plan_name": "Small Clos Reference",
+    "customer_name": "Reference Lab"
+  },
+  "nodes": [
+    {
+      "node_id": "gpu-servers-0",
+      "name": "gpu-servers-0",
+      "node_type": "server",
+      "device_class_id": "gpu-server",
+      "fabric": null,
+      "hedgehog_role": "server",
+      "instance_index": 0
+    },
+    {
+      "node_id": "gpu-servers-1",
+      "name": "gpu-servers-1",
+      "node_type": "server",
+      "device_class_id": "gpu-server",
+      "fabric": null,
+      "hedgehog_role": "server",
+      "instance_index": 1
+    },
+    {
+      "node_id": "gpu-servers-2",
+      "name": "gpu-servers-2",
+      "node_type": "server",
+      "device_class_id": "gpu-server",
+      "fabric": null,
+      "hedgehog_role": "server",
+      "instance_index": 2
+    },
+    {
+      "node_id": "gpu-servers-3",
+      "name": "gpu-servers-3",
+      "node_type": "server",
+      "device_class_id": "gpu-server",
+      "fabric": null,
+      "hedgehog_role": "server",
+      "instance_index": 3
+    },
+    {
+      "node_id": "server-leafs-0",
+      "name": "server-leafs-0",
+      "node_type": "switch",
+      "device_class_id": "leaf-switch",
+      "fabric": "frontend",
+      "hedgehog_role": "server-leaf",
+      "instance_index": 0
+    },
+    {
+      "node_id": "server-leafs-1",
+      "name": "server-leafs-1",
+      "node_type": "switch",
+      "device_class_id": "leaf-switch",
+      "fabric": "frontend",
+      "hedgehog_role": "server-leaf",
+      "instance_index": 1
+    },
+    {
+      "node_id": "spines-0",
+      "name": "spines-0",
+      "node_type": "spine",
+      "device_class_id": "spine-switch",
+      "fabric": "frontend",
+      "hedgehog_role": "spine",
+      "instance_index": 0
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "e0",
+      "node_a_id": "gpu-servers-0",
+      "node_b_id": "server-leafs-0",
+      "speed_gbps": 400,
+      "fabric": "frontend",
+      "zone": "leaf-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:0",
+      "port_b": "leaf-server"
+    },
+    {
+      "edge_id": "e1",
+      "node_a_id": "gpu-servers-0",
+      "node_b_id": "server-leafs-1",
+      "speed_gbps": 400,
+      "fabric": "frontend",
+      "zone": "leaf-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:1",
+      "port_b": "leaf-server"
+    },
+    {
+      "edge_id": "e2",
+      "node_a_id": "gpu-servers-1",
+      "node_b_id": "server-leafs-0",
+      "speed_gbps": 400,
+      "fabric": "frontend",
+      "zone": "leaf-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:0",
+      "port_b": "leaf-server"
+    },
+    {
+      "edge_id": "e3",
+      "node_a_id": "gpu-servers-1",
+      "node_b_id": "server-leafs-1",
+      "speed_gbps": 400,
+      "fabric": "frontend",
+      "zone": "leaf-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:1",
+      "port_b": "leaf-server"
+    },
+    {
+      "edge_id": "e4",
+      "node_a_id": "gpu-servers-2",
+      "node_b_id": "server-leafs-0",
+      "speed_gbps": 400,
+      "fabric": "frontend",
+      "zone": "leaf-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:0",
+      "port_b": "leaf-server"
+    },
+    {
+      "edge_id": "e5",
+      "node_a_id": "gpu-servers-2",
+      "node_b_id": "server-leafs-1",
+      "speed_gbps": 400,
+      "fabric": "frontend",
+      "zone": "leaf-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:1",
+      "port_b": "leaf-server"
+    },
+    {
+      "edge_id": "e6",
+      "node_a_id": "gpu-servers-3",
+      "node_b_id": "server-leafs-0",
+      "speed_gbps": 400,
+      "fabric": "frontend",
+      "zone": "leaf-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:0",
+      "port_b": "leaf-server"
+    },
+    {
+      "edge_id": "e7",
+      "node_a_id": "gpu-servers-3",
+      "node_b_id": "server-leafs-1",
+      "speed_gbps": 400,
+      "fabric": "frontend",
+      "zone": "leaf-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:1",
+      "port_b": "leaf-server"
+    },
+    {
+      "edge_id": "e8",
+      "node_a_id": "server-leafs-0",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:0",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e9",
+      "node_a_id": "server-leafs-0",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:1",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e10",
+      "node_a_id": "server-leafs-0",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:2",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e11",
+      "node_a_id": "server-leafs-0",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:3",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e12",
+      "node_a_id": "server-leafs-0",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:4",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e13",
+      "node_a_id": "server-leafs-0",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:5",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e14",
+      "node_a_id": "server-leafs-0",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:6",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e15",
+      "node_a_id": "server-leafs-0",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:7",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e16",
+      "node_a_id": "server-leafs-1",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:0",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e17",
+      "node_a_id": "server-leafs-1",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:1",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e18",
+      "node_a_id": "server-leafs-1",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:2",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e19",
+      "node_a_id": "server-leafs-1",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:3",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e20",
+      "node_a_id": "server-leafs-1",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:4",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e21",
+      "node_a_id": "server-leafs-1",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:5",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e22",
+      "node_a_id": "server-leafs-1",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:6",
+      "port_b": "fabric"
+    },
+    {
+      "edge_id": "e23",
+      "node_a_id": "server-leafs-1",
+      "node_b_id": "spines-0",
+      "speed_gbps": 0,
+      "fabric": "frontend",
+      "zone": "leaf-uplink",
+      "breakout_index": null,
+      "connection_type": "uplink",
+      "port_a": "leaf-uplink:7",
+      "port_b": "fabric"
+    }
+  ],
+  "fabrics": [
+    {
+      "fabric_name": "frontend",
+      "switch_count": 3,
+      "total_server_bandwidth_gbps": 3200,
+      "total_spine_bandwidth_gbps": 6400,
+      "oversubscription_ratio": 0.5
+    }
+  ]
+}
