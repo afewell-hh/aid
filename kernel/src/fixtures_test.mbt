@@ -10,13 +10,6 @@ fn calc(json : String) -> CalcOutput {
   }
 }
 
-fn has_oversub(out : CalcOutput, fabric : String) -> Bool {
-  match fabric_oversub(out, fabric) {
-    Some(_) => true
-    None => false
-  }
-}
-
 // ---------------------------------------------------------------- clos-small
 
 test "clos-small: device, cable and per-fabric switch counts" {
@@ -44,10 +37,12 @@ test "clos-small: recursive BOM per-unit and fleet totals" {
   assert_eq(bom_out_fleet(out, "spines", "spine-switch"), 1)
 }
 
-test "clos-small: oversubscription summary present for the fabric" {
+test "clos-small: oversubscription = 0.5 (D17: 3200 / 6400)" {
   let out = calc(clos_small_plan_json)
   assert_true(has_fabric_summary(out, "frontend"))
-  assert_true(has_oversub(out, "frontend"))
+  assert_eq(fabric_server_bw(out, "frontend"), Some(3200))
+  assert_eq(fabric_uplink_bw(out, "frontend"), Some(6400))
+  assert_eq(fabric_oversub(out, "frontend"), Some(0.5))
 }
 
 // ------------------------------------------------------------ mesh-two-switch
@@ -67,10 +62,10 @@ test "mesh-two-switch: recursive BOM fleet totals" {
   assert_eq(bom_out_fleet(out, "mesh-switch-b", "mesh-switch"), 1)
 }
 
-test "mesh-two-switch: oversubscription summary present for the fabric" {
+test "mesh-two-switch: oversubscription N/A (D17: no spine/uplink tier)" {
   let out = calc(mesh_two_switch_plan_json)
   assert_true(has_fabric_summary(out, "converged"))
-  assert_true(has_oversub(out, "converged"))
+  assert_eq(fabric_oversub(out, "converged"), Some(0.0))
 }
 
 // ----------------------------------------------------------------- switch-bom
@@ -90,8 +85,8 @@ test "switch-bom: non-server recursive BOM includes the switch SKU" {
   assert_eq(bom_out_fleet(out, "leaf-switches", "osfp-800g-xcvr"), 128) // 64 x 2
 }
 
-test "switch-bom: oversubscription summary present for the fabric" {
+test "switch-bom: oversubscription N/A (D17: leaf class has no UPLINK zone)" {
   let out = calc(switch_bom_plan_json)
   assert_true(has_fabric_summary(out, "bom-fabric"))
-  assert_true(has_oversub(out, "bom-fabric"))
+  assert_eq(fabric_oversub(out, "bom-fabric"), Some(0.0))
 }

@@ -135,20 +135,28 @@ fn total_server_bw(plan : TopologyPlan, fabric_id : String) -> Int {
   bw
 }
 
-fn total_spine_bw(plan : TopologyPlan, fabric_id : String) -> Int {
+// Algorithm 7 denominator (DECISIONS.md D17): total declared leaf-uplink
+// bandwidth = sum over the fabric's leaf switch classes of
+// (leaf_count × uplink_zone_logical_ports × uplink_speed), taken from each leaf
+// class's explicitly declared UPLINK zone (zone_type = uplink). Uplinks are
+// declared, never inferred; a leaf class with no UPLINK zone contributes nothing
+// (=> oversubscription N/A for that fabric). This is NOT the spine's fabric-port
+// capacity (the older form, replaced per D17).
+fn total_uplink_bw(plan : TopologyPlan, fabric_id : String) -> Int {
   let speed = fabric_speed(plan, fabric_id)
   let mut bw = 0
   for entry in plan.entries {
-    if entry_in_fabric(entry, fabric_id) && is_spine_role(entry.role) {
-      let n = instance_count(entry)
-      let mut ports = 0
-      for zone in entry.port_zones {
-        match zone.zone_type {
-          Uplink => ports = ports + port_range_count(zone.port_range)
-          _ => ()
+    if entry_in_fabric(entry, fabric_id) &&
+      !is_server_role(entry.role) &&
+      !is_spine_role(entry.role) {
+      match uplink_zone(entry) {
+        Some(uz) => {
+          let n = instance_count(entry)
+          let ports = zone_logical_capacity(uz)
+          bw = bw + n * ports * speed
         }
+        None => ()
       }
-      bw = bw + n * ports * speed
     }
   }
   bw
@@ -312,13 +320,15 @@ fn build_fabric_summaries(plan : TopologyPlan) -> Array[FabricSummary] {
   for fab in plan.fabric_domains {
     let switch_count = count_switches_in_fabric(plan, fab.fabric_id)
     let server_bw = total_server_bw(plan, fab.fabric_id)
-    let spine_bw = total_spine_bw(plan, fab.fabric_id)
+    // Denominator is declared leaf-uplink bandwidth (D17), carried in the
+    // total_spine_bandwidth_gbps WIT field (the leaf->spine uplink bandwidth).
+    let uplink_bw = total_uplink_bw(plan, fab.fabric_id)
     out.push({
       fabric_name: fab.fabric_name,
       switch_count: switch_count.reinterpret_as_uint(),
       total_server_bandwidth_gbps: server_bw.to_uint64(),
-      total_spine_bandwidth_gbps: spine_bw.to_uint64(),
-      oversubscription_ratio: oversubscription_ratio(server_bw, spine_bw),
+      total_spine_bandwidth_gbps: uplink_bw.to_uint64(),
+      oversubscription_ratio: oversubscription_ratio(server_bw, uplink_bw),
     })
   }
   out

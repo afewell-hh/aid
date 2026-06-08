@@ -52,6 +52,28 @@ pub fn fabric_oversub(out : CalcOutput, fabric_name : String) -> Double? {
   None
 }
 
+/// Total server-access bandwidth (Gbps) recorded for a fabric, if present.
+pub fn fabric_server_bw(out : CalcOutput, fabric_name : String) -> Int? {
+  for fs in out.ir.fabrics {
+    if fs.fabric_name == fabric_name {
+      return Some(fs.total_server_bandwidth_gbps.to_int())
+    }
+  }
+  None
+}
+
+/// Total leaf-uplink bandwidth (Gbps) recorded for a fabric — the Algorithm 7 /
+/// D17 oversubscription denominator, carried in the total_spine_bandwidth_gbps
+/// WIT field. None if no such fabric.
+pub fn fabric_uplink_bw(out : CalcOutput, fabric_name : String) -> Int? {
+  for fs in out.ir.fabrics {
+    if fs.fabric_name == fabric_name {
+      return Some(fs.total_spine_bandwidth_gbps.to_int())
+    }
+  }
+  None
+}
+
 /// Find the BOM for a plan entry by entry id.
 pub fn bom_for(out : CalcOutput, entry_id : String) -> DeviceClassBom? {
   for b in out.boms {

@@ -28,5 +28,12 @@
     "Device count = switch instances only = override_quantity(2) = 2. per_fabric_switch_counts.bom-fabric.server-leaf = 2.",
     "Cable count = 0: no connections, no spine entries, so no cables are derived. Wiring is intentionally out of scope for this BOM-focused fixture.",
     "BOM (Algorithm 6, recursive DeviceClass traversal on a non-server root): leaf-switch-800g per unit = the switch itself x1 plus osfp-800g-xcvr x64 (one transceiver sub-component slot at quantity_per_parent 64). Fleet = per_unit x plan_quantity(2): osfp-800g-xcvr 64 x 2 = 128."
-  ]
+  ],
+  "oversubscription": {
+    "bom-fabric": {
+      "applicable": false,
+      "oversubscription_ratio": 0.0,
+      "note": "N/A (DECISIONS.md D17): the leaf class declares no UPLINK zone and there is no spine tier, so leaf-uplink bandwidth is 0. Reported as 0.0 = N/A."
+    }
+  }
 }
