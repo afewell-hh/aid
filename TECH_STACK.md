@@ -4,7 +4,7 @@
 
 ### MoonBit — Topology Calculation Kernel
 
-**Used for:** `topology-calculator` WASM component, `bom-adapter` WASM component, `aid-ui` frontend
+**Used for:** `topology-calculator` WASM component, `aid-ui` frontend
 
 **Why MoonBit:**
 - First-class formal verification via `moon prove` (Z3 SMT backend, built into standard toolchain)
@@ -37,7 +37,16 @@
 
 ### Rust — Adapters and WASM Components
 
-**Used for:** `hhfab-adapter` WASM component, `netbox-adapter`, plan schema validation
+**Used for:** `hhfab-adapter` and `bom-adapter` WASM components, `netbox-adapter`, plan schema validation
+
+> **`bom-adapter` is Rust for the MVP** (Phase 4 architecture sign-off, issue #8), though
+> this doc originally listed it under MoonBit. Rationale: under **D16** the Layer-2 boundary
+> is JSON-over-linear-memory, so the adapter never links the kernel — the "reuse MoonBit
+> kernel types" benefit disappears (and the kernel's BOM structs carry no `@json` codec, so
+> MoonBit would hand-roll a decoder anyway, with no `kernel/` edits allowed). Rust instead
+> reuses the merged `hhfab-adapter` Layer-2 pattern verbatim (ABI shell, `wasmi` smoke test,
+> golden harness) plus the `csv`/`serde` crates. The BOM *test-data generator* stays MoonBit
+> (it must call the kernel's `calculate()`), preserving the kernel reuse that actually matters.
 
 **Why Rust:**
 - `serde_yaml`: production-proven YAML serialization — no equivalent in MoonBit ecosystem
