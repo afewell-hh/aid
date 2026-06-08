@@ -1,0 +1,45 @@
+{
+  "include_fleet_totals": true,
+  "boms": [
+    {
+      "entry_id": "leaf-switches",
+      "plan_quantity": 2,
+      "device_class": {
+        "id": "leaf-switch-800g",
+        "name": "Reference 64-port 800G Leaf Switch",
+        "slug": "leaf-switch-800g",
+        "category": "network",
+        "manufacturer": "Reference",
+        "part_number": "REF-SW-800"
+      },
+      "line_items": [
+        {
+          "path": [],
+          "level": 0,
+          "slug": "leaf-switch-800g",
+          "name": "Reference 64-port 800G Leaf Switch",
+          "category": "network",
+          "manufacturer": "Reference",
+          "part_number": "REF-SW-800",
+          "quantity_per_parent": 1,
+          "quantity_per_unit": 1,
+          "fleet_quantity": 2
+        },
+        {
+          "path": [
+            "xcvr"
+          ],
+          "level": 1,
+          "slug": "osfp-800g-xcvr",
+          "name": "OSFP 800G Transceiver",
+          "category": "transceiver",
+          "manufacturer": "Reference",
+          "part_number": "REF-XCVR-800",
+          "quantity_per_parent": 64,
+          "quantity_per_unit": 64,
+          "fleet_quantity": 128
+        }
+      ]
+    }
+  ]
+}

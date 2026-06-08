@@ -12,10 +12,11 @@
 //! and it RENDERS these values — it never recomputes them or re-derives the
 //! role-based root-inclusion rule (the kernel already applied it).
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// `types.wit` record `device-class-summary` — a flat identity snapshot.
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+/// `Serialize` so the JSON renderer can embed it verbatim as `device_class`.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DeviceClassSummary {
     pub id: String,
     pub name: String,
