@@ -1,0 +1,37 @@
+{
+  "metadata": {
+    "plan_id": "switch-bom",
+    "plan_name": "Switch BOM Reference",
+    "customer_name": "Reference Lab"
+  },
+  "nodes": [
+    {
+      "node_id": "leaf-switches-0",
+      "name": "leaf-switches-0",
+      "node_type": "switch",
+      "device_class_id": "leaf-switch-800g",
+      "fabric": "bom-fabric",
+      "hedgehog_role": "server-leaf",
+      "instance_index": 0
+    },
+    {
+      "node_id": "leaf-switches-1",
+      "name": "leaf-switches-1",
+      "node_type": "switch",
+      "device_class_id": "leaf-switch-800g",
+      "fabric": "bom-fabric",
+      "hedgehog_role": "server-leaf",
+      "instance_index": 1
+    }
+  ],
+  "edges": [],
+  "fabrics": [
+    {
+      "fabric_name": "bom-fabric",
+      "switch_count": 2,
+      "total_server_bandwidth_gbps": 0,
+      "total_spine_bandwidth_gbps": 0,
+      "oversubscription_ratio": 0
+    }
+  ]
+}

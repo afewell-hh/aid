@@ -1,0 +1,128 @@
+{
+  "metadata": {
+    "plan_id": "mesh-two-switch",
+    "plan_name": "Two-Switch Mesh Reference",
+    "customer_name": "Reference Lab"
+  },
+  "nodes": [
+    {
+      "node_id": "mesh-servers-0",
+      "name": "mesh-servers-0",
+      "node_type": "server",
+      "device_class_id": "mesh-server",
+      "fabric": null,
+      "hedgehog_role": "server",
+      "instance_index": 0
+    },
+    {
+      "node_id": "mesh-servers-1",
+      "name": "mesh-servers-1",
+      "node_type": "server",
+      "device_class_id": "mesh-server",
+      "fabric": null,
+      "hedgehog_role": "server",
+      "instance_index": 1
+    },
+    {
+      "node_id": "mesh-switch-a-0",
+      "name": "mesh-switch-a-0",
+      "node_type": "switch",
+      "device_class_id": "mesh-switch",
+      "fabric": "converged",
+      "hedgehog_role": "server-leaf",
+      "instance_index": 0
+    },
+    {
+      "node_id": "mesh-switch-b-0",
+      "name": "mesh-switch-b-0",
+      "node_type": "switch",
+      "device_class_id": "mesh-switch",
+      "fabric": "converged",
+      "hedgehog_role": "server-leaf",
+      "instance_index": 0
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "e0",
+      "node_a_id": "mesh-servers-0",
+      "node_b_id": "mesh-switch-a-0",
+      "speed_gbps": 200,
+      "fabric": "converged",
+      "zone": "a-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:0",
+      "port_b": "a-server"
+    },
+    {
+      "edge_id": "e1",
+      "node_a_id": "mesh-servers-1",
+      "node_b_id": "mesh-switch-a-0",
+      "speed_gbps": 200,
+      "fabric": "converged",
+      "zone": "a-server",
+      "breakout_index": null,
+      "connection_type": "unbundled",
+      "port_a": "nic-fe:0",
+      "port_b": "a-server"
+    },
+    {
+      "edge_id": "e2",
+      "node_a_id": "mesh-switch-a-0",
+      "node_b_id": "mesh-switch-b-0",
+      "speed_gbps": 0,
+      "fabric": "converged",
+      "zone": "mesh",
+      "breakout_index": null,
+      "connection_type": "mesh",
+      "port_a": "mesh:0",
+      "port_b": "mesh:0"
+    },
+    {
+      "edge_id": "e3",
+      "node_a_id": "mesh-switch-a-0",
+      "node_b_id": "mesh-switch-b-0",
+      "speed_gbps": 0,
+      "fabric": "converged",
+      "zone": "mesh",
+      "breakout_index": null,
+      "connection_type": "mesh",
+      "port_a": "mesh:1",
+      "port_b": "mesh:1"
+    },
+    {
+      "edge_id": "e4",
+      "node_a_id": "mesh-switch-a-0",
+      "node_b_id": "mesh-switch-b-0",
+      "speed_gbps": 0,
+      "fabric": "converged",
+      "zone": "mesh",
+      "breakout_index": null,
+      "connection_type": "mesh",
+      "port_a": "mesh:2",
+      "port_b": "mesh:2"
+    },
+    {
+      "edge_id": "e5",
+      "node_a_id": "mesh-switch-a-0",
+      "node_b_id": "mesh-switch-b-0",
+      "speed_gbps": 0,
+      "fabric": "converged",
+      "zone": "mesh",
+      "breakout_index": null,
+      "connection_type": "mesh",
+      "port_a": "mesh:3",
+      "port_b": "mesh:3"
+    }
+  ],
+  "fabrics": [
+    {
+      "fabric_name": "converged",
+      "switch_count": 2,
+      "total_server_bandwidth_gbps": 400,
+      "total_spine_bandwidth_gbps": 0,
+      "oversubscription_ratio": 0
+    }
+  ]
+}
