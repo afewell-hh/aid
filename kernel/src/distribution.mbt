@@ -1,13 +1,13 @@
 // Algorithms 3 & 4 — switch distribution (ALGORITHMS.md).
-//
-// RED phase: stubs return -1 so unit tests fail on assertions.
 
 /// Algorithm 4 — alternating (round-robin) distribution.
 /// switch_index = port_index % effective_quantity.
 pub fn switch_index_alternating(port_index : Int, effective_quantity : Int) -> Int {
-  let _ = port_index
-  let _ = effective_quantity
-  -1
+  if effective_quantity <= 0 {
+    0
+  } else {
+    port_index % effective_quantity
+  }
 }
 
 /// Algorithm 3 sub-case A — rail-optimized, capacity-sharing
@@ -20,11 +20,11 @@ pub fn switch_index_rail_shared(
   port_index : Int,
   ports_per_switch_zone : Int
 ) -> Int {
-  let _ = server_index
-  let _ = ports_per_connection
-  let _ = port_index
-  let _ = ports_per_switch_zone
-  -1
+  if ports_per_switch_zone <= 0 {
+    0
+  } else {
+    (server_index * ports_per_connection + port_index) / ports_per_switch_zone
+  }
 }
 
 /// Algorithm 3 sub-case B — rail-optimized, domain-based
@@ -37,9 +37,14 @@ pub fn switch_index_rail_domain(
   effective_quantity : Int,
   total_rails : Int
 ) -> Int {
-  let _ = rail
-  let _ = server_index
-  let _ = effective_quantity
-  let _ = total_rails
-  -1
+  if total_rails <= 0 {
+    0
+  } else {
+    let servers_per_domain = effective_quantity / total_rails
+    if servers_per_domain <= 0 {
+      rail
+    } else {
+      rail * servers_per_domain + server_index / servers_per_domain
+    }
+  }
 }

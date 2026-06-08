@@ -1,26 +1,79 @@
 // Algorithm 6 — recursive DeviceClass BOM traversal (ALGORITHMS.md; D6, D13).
 //
-// RED phase: stub returns a BOM with no line items so the unit/fixture tests
-// fail on their quantity assertions.
-//
-// GREEN contract (encoded by the tests):
 //   - quantity_per_unit(node) = product of quantity_per_parent from root to node
 //   - fleet_quantity(node)    = quantity_per_unit(node) * plan_entry.quantity
 //   - root quantity_per_unit  = 1
 //   - SERVER-role entries list their sub-components only (the assembled server is
 //     not itself a procurement line); SWITCH-role entries include the switch SKU
-//     itself plus its sub-components. (Per the issue #6 fixture table:
-//     clos-small gpu-servers omits the server root; switch-bom includes the
-//     switch root.)
+//     itself plus its sub-components. (Role-based root inclusion — confirmed
+//     against the fixture baselines; see ALGORITHMS.md Algorithm 6 as clarified
+//     in PR #24. The recursion/type model itself is uniform per D13.)
 
 /// Recursive BOM for one plan entry's device class, resolved against the
 /// normalized device catalog (sub-components reference catalog entries by id).
 pub fn bom_for_entry(entry : PlanEntry, catalog : Array[DeviceClass]) -> DeviceClassBom {
-  let _ = catalog
+  let items : Array[BomLineItem] = []
+  let plan_qty = entry.quantity.reinterpret_as_int()
+  let root_opt = find_device_class(catalog, entry.device_class_id)
+  let root_summary = match root_opt {
+    Some(root) => summary_of(root)
+    None => empty_summary(entry.device_class_id)
+  }
+  match root_opt {
+    Some(root) => {
+      // Switch entries include the switch SKU itself as a root BOM line;
+      // server entries do not (their components are the procurement lines).
+      if is_server_role(entry.role) {
+        ()
+      } else {
+        items.push({
+          path: [],
+          device_class: root_summary,
+          quantity_per_parent: 1U,
+          quantity_per_unit: 1U,
+          fleet_quantity: plan_qty.reinterpret_as_uint(),
+        })
+      }
+      bom_traverse(root, catalog, [], 1, plan_qty, items)
+    }
+    None => ()
+  }
   {
-    device_class: empty_summary(entry.device_class_id),
+    device_class: root_summary,
     entry_id: entry.entry_id,
     plan_quantity: entry.quantity,
-    line_items: [],
+    line_items: items,
+  }
+}
+
+fn bom_traverse(
+  parent : DeviceClass,
+  catalog : Array[DeviceClass],
+  parent_path : Array[String],
+  parent_qpu : Int,
+  plan_qty : Int,
+  items : Array[BomLineItem]
+) -> Unit {
+  for sub in parent.sub_components {
+    let qpp = sub.quantity_per_parent.reinterpret_as_int()
+    let qpu = parent_qpu * qpp
+    let path = parent_path.copy()
+    path.push(sub.slot_id)
+    let child_opt = find_device_class(catalog, sub.device_class_id)
+    let summary = match child_opt {
+      Some(child) => summary_of(child)
+      None => empty_summary(sub.device_class_id)
+    }
+    items.push({
+      path,
+      device_class: summary,
+      quantity_per_parent: sub.quantity_per_parent,
+      quantity_per_unit: qpu.reinterpret_as_uint(),
+      fleet_quantity: (qpu * plan_qty).reinterpret_as_uint(),
+    })
+    match child_opt {
+      Some(child) => bom_traverse(child, catalog, path, qpu, plan_qty, items)
+      None => ()
+    }
   }
 }
