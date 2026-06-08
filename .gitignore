@@ -7,3 +7,6 @@
 
 # Environment / secrets
 .env
+
+# Go build output
+/aid
