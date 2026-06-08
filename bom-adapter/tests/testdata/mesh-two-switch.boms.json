@@ -1,0 +1,105 @@
+[
+  {
+    "device_class": {
+      "id": "mesh-server",
+      "name": "Reference Mesh Server",
+      "slug": "mesh-server",
+      "category": "compute",
+      "manufacturer": null,
+      "part_number": null
+    },
+    "entry_id": "mesh-servers",
+    "plan_quantity": 2,
+    "line_items": [
+      {
+        "path": [
+          "nic-fe"
+        ],
+        "device_class": {
+          "id": "cx7-single-nic",
+          "name": "ConnectX-7 Single-Port NIC",
+          "slug": "cx7-single-nic",
+          "category": "nic",
+          "manufacturer": null,
+          "part_number": null
+        },
+        "quantity_per_parent": 1,
+        "quantity_per_unit": 1,
+        "fleet_quantity": 2
+      },
+      {
+        "path": [
+          "nic-fe",
+          "xcvr"
+        ],
+        "device_class": {
+          "id": "qsfp112-200g-xcvr",
+          "name": "QSFP112 200G Transceiver",
+          "slug": "qsfp112-200g-xcvr",
+          "category": "transceiver",
+          "manufacturer": null,
+          "part_number": null
+        },
+        "quantity_per_parent": 1,
+        "quantity_per_unit": 1,
+        "fleet_quantity": 2
+      }
+    ]
+  },
+  {
+    "device_class": {
+      "id": "mesh-switch",
+      "name": "Reference Mesh Switch",
+      "slug": "mesh-switch",
+      "category": "network",
+      "manufacturer": null,
+      "part_number": null
+    },
+    "entry_id": "mesh-switch-a",
+    "plan_quantity": 1,
+    "line_items": [
+      {
+        "path": [],
+        "device_class": {
+          "id": "mesh-switch",
+          "name": "Reference Mesh Switch",
+          "slug": "mesh-switch",
+          "category": "network",
+          "manufacturer": null,
+          "part_number": null
+        },
+        "quantity_per_parent": 1,
+        "quantity_per_unit": 1,
+        "fleet_quantity": 1
+      }
+    ]
+  },
+  {
+    "device_class": {
+      "id": "mesh-switch",
+      "name": "Reference Mesh Switch",
+      "slug": "mesh-switch",
+      "category": "network",
+      "manufacturer": null,
+      "part_number": null
+    },
+    "entry_id": "mesh-switch-b",
+    "plan_quantity": 1,
+    "line_items": [
+      {
+        "path": [],
+        "device_class": {
+          "id": "mesh-switch",
+          "name": "Reference Mesh Switch",
+          "slug": "mesh-switch",
+          "category": "network",
+          "manufacturer": null,
+          "part_number": null
+        },
+        "quantity_per_parent": 1,
+        "quantity_per_unit": 1,
+        "fleet_quantity": 1
+      }
+    ]
+  }
+]

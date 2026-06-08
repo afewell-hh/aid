@@ -1,0 +1,4 @@
+# MoonBit build output (regenerate with `moon run gen` via ../gen-bom.sh)
+_build/
+target/
+.mooncakes/
