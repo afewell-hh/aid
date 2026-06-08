@@ -1,0 +1,128 @@
+{
+  "include_fleet_totals": true,
+  "boms": [
+    {
+      "entry_id": "gpu-servers",
+      "plan_quantity": 4,
+      "device_class": {
+        "id": "gpu-server",
+        "name": "Reference GPU Server",
+        "slug": "gpu-server",
+        "category": "compute",
+        "manufacturer": "Reference",
+        "part_number": "REF-GPU-1"
+      },
+      "line_items": [
+        {
+          "path": [
+            "chassis"
+          ],
+          "level": 1,
+          "slug": "server-chassis",
+          "name": "Reference Server Barebone",
+          "category": "chassis",
+          "manufacturer": null,
+          "part_number": null,
+          "quantity_per_parent": 1,
+          "quantity_per_unit": 1,
+          "fleet_quantity": 4
+        },
+        {
+          "path": [
+            "gpu"
+          ],
+          "level": 1,
+          "slug": "h100-gpu",
+          "name": "H100 SXM GPU Board",
+          "category": "gpu",
+          "manufacturer": null,
+          "part_number": null,
+          "quantity_per_parent": 8,
+          "quantity_per_unit": 8,
+          "fleet_quantity": 32
+        },
+        {
+          "path": [
+            "nic-fe"
+          ],
+          "level": 1,
+          "slug": "connectx-7-nic",
+          "name": "ConnectX-7 OSFP NIC",
+          "category": "nic",
+          "manufacturer": null,
+          "part_number": null,
+          "quantity_per_parent": 2,
+          "quantity_per_unit": 2,
+          "fleet_quantity": 8
+        },
+        {
+          "path": [
+            "nic-fe",
+            "xcvr"
+          ],
+          "level": 2,
+          "slug": "osfp-400g-xcvr",
+          "name": "OSFP 400G Transceiver",
+          "category": "transceiver",
+          "manufacturer": null,
+          "part_number": null,
+          "quantity_per_parent": 1,
+          "quantity_per_unit": 2,
+          "fleet_quantity": 8
+        }
+      ]
+    },
+    {
+      "entry_id": "server-leafs",
+      "plan_quantity": 2,
+      "device_class": {
+        "id": "leaf-switch",
+        "name": "Reference 56-port Leaf Switch",
+        "slug": "leaf-switch",
+        "category": "network",
+        "manufacturer": null,
+        "part_number": null
+      },
+      "line_items": [
+        {
+          "path": [],
+          "level": 0,
+          "slug": "leaf-switch",
+          "name": "Reference 56-port Leaf Switch",
+          "category": "network",
+          "manufacturer": null,
+          "part_number": null,
+          "quantity_per_parent": 1,
+          "quantity_per_unit": 1,
+          "fleet_quantity": 2
+        }
+      ]
+    },
+    {
+      "entry_id": "spines",
+      "plan_quantity": 1,
+      "device_class": {
+        "id": "spine-switch",
+        "name": "Reference 32-port Spine Switch",
+        "slug": "spine-switch",
+        "category": "network",
+        "manufacturer": null,
+        "part_number": null
+      },
+      "line_items": [
+        {
+          "path": [],
+          "level": 0,
+          "slug": "spine-switch",
+          "name": "Reference 32-port Spine Switch",
+          "category": "network",
+          "manufacturer": null,
+          "part_number": null,
+          "quantity_per_parent": 1,
+          "quantity_per_unit": 1,
+          "fleet_quantity": 1
+        }
+      ]
+    }
+  ]
+}

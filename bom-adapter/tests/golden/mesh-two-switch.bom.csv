@@ -1,0 +1,5 @@
+entry_id,plan_quantity,level,path,slug,name,category,manufacturer,part_number,quantity_per_parent,quantity_per_unit,fleet_quantity
+mesh-servers,2,1,nic-fe,cx7-single-nic,ConnectX-7 Single-Port NIC,nic,,,1,1,2
+mesh-servers,2,2,nic-fe/xcvr,qsfp112-200g-xcvr,QSFP112 200G Transceiver,transceiver,,,1,1,2
+mesh-switch-a,1,0,,mesh-switch,Reference Mesh Switch,network,,,1,1,1
+mesh-switch-b,1,0,,mesh-switch,Reference Mesh Switch,network,,,1,1,1

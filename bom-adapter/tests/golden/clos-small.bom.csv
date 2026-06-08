@@ -1,0 +1,7 @@
+entry_id,plan_quantity,level,path,slug,name,category,manufacturer,part_number,quantity_per_parent,quantity_per_unit,fleet_quantity
+gpu-servers,4,1,chassis,server-chassis,Reference Server Barebone,chassis,,,1,1,4
+gpu-servers,4,1,gpu,h100-gpu,H100 SXM GPU Board,gpu,,,8,8,32
+gpu-servers,4,1,nic-fe,connectx-7-nic,ConnectX-7 OSFP NIC,nic,,,2,2,8
+gpu-servers,4,2,nic-fe/xcvr,osfp-400g-xcvr,OSFP 400G Transceiver,transceiver,,,1,2,8
+server-leafs,2,0,,leaf-switch,Reference 56-port Leaf Switch,network,,,1,1,2
+spines,1,0,,spine-switch,Reference 32-port Spine Switch,network,,,1,1,1
