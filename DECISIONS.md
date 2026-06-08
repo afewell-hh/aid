@@ -294,6 +294,16 @@ tooling matures (targeted during/after Phase 6).
   (de)serialization edge with `wit-bindgen`-generated canonical ABI. The WIT contract and the
   kernel's internal typed functions are unchanged.
 - Approved as the Phase 3 architecture sign-off (issue #6, kernel architecture note).
+- **Scope extended to Layer-2 export adapters (Phase 5 sign-off, issue #9).** The same
+  JSON-over-linear-memory convention applies to *all* MVP WASM components the Go CLI hosts,
+  not just the kernel: each exports `alloc`/`dealloc` + an entry point taking `(ptr,len)` and
+  returning a packed `(ptr,len)`, with WIT-shaped JSON in/out. This gives Phase 6 one uniform
+  hosting path. The `hhfab-adapter` (Rust) is the first implementation of the pattern; the
+  Phase-6 kernel wasm wrapper follows it. Consequence: the **IR JSON shape** (snake_case,
+  mirroring `wit/types.wit`) is the Layer-1→Layer-2 wire contract — the Phase-6 kernel encoder
+  must emit the same bytes the adapter consumes, so the IR→JSON encoder should consolidate into
+  the kernel in Phase 6 (the Phase-5 `ir-gen` tool is interim test-data tooling, not a second
+  contract).
 
 ---
 
