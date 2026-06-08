@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/spf13/cobra"
@@ -32,7 +33,16 @@ func newServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the REST API server (Phase-6b stub: documented endpoints return 501)",
-		RunE:  func(cmd *cobra.Command, args []string) error { return errNotImplemented },
+		RunE: func(cmd *cobra.Command, args []string) error {
+			addr := fmt.Sprintf(":%d", port)
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "aid serve (Phase-6b stub) listening on %s\n", addr)
+			fmt.Fprintln(out, "documented endpoints (all return 501 until Phase 6b):")
+			for _, r := range serveRoutes {
+				fmt.Fprintf(out, "  %s\n", r)
+			}
+			return http.ListenAndServe(addr, newServeMux())
+		},
 	}
 	cmd.Flags().IntVar(&port, "port", 8080, "listen port")
 	return cmd

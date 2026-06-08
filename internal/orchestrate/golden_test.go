@@ -39,6 +39,7 @@ func hhfabValidate(t *testing.T, wiringYAML string) (bool, string) {
 		t.Fatal(err)
 	}
 	out, err := runIn(dir, "hhfab", "validate", "--brief")
+	t.Logf("hhfab validate (exit ok=%v):\n%s", err == nil, out)
 	return err == nil, out
 }
 
