@@ -204,14 +204,32 @@ structure.
 total_server_bandwidth_gbps = sum over all server connections targeting this fabric of:
     (server_count × ports_per_connection × speed_gbps)
 
-total_spine_bandwidth_gbps = spine_count × spine_fabric_port_capacity_gbps
+total_uplink_bandwidth_gbps = sum over the fabric's leaf switch classes of:
+    (leaf_count × uplink_zone_logical_ports × uplink_speed_gbps)
+    where uplink_zone_logical_ports is taken from each leaf class's explicitly
+    declared UPLINK port zone (zone_type = uplink)
 
-oversubscription_ratio = total_server_bandwidth_gbps / total_spine_bandwidth_gbps
+oversubscription_ratio = total_server_bandwidth_gbps / total_uplink_bandwidth_gbps
 ```
+
+**Uplink ports are declared, never inferred.** There is no universal rule for which
+physical ports a switch uses as uplinks — it is a per-switch human design choice. For
+example, a Celestica DS5000 exposes 64×800G + 2×25G ports, yet operators typically
+designate 32×800G as uplinks and treat the result as 1:1, ignoring the 25G ports — a
+convention, not a derivable fact. AID therefore reads the uplink set from each leaf
+switch class's **explicitly declared UPLINK port zone** and computes oversubscription as
+server-facing (downlink) bandwidth ÷ that declared uplink bandwidth. This is the
+operationally-meaningful leaf-tier contention ratio, it makes the
+`ratio = 1.0 ⇔ non-blocking` semantics below exact, and it is unaffected by spine
+over-provisioning (the older `spine_count × spine_fabric_port_capacity` form only
+coincides when the spine is sized exactly to the uplinks). A leaf class with no UPLINK
+zone has no computable oversubscription for that fabric (reported as N/A). For **mesh**
+fabrics (no spine) the mesh/peer zone is the uplink analog; mesh oversubscription is a
+documented follow-up and is currently reported as N/A. See `DECISIONS.md` D17.
 
 **Interpretation:**
 - `ratio = 1.0`: non-blocking (every server port has a guaranteed path to any other)
-- `ratio > 1.0`: oversubscribed; multiple servers competing for the same spine bandwidth
+- `ratio > 1.0`: oversubscribed; multiple servers competing for the same uplink bandwidth
 - `ratio < 1.0`: over-provisioned (unusual but valid)
 
 AI/ML training workloads using RDMA collective operations (all-reduce, all-to-all) are
