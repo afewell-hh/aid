@@ -163,6 +163,29 @@ official upstream command, and upstream states the CLI is not yet stable — pin
 version (`0.57.1`) when reproducing. A future CI/workstation-setup ticket can convert these
 steps into a provisioning script.
 
+### CI & provisioning scripts (Issue #21)
+
+The manual proof-toolchain steps above are now codified in idempotent scripts, used by
+both a clean machine and CI (`.github/workflows/ci.yml`):
+
+- **`scripts/setup-proof-toolchain.sh`** — installs Why3 `1.7.2` (opam, OCaml `4.14.2`)
+  + Z3 `4.8.12` (apt) and runs `why3 config detect`. Idempotent: re-running on a machine
+  that already has the `why3env` switch skips the OCaml/Why3 build. Exports the switch bin
+  to `$GITHUB_PATH` in CI, or appends it to `~/.profile` locally — so `moon prove` works
+  with **no** manual `eval $(opam env)`. `--check` verifies without installing.
+- **`scripts/moon-prove-gate.sh <pkg-dir>...`** — the proof build gate. Runs `moon prove`
+  and parses stdout for `N of M packages proved` (never trusting the exit code, which is
+  always `0`); fails the build on any unproved/failed/timed-out goal or missing summary.
+  Wired to `spikes/moonbit-port-proof` today; Phase 8 (#7) appends the kernel proof package.
+
+CI runs on `ubuntu-22.04` (pinned to hold Z3 at `4.8.12` from apt) in two jobs: `build-test`
+(kernel `moon test`, both adapters' `cargo test` incl. real `hhfab validate`, `make wasm` +
+`go test ./...` golden path, `go build`, `make embed-check`) and an isolated `prove-gate`
+(the script above over the spike). Toolchain versions track the table in this document; the
+`~/.opam` and `~/.moon` caches are keyed on those pinned versions. MoonBit note: upstream's
+CDN serves only `latest`, so CI installs `latest`, caches the exact bits keyed on
+`0.1.20260529`, and warns if `latest` drifts from that recorded version.
+
 ---
 
 ## Toolchain Coverage by Phase

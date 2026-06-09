@@ -1,0 +1,177 @@
+# AID CI (Issue #21) — first CI for the repo. Two jobs:
+#   build-test  : kernel moon test + both adapters' cargo test (with real hhfab
+#                 validate) + make wasm/embed-check + go test (golden path) +
+#                 go build. No Why3/Z3 needed here.
+#   prove-gate  : isolated moon prove gate over the spike package (Why3 + Z3).
+#                 Kept separate so the proof signal — and the negative-control
+#                 red run — is crisp and independent, and so the heavy opam
+#                 cache is scoped to the one job that needs it.
+#
+# Runner is pinned to ubuntu-22.04 to hold Z3 at 4.8.12 (apt). Re-validate the
+# pinned toolchain versions when GitHub deprecates the 22.04 runner image.
+# Toolchain versions track DEVELOPMENT.md.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Pinned toolchain versions (DEVELOPMENT.md).
+  GO_VERSION: "1.21.5"
+  RUST_VERSION: "1.90.0"
+  MOON_VERSION: "0.1.20260529"   # also the cache key; see "moon pin" note below
+  HHFAB_VERSION: "v0.43.1"
+
+jobs:
+  build-test:
+    name: build + test (all components)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Rust ${{ env.RUST_VERSION }} (+ wasm32 target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            hhfab-adapter
+            bom-adapter
+
+      # moon pin note: MoonBit's CDN serves only `latest`/`nightly` (date-stamped
+      # versions 403), so we install latest and assert it matches MOON_VERSION,
+      # warning loudly on drift. The ~/.moon cache (keyed on MOON_VERSION) then
+      # pins the exact bits across runs until the key is bumped.
+      - name: Cache MoonBit toolchain
+        id: moon-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.moon
+          key: moon-${{ runner.os }}-${{ env.MOON_VERSION }}
+
+      - name: Install MoonBit
+        if: steps.moon-cache.outputs.cache-hit != 'true'
+        run: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+
+      - name: Put moon on PATH + assert version
+        run: |
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.moon/bin:$PATH"
+          moon --version
+          if ! moon --version | grep -q "${MOON_VERSION}"; then
+            echo "::warning::moon 'latest' has drifted from the recorded ${MOON_VERSION} — re-validate and bump MOON_VERSION in ci.yml + DEVELOPMENT.md."
+          fi
+
+      - name: Cache hhfab ${{ env.HHFAB_VERSION }}
+        id: hhfab-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/hhfab
+          key: hhfab-${{ runner.os }}-${{ env.HHFAB_VERSION }}
+
+      - name: Install hhfab ${{ env.HHFAB_VERSION }}
+        if: steps.hhfab-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/.local/bin" /tmp/hhfab
+          url="https://github.com/githedgehog/fabricator/releases/download/${HHFAB_VERSION}/hhfab-linux-amd64-${HHFAB_VERSION}.tar.gz"
+          echo "downloading $url"
+          curl -fsSL "$url" -o /tmp/hhfab/hhfab.tar.gz
+          tar -xzf /tmp/hhfab/hhfab.tar.gz -C /tmp/hhfab
+          bin="$(find /tmp/hhfab -type f -name hhfab | head -1)"
+          [ -n "$bin" ] || { echo "hhfab binary not found in tarball"; exit 1; }
+          install -m 0755 "$bin" "$HOME/.local/bin/hhfab"
+
+      # Preflight: a missing hhfab is a HARD failure, so the Go golden test can
+      # never silently take its t.Skip branch ("a skip must not read as a pass").
+      - name: Preflight — hhfab present (skip-guard)
+        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          command -v hhfab >/dev/null || { echo "hhfab not on PATH — golden tests would skip"; exit 1; }
+          hhfab versions || true
+
+      - name: Kernel — moon test
+        run: cd kernel && moon test
+
+      # NB: Cargo.lock is gitignored in both adapters (deliberate), so no --locked.
+      - name: hhfab adapter — cargo test (real hhfab validate)
+        run: cd hhfab-adapter && cargo test
+
+      - name: BOM adapter — cargo test
+        run: cd bom-adapter && cargo test
+
+      - name: Build embedded components (make wasm) + stale-embed guard
+        run: |
+          make wasm
+          make embed-check
+
+      - name: Go — go test ./... (golden path shells real hhfab validate)
+        run: go test ./...
+
+      # Explicit proof that the golden hhfab test RAN (did not skip) — converts a
+      # silent skip into a hard failure even if the preflight ever regresses.
+      - name: Assert golden hhfab test did not skip
+        run: |
+          log="$(go test -v -run TestGolden_WiringValidatesWithHhfab ./internal/orchestrate/ 2>&1)"
+          echo "$log"
+          if echo "$log" | grep -q -- '--- SKIP'; then
+            echo "::error::TestGolden_WiringValidatesWithHhfab SKIPPED — hhfab did not actually run"
+            exit 1
+          fi
+          echo "$log" | grep -q -- '--- PASS: TestGolden_WiringValidatesWithHhfab' \
+            || { echo "::error::golden hhfab test did not report PASS"; exit 1; }
+
+      - name: Build single binary
+        run: go build -o aid ./cmd/aid
+
+  prove-gate:
+    name: moon prove gate (spike)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache MoonBit toolchain
+        id: moon-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.moon
+          key: moon-${{ runner.os }}-${{ env.MOON_VERSION }}
+
+      - name: Install MoonBit
+        if: steps.moon-cache.outputs.cache-hit != 'true'
+        run: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+
+      - name: Put moon on PATH
+        run: echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      # The linchpin cache: ~/.opam holds the OCaml 4.14.2 switch + Why3 1.7.2.
+      # Cold build is ~10 min (builds OCaml); a hit makes setup near-instant.
+      - name: Cache opam (Why3 switch)
+        id: opam-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.opam
+          key: opam-${{ runner.os }}-ocaml4.14.2-why3-1.7.2-z3-4.8.12
+
+      - name: Provision proof toolchain (Why3 + Z3)
+        run: scripts/setup-proof-toolchain.sh
+
+      - name: Verify proof toolchain
+        run: scripts/setup-proof-toolchain.sh --check
+
+      - name: moon prove gate — spike package
+        run: scripts/moon-prove-gate.sh spikes/moonbit-port-proof
