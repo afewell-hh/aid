@@ -1,0 +1,12 @@
+{
+  "import": [
+    "moonbitlang/core/encoding/utf8",
+    { "path": "aid/kernel/src", "alias": "src" }
+  ],
+  "link": {
+    "wasm": {
+      "exports": ["alloc", "dealloc", "export_calculate", "export_validate"],
+      "export-memory-name": "memory"
+    }
+  }
+}
