@@ -60,5 +60,5 @@ pub fn non_overlap_holds(base : Int, j : Int, k : Int) -> Bool where {
   proof_require: j != k,
   proof_ensure: result => result == true,
 } {
-  (base + j) != (base + k)
+  (base + j) == (base + k)
 }
