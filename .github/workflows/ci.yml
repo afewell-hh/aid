@@ -2,10 +2,10 @@
 #   build-test  : kernel moon test + both adapters' cargo test (with real hhfab
 #                 validate) + make wasm/embed-check + go test (golden path) +
 #                 go build. No Why3/Z3 needed here.
-#   prove-gate  : isolated moon prove gate over the spike package (Why3 + Z3).
-#                 Kept separate so the proof signal — and the negative-control
-#                 red run — is crisp and independent, and so the heavy opam
-#                 cache is scoped to the one job that needs it.
+#   prove-gate  : isolated moon prove gate over the spike + kernel proof
+#                 packages (Why3 + Z3). Kept separate so the proof signal — and
+#                 the negative-control red run — is crisp and independent, and so
+#                 the heavy opam cache is scoped to the one job that needs it.
 #
 # Runner is pinned to ubuntu-22.04 to hold Z3 at 4.8.12 (apt). Re-validate the
 # pinned toolchain versions when GitHub deprecates the 22.04 runner image.
@@ -139,7 +139,7 @@ jobs:
         run: go build -o aid ./cmd/aid
 
   prove-gate:
-    name: moon prove gate (spike)
+    name: moon prove gate (spike + kernel)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -173,5 +173,5 @@ jobs:
       - name: Verify proof toolchain
         run: scripts/setup-proof-toolchain.sh --check
 
-      - name: moon prove gate — spike package
-        run: scripts/moon-prove-gate.sh spikes/moonbit-port-proof
+      - name: moon prove gate — spike + kernel proof package
+        run: scripts/moon-prove-gate.sh spikes/moonbit-port-proof kernel/proofs

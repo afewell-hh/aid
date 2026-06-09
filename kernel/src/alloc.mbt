@@ -45,7 +45,9 @@ pub fn port_range_count(spec : String) -> Int {
 pub fn allocate_sequential(base : Int, demand : Int) -> Array[Int] {
   let ports = []
   for i in 0..<demand {
-    ports.push(base + i)
+    // The port for offset `i` is `@proofs.port_at(base, i)` (= base + i), the
+    // cursor map proven injective by `@proofs.ports_distinct` (Issue #7 I1).
+    ports.push(@proofs.port_at(base, i))
   }
   ports
 }
