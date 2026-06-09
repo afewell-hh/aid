@@ -47,7 +47,11 @@ Contains:
 Formally verified properties (`moon prove`):
 - Port non-overlap: no logical port is allocated to more than one connection
 - Allocation completeness: total allocated ports == total demanded ports
-- Switch count lower bound: effective_quantity >= ceil(demand / capacity) for each zone
+- Switch count lower bound: effective_quantity >= ceil(demand / capacity) for each zone,
+  for the non-ESLAG paths (none/alternating/MCLAG — these only raise the count). ESLAG is a
+  deliberate hard cap and is a *separate* invariant: 2 <= effective_quantity <= 4 (the [2,4]
+  clamp can intentionally drop below ceil(demand/capacity), so the lower bound does not apply
+  under ESLAG — see `ALGORITHMS.md` Algorithm 1)
 - BOM scaling: fleet_count(component) == per_unit_count × plan_entry.quantity (at each level)
 - Mesh constraint: mesh switch count ∈ {2, 3}
 - MCLAG even-count: MCLAG switch count is even and >= 2
