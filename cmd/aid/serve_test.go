@@ -1,0 +1,368 @@
+package main
+
+// Stage-A RED (issue #11): httptest handler tests over all 8 REST routes.
+// These encode the contract the GREEN implementation must satisfy:
+//   - plan CRUD happy + error paths (incl. path-traversal rejection on the id)
+//   - calc/bom/wiring over a fixture plan, reusing internal/orchestrate
+//   - structured JSON errors ({"error": ...})
+//   - kernel validation surfaced as DATA (200 with is_valid:false), not a 500
+// In the RED phase every handler is a stub returning 501, so all of these fail
+// for the right reason: the behavior is not implemented yet.
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/afewell-hh/aid/internal/fixtures"
+	"github.com/afewell-hh/aid/internal/orchestrate"
+	"github.com/afewell-hh/aid/internal/planstore"
+)
+
+// newTestAPI returns a mux backed by a fresh temp-dir plan store, plus the dir.
+func newTestAPI(t *testing.T) (http.Handler, string) {
+	t.Helper()
+	dir := t.TempDir()
+	store, err := planstore.Open(dir)
+	if err != nil {
+		t.Fatalf("planstore.Open: %v", err)
+	}
+	return newServeMux(store), dir
+}
+
+// seedPlan writes a fixture plan YAML into the store dir as <id>.yaml so the
+// read/calc/bom/wiring routes have something to operate on.
+func seedPlan(t *testing.T, dir, id, kind, name string) {
+	t.Helper()
+	b, err := fixtures.PlanYAML(kind, name)
+	if err != nil {
+		t.Fatalf("read fixture %s/%s: %v", kind, name, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, id+".yaml"), b, 0o644); err != nil {
+		t.Fatalf("seed %s: %v", id, err)
+	}
+}
+
+func do(t *testing.T, mux http.Handler, method, path string, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	var r io.Reader
+	if body != nil {
+		r = bytes.NewReader(body)
+	}
+	req := httptest.NewRequest(method, path, r)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+// assertJSONError asserts a structured JSON error with the wanted status.
+func assertJSONError(t *testing.T, rec *httptest.ResponseRecorder, wantStatus int) {
+	t.Helper()
+	if rec.Code != wantStatus {
+		t.Errorf("status: got %d want %d; body=%s", rec.Code, wantStatus, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("content-type %q is not application/json", ct)
+	}
+	var e struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil || e.Error == "" {
+		t.Errorf("error body is not structured {\"error\":...}: %s", rec.Body.String())
+	}
+}
+
+// --- GET /api/plans (list) --------------------------------------------------
+
+func TestAPI_ListPlans_Empty(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodGet, "/api/plans", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Plans []planstore.Plan `json:"plans"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode list: %v; body=%s", err, rec.Body.String())
+	}
+	if len(out.Plans) != 0 {
+		t.Errorf("empty store: got %d plans want 0", len(out.Plans))
+	}
+}
+
+func TestAPI_ListPlans_SeededSummaries(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	seedPlan(t, dir, "clos-small", "valid", "clos-small")
+	seedPlan(t, dir, "switch-bom", "valid", "switch-bom")
+
+	rec := do(t, mux, http.MethodGet, "/api/plans", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Plans []planstore.Plan `json:"plans"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(out.Plans) != 2 {
+		t.Fatalf("got %d plans want 2", len(out.Plans))
+	}
+	for _, p := range out.Plans {
+		if p.ID == "" || p.Name == "" {
+			t.Errorf("summary missing id/name: %+v", p)
+		}
+		if p.YAML != "" {
+			t.Errorf("list summary should omit yaml, got %q", p.YAML)
+		}
+	}
+}
+
+// --- POST /api/plans (create) -----------------------------------------------
+
+func TestAPI_CreatePlan(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	body, err := fixtures.PlanYAML("valid", "clos-small")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := do(t, mux, http.MethodPost, "/api/plans", body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status: got %d want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	var p planstore.Plan
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+		t.Fatalf("decode created plan: %v", err)
+	}
+	if p.ID != "clos-small" {
+		t.Errorf("created id: got %q want clos-small", p.ID)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "clos-small.yaml")); err != nil {
+		t.Errorf("create did not persist <id>.yaml: %v", err)
+	}
+}
+
+func TestAPI_CreatePlan_MalformedYAML(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodPost, "/api/plans", []byte("this: : not: valid: yaml\n  - ["))
+	assertJSONError(t, rec, http.StatusBadRequest)
+}
+
+// TestAPI_CreatePlan_RejectsTraversalID is the real path-traversal vector: a
+// plan whose YAML id escapes the store dir must be rejected, never written.
+func TestAPI_CreatePlan_RejectsTraversalID(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	body := []byte("id: ../../pwned\nname: Evil Plan\nstatus: draft\n")
+	rec := do(t, mux, http.MethodPost, "/api/plans", body)
+	assertJSONError(t, rec, http.StatusBadRequest)
+	if _, err := os.Stat(filepath.Join(dir, "..", "..", "pwned.yaml")); err == nil {
+		t.Fatal("path traversal id wrote a file outside the store dir")
+	}
+}
+
+// --- GET /api/plans/{id} (detail) -------------------------------------------
+
+func TestAPI_GetPlan(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	seedPlan(t, dir, "clos-small", "valid", "clos-small")
+	rec := do(t, mux, http.MethodGet, "/api/plans/clos-small", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var p planstore.Plan
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+		t.Fatalf("decode plan: %v", err)
+	}
+	if p.ID != "clos-small" || p.Name == "" {
+		t.Errorf("detail missing id/name: %+v", p)
+	}
+	if !strings.Contains(p.YAML, "fabric_domains") {
+		t.Errorf("detail should include the canonical YAML, got %q", p.YAML)
+	}
+}
+
+func TestAPI_GetPlan_NotFound(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodGet, "/api/plans/does-not-exist", nil)
+	assertJSONError(t, rec, http.StatusNotFound)
+}
+
+// TestAPI_GetPlan_TraversalIDRejected exercises the URL-layer defense in depth:
+// an unsafe dot-segment id reaching the item handler must be rejected as a bad
+// request, not resolved against the filesystem. The request bypasses ServeMux
+// path cleaning by setting URL.Path directly on the item handler, so the id
+// arrives as a single (unsafe) segment.
+func TestAPI_GetPlan_TraversalIDRejected(t *testing.T) {
+	_, dir := newTestAPI(t)
+	store, _ := planstore.Open(dir)
+	a := &api{store: store}
+	req := httptest.NewRequest(http.MethodGet, "/api/plans/placeholder", nil)
+	req.URL.Path = "/api/plans/.." // single unsafe id segment reaching getPlan
+	rec := httptest.NewRecorder()
+	a.routePlanID(rec, req)
+	assertJSONError(t, rec, http.StatusBadRequest)
+}
+
+// --- PUT /api/plans/{id} (update) -------------------------------------------
+
+func TestAPI_UpdatePlan(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	seedPlan(t, dir, "clos-small", "valid", "clos-small")
+	updated := []byte("id: clos-small\nname: Renamed Clos\nstatus: active\n")
+	rec := do(t, mux, http.MethodPut, "/api/plans/clos-small", updated)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var p planstore.Plan
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+		t.Fatalf("decode updated plan: %v", err)
+	}
+	if p.Name != "Renamed Clos" {
+		t.Errorf("update name: got %q want Renamed Clos", p.Name)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, "clos-small.yaml"))
+	if !strings.Contains(string(got), "Renamed Clos") {
+		t.Errorf("update did not persist new YAML: %s", got)
+	}
+}
+
+func TestAPI_UpdatePlan_NotFound(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodPut, "/api/plans/missing", []byte("id: missing\nname: X\n"))
+	assertJSONError(t, rec, http.StatusNotFound)
+}
+
+// --- DELETE /api/plans/{id} -------------------------------------------------
+
+func TestAPI_DeletePlan(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	seedPlan(t, dir, "clos-small", "valid", "clos-small")
+	rec := do(t, mux, http.MethodDelete, "/api/plans/clos-small", nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status: got %d want 204; body=%s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "clos-small.yaml")); !os.IsNotExist(err) {
+		t.Errorf("delete did not remove the file (err=%v)", err)
+	}
+	// A subsequent GET must 404.
+	rec2 := do(t, mux, http.MethodGet, "/api/plans/clos-small", nil)
+	if rec2.Code != http.StatusNotFound {
+		t.Errorf("get after delete: got %d want 404", rec2.Code)
+	}
+}
+
+func TestAPI_DeletePlan_NotFound(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodDelete, "/api/plans/missing", nil)
+	assertJSONError(t, rec, http.StatusNotFound)
+}
+
+// --- POST /api/plans/{id}/calc ----------------------------------------------
+
+func TestAPI_CalcPlan_Valid(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	seedPlan(t, dir, "clos-small", "valid", "clos-small")
+	rec := do(t, mux, http.MethodPost, "/api/plans/clos-small/calc", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		IR struct {
+			Nodes []json.RawMessage `json:"nodes"`
+		} `json:"ir"`
+		Validation orchestrate.ValidationResult `json:"validation"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode calc: %v; body=%s", err, rec.Body.String())
+	}
+	if len(out.IR.Nodes) == 0 {
+		t.Errorf("calc produced no IR nodes")
+	}
+	if !out.Validation.IsValid {
+		t.Errorf("clos-small should be valid; errors=%+v", out.Validation.Errors)
+	}
+}
+
+// TestAPI_CalcPlan_InvalidSurfacedAsData is the key contract: a semantically
+// invalid (but decodable) plan returns 200 with validation.is_valid=false and
+// the violation in the errors array — NOT a 500.
+func TestAPI_CalcPlan_InvalidSurfacedAsData(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	seedPlan(t, dir, "mclag-odd", "invalid", "mclag-odd-count")
+	rec := do(t, mux, http.MethodPost, "/api/plans/mclag-odd/calc", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("invalid plan calc must be 200 (validation as data), got %d; body=%s",
+			rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Validation orchestrate.ValidationResult `json:"validation"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode calc: %v; body=%s", err, rec.Body.String())
+	}
+	if out.Validation.IsValid {
+		t.Errorf("mclag-odd-count must be invalid")
+	}
+	found := false
+	for _, e := range out.Validation.Errors {
+		if e.Code == "MCLAG_SWITCH_COUNT" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected MCLAG_SWITCH_COUNT in validation errors; got %+v", out.Validation.Errors)
+	}
+}
+
+// --- GET /api/plans/{id}/bom ------------------------------------------------
+
+// TestAPI_BOM_PerUnitAndFleet covers the exit-gate requirement: a multi-level
+// device class (switch -> transceiver) yields per-unit AND fleet quantities.
+func TestAPI_BOM_PerUnitAndFleet(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	seedPlan(t, dir, "switch-bom", "valid", "switch-bom")
+	rec := do(t, mux, http.MethodGet, "/api/plans/switch-bom/bom", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "quantity_per_unit") {
+		t.Errorf("BOM lacks per-unit quantities:\n%s", body)
+	}
+	if !strings.Contains(body, "fleet_quantity") {
+		t.Errorf("BOM lacks fleet totals:\n%s", body)
+	}
+}
+
+func TestAPI_BOM_NotFound(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodGet, "/api/plans/missing/bom", nil)
+	assertJSONError(t, rec, http.StatusNotFound)
+}
+
+// --- GET /api/plans/{id}/wiring/{fabric} ------------------------------------
+
+func TestAPI_Wiring(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	seedPlan(t, dir, "clos-small", "valid", "clos-small")
+	rec := do(t, mux, http.MethodGet, "/api/plans/clos-small/wiring/frontend", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "wiring.githedgehog.com") {
+		t.Errorf("wiring output lacks hhfab CRDs:\n%s", rec.Body.String())
+	}
+}
+
+func TestAPI_Wiring_NotFound(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodGet, "/api/plans/missing/wiring/frontend", nil)
+	assertJSONError(t, rec, http.StatusNotFound)
+}
