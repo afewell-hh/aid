@@ -56,6 +56,20 @@ Formally verified properties (`moon prove`):
 - Mesh constraint: mesh switch count ∈ {2, 3}
 - MCLAG even-count: MCLAG switch count is even and >= 2
 
+**Verification scope (Phase 8, Issue #7).** These properties are machine-proved
+by `moon prove` (Why3 + Z3) at each invariant's **pure-arithmetic core** — the
+`Int`/`Bool` functions in the `aid/kernel/proofs` package (`kernel/proofs/`),
+which the production kernel routes its real computation through (the proven core
+is the production path, not a copy). A `moon prove` logic body cannot reference
+`Array` methods, struct fields, or enum equality, so the surrounding
+**Array / whole-plan wiring** — the allocation loop's port count, the recursive
+BOM traversal, and `validate_plan`'s iteration that *rejects* out-of-range mesh
+/ MCLAG / ESLAG counts — is covered by the kernel's **fixture tests**, not by
+`moon prove`. The proof gate (`scripts/moon-prove-gate.sh kernel/proofs`,
+enforced in CI) blocks the build on any unproved core goal (D2). Per-invariant
+proof obligations, `moon prove` evidence, and this core-vs-wiring split are
+recorded in Issue #7.
+
 Zero imports from NetBox, Django, filesystem, or HTTP.
 
 ### Layer 2 — Export Adapters (WASM components, Rust or MoonBit)

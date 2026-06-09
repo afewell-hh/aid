@@ -1,5 +1,6 @@
 {
   "import": [
-    "moonbitlang/core/json"
+    "moonbitlang/core/json",
+    { "path": "aid/kernel/proofs", "alias": "proofs" }
   ]
 }

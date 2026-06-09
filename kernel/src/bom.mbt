@@ -31,7 +31,8 @@ pub fn bom_for_entry(entry : PlanEntry, catalog : Array[DeviceClass]) -> DeviceC
           device_class: root_summary,
           quantity_per_parent: 1U,
           quantity_per_unit: 1U,
-          fleet_quantity: plan_qty.reinterpret_as_uint(),
+          // fleet = quantity_per_unit (1) × plan_quantity — @proofs.fleet_quantity (I4).
+          fleet_quantity: @proofs.fleet_quantity(1, plan_qty).reinterpret_as_uint(),
         })
       }
       bom_traverse(root, catalog, [], 1, plan_qty, items)
@@ -56,7 +57,8 @@ fn bom_traverse(
 ) -> Unit {
   for sub in parent.sub_components {
     let qpp = sub.quantity_per_parent.reinterpret_as_int()
-    let qpu = parent_qpu * qpp
+    // qpu(child) = qpu(parent) × quantity_per_parent — @proofs.child_qpu (I4).
+    let qpu = @proofs.child_qpu(parent_qpu, qpp)
     let path = parent_path.copy()
     path.push(sub.slot_id)
     let child_opt = find_device_class(catalog, sub.device_class_id)
@@ -69,7 +71,8 @@ fn bom_traverse(
       device_class: summary,
       quantity_per_parent: sub.quantity_per_parent,
       quantity_per_unit: qpu.reinterpret_as_uint(),
-      fleet_quantity: (qpu * plan_qty).reinterpret_as_uint(),
+      // fleet = quantity_per_unit × plan_quantity — @proofs.fleet_quantity (I4).
+      fleet_quantity: @proofs.fleet_quantity(qpu, plan_qty).reinterpret_as_uint(),
     })
     match child_opt {
       Some(child) => bom_traverse(child, catalog, path, qpu, plan_qty, items)

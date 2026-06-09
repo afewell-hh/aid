@@ -44,6 +44,14 @@ aid CLI (Go) / aid-server (Go)
 Components communicate through WIT-defined interfaces using the WASM Component Model.
 The topology calculation kernel is implemented in MoonBit with formally verified invariants.
 
+The six kernel invariants (port non-overlap, allocation completeness, switch-count
+lower bound, BOM scaling, mesh switch count ∈ {2,3}, MCLAG even-count) are
+machine-proved by `moon prove` at their **pure-arithmetic cores** (the
+`aid/kernel/proofs` package, which the kernel routes its real computation
+through); the surrounding `Array`/whole-plan wiring is covered by fixture tests.
+A CI proof gate blocks the build on any unproved core. See `ARCHITECTURE.md`
+Layer 1 ("Verification scope") and Issue #7 for the per-invariant detail.
+
 ## Technology Stack
 
 | Layer | Language | Reason |
