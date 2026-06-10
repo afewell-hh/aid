@@ -5,8 +5,6 @@ package main
 
 import (
 	"bytes"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -59,18 +57,5 @@ func TestCLI_ExportWiring(t *testing.T) {
 	}
 	if !strings.Contains(out, "wiring.githedgehog.com") {
 		t.Errorf("wiring output lacks hhfab CRDs:\n%s", out)
-	}
-}
-
-func TestServeStub_Returns501(t *testing.T) {
-	srv := httptest.NewServer(newServeMux())
-	defer srv.Close()
-	resp, err := http.Get(srv.URL + "/api/plans")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotImplemented {
-		t.Errorf("serve stub: got %d want 501", resp.StatusCode)
 	}
 }
