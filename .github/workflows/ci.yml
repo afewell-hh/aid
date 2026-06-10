@@ -138,6 +138,20 @@ jobs:
       - name: Build single binary
         run: go build -o aid ./cmd/aid
 
+      # Web frontend (Phase 6b Stage B): the committed ui/static/app.js must match
+      # a fresh `moon build --target js` of ui/src (the #33-style freshness guard),
+      # and the Node ESM smoke tests must pass against it.
+      - name: Set up Node (web frontend smoke)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Web frontend — app.js freshness guard
+        run: make ui-check
+
+      - name: Web frontend — Node ESM smoke tests
+        run: make ui-test
+
   prove-gate:
     name: moon prove gate (spike + kernel)
     runs-on: ubuntu-22.04

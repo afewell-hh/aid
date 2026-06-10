@@ -3,8 +3,7 @@
 // these explicit, reviewable lines (TECH_STACK: MoonBit-JS has no npm interop).
 //
 // This boundary is the part proven by the Phase-6b spike (DOM render, fetch
-// GET/POST, value read, event registration, MoonBit closures across the FFI).
-// It is REAL in the RED phase; the UI logic above it (render/app) is stubbed.
+// GET/POST, event registration, MoonBit closures across the FFI).
 
 // Log to the browser console.
 extern "js" fn console_log(msg : String) -> Unit = "(m) => console.log(m)"
@@ -12,10 +11,6 @@ extern "js" fn console_log(msg : String) -> Unit = "(m) => console.log(m)"
 // Set the innerHTML of the element with the given id (no-op if absent).
 extern "js" fn set_html(id : String, html : String) -> Unit =
   #|(id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; }
-
-// Read the value of a form element (empty string if absent).
-extern "js" fn get_value(id : String) -> String =
-  #|(id) => { const e = document.getElementById(id); return e ? e.value : ""; }
 
 // Register a click handler; the MoonBit callback runs from the JS event loop.
 extern "js" fn on_click(id : String, cb : () -> Unit) -> Unit =
