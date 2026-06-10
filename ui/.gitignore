@@ -1,0 +1,3 @@
+# MoonBit build output (regenerate with `make ui`)
+_build/
+target/

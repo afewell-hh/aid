@@ -1,0 +1,19 @@
+{
+  "import": [
+    "moonbitlang/core/json"
+  ],
+  "link": {
+    "js": {
+      "exports": [
+        "main_entry",
+        "render_plan_list",
+        "load_plans",
+        "render_plan_detail",
+        "trigger_calc",
+        "render_bom",
+        "download_wiring"
+      ],
+      "format": "esm"
+    }
+  }
+}

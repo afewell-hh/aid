@@ -13,6 +13,7 @@ import (
 	"github.com/afewell-hh/aid/internal/orchestrate"
 	"github.com/afewell-hh/aid/internal/plan"
 	"github.com/afewell-hh/aid/internal/planstore"
+	"github.com/afewell-hh/aid/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -68,6 +69,7 @@ func newServeMux(store *planstore.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/plans", a.routePlans)   // collection: GET list, POST create
 	mux.HandleFunc("/api/plans/", a.routePlanID) // item + sub-resources
+	mux.Handle("/", ui.Handler())                // embedded frontend (Bootstrap 5 + app.js)
 	return mux
 }
 
