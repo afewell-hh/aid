@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AID — AI-cluster topology design</title>
+  <!-- Bootstrap 5 bundled locally (D15) — never a CDN (air-gapped). -->
+  <link rel="stylesheet" href="/static/bootstrap.min.css">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg bg-dark border-bottom border-body" data-bs-theme="dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="/">AID</a>
+      <span class="navbar-text">AI-cluster topology design</span>
+    </div>
+  </nav>
+  <main class="container py-4">
+    <div id="app"></div>
+    <div id="result"></div>
+  </main>
+  <!-- Bootstrap component JS (dropdowns/modals) — bundled vanilla asset. -->
+  <script src="/static/bootstrap.bundle.min.js"></script>
+  <!-- The MoonBit->JS bundle. Only link.js.exports names are stable. -->
+  <script type="module">
+    import { main_entry } from "/static/app.js";
+    main_entry();
+  </script>
+</body>
+</html>
