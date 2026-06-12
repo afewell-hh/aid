@@ -25,6 +25,19 @@ import (
 // ErrNotImplemented marks an F0 RED stub.
 var ErrNotImplemented = errors.New("topology: not implemented (F0 GREEN)")
 
+// Distinguishable validation errors (the F0 contract). GREEN returns these; the
+// RED tests assert them so a trivial implementation cannot pass.
+var (
+	// ErrUnpinnedRef: a catalog reference lacks a pinned id+version (guardrail 1).
+	ErrUnpinnedRef = errors.New("topology: catalog ref is not pinned (id+version required)")
+	// ErrUnresolvedRef: a catalog reference does not resolve to a catalog object.
+	ErrUnresolvedRef = errors.New("topology: catalog ref does not resolve")
+	// ErrInvalidPlan: the plan is structurally invalid.
+	ErrInvalidPlan = errors.New("topology: invalid plan")
+	// ErrInsufficientPorts: a connection needs more ports than the class provides (guardrail 4).
+	ErrInsufficientPorts = errors.New("topology: connection requires more ports than the configured class provides")
+)
+
 // Plan is the top-level document: spec (inputs) + optional status/expected.
 type Plan struct {
 	Meta   Meta    `json:"meta"`

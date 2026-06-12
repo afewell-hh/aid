@@ -8,10 +8,17 @@ validation contracts are enforced.
 ## 1. Schema / substrate representation
 
 - **Canonical wire contracts = JSON Schema** under `schema/` (D18): `topology-plan-v2.json`
-  (the real diet/XOC 9-section shape + a Kubernetes-style `spec`/`status` plane) and
-  `catalog-v1.json` (the two-layer catalog). These are language-neutral so the MoonBit
-  kernel (F2) and Rust/Go reducers (F3) consume the same contracts. The invented
-  `topology-plan-v1.json` is **retired** to `schema/superseded/`.
+  and `catalog-v1.json`. These are language-neutral so the MoonBit kernel (F2) and Rust/Go
+  reducers (F3) consume the same contracts. The invented `topology-plan-v1.json` is
+  **retired** to `schema/superseded/`.
+- `topology-plan-v2.json` is a real **`oneOf` contract**, not a placeholder: a document is
+  EITHER the external diet/XOC 9-section bundled shape (no `spec`/`status`) OR the
+  AID-canonical pure-reference shape (`meta` + constrained `spec` with **pinned**
+  `class_ref{name,version}` + optional `status`/`expected`). The branches are mutually
+  exclusive, so a malformed `spec`/`status` matches neither and is **rejected**. Verified
+  against all five fixtures with a JSON-Schema validator: the two external files and the two
+  canonical files validate; `tests/oracle/canonical/plan-malformed-spec.yaml` (a `class_ref`
+  missing its pinned `version`) is rejected.
 - **General extensible object substrate** (`internal/objectmodel`, §4.2/D19): every modelled
   thing is a typed `Object{Kind, ID, Attributes: map[namespace]map[field]any, Relations[]}`
   with **open namespaced attributes** (`calc_profile`/`purchase_profile`; future
@@ -68,16 +75,28 @@ deterministic `ports_per_connection>1` — `topology.ExpandPorts` (defined now, 
 
 ## 5. RED state (what devb is reviewing)
 
-`go test ./...` on this branch:
+`go test ./internal/... ./cmd/... ./embed/...` on this branch — **6 PASS / 19 FAIL / 2 SKIP**:
 - **PASS (6, model-of-record + wiring):** substrate dedup (IDs, kinds); `catalog`
   `TestModel_ExpressesRealServer` (the model represents the owner's real B200 server — 8× CX-7
   as one quantity-8 slot, BF3 = 1 fixed BMC + 2 cages, 4 non-physical slots); `planschema`
   schema files are valid JSON; `oracle` Layer A/B oracles wired (counts pinned).
-- **FAIL (12, the F0 GREEN targets — failing for the right reason, ErrNotImplemented):**
-  `planschema` validates training.yaml + topology-plan.yaml (×2); `topology` IngestBundled,
-  round-trip, Validate, ExpandPorts (×4); `objectmodel` required-fields, acyclicity, quantity
-  composition (×3); `catalog` Contracts, ToObjects, Load (×3).
+- **FAIL (19, the F0 GREEN targets — failing for the right reason, `ErrNotImplemented`):**
+  - `planschema` (5): the external training.yaml + topology-plan.yaml validate; the canonical
+    input-only + input+expected validate; the malformed canonical spec is **rejected**.
+  - `topology` (8) — guardrail-locked: ingest yields **pinned** class refs that resolve (G1);
+    an unpinned ref is rejected → `ErrUnpinnedRef` (G1); round-trip preserves
+    reference_data ids + nic/connection counts + expected.counts (G2); Validate resolves refs,
+    rejects an unresolved ref → `ErrUnresolvedRef`, and **ignores** conflicting status (G3);
+    ExpandPorts yields the exact `(server_class,nic_slot,port_index)→zone` sequence and rejects
+    insufficient cages → `ErrInsufficientPorts` (G4).
+  - `objectmodel` (3): required-fields-per-projection, `component_slot` acyclicity, quantity
+    composition.
+  - `catalog` (3): Contracts (acyclic+quantity-bearing component_slot), ToObjects, Load.
 - **SKIP (2, pending calc):** `oracle` Layer A counts comparison, Layer B 1×/2× scaling.
+
+The guardrail tests assert exact promised behavior (pinned refs, lossless preservation,
+status-ignored, deterministic expansion sequence, typed rejection errors) so a trivial or
+partially-fake GREEN cannot pass them (devb RED review, #48).
 
 At **F0 GREEN** the 12 FAILs become PASS (schema validates the real files; ingest round-trips
 losslessly; the substrate contracts hold) and only the 2 oracle comparisons remain skipped, so
