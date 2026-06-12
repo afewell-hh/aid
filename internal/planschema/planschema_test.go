@@ -16,6 +16,7 @@ func repoRoot() string {
 
 func oracleDir() string    { return filepath.Join(repoRoot(), "tests", "oracle", "xoc-64-mesh-conv-ro") }
 func canonicalDir() string { return filepath.Join(repoRoot(), "tests", "oracle", "canonical") }
+func negativeDir() string  { return filepath.Join(repoRoot(), "tests", "oracle", "negative") }
 
 func mustRead(t *testing.T, path string) []byte {
 	t.Helper()
@@ -91,4 +92,17 @@ func TestTopologyPlanSchema_ValidatesCanonicalWithExpected(t *testing.T) {
 // neither oneOf branch and must be REJECTED.
 func TestTopologyPlanSchema_RejectsMalformedSpec(t *testing.T) {
 	expectRejected(t, mustRead(t, filepath.Join(canonicalDir(), "plan-malformed-spec.yaml")), "malformed canonical spec")
+}
+
+// External-negative: a meta-only document is neither a real bundled plan (it
+// lacks plan/switch_classes/server_classes/server_connections) nor canonical (no
+// spec). The external branch must not accept it just because it has `meta`.
+func TestTopologyPlanSchema_RejectsMetaOnly(t *testing.T) {
+	expectRejected(t, mustRead(t, filepath.Join(negativeDir(), "meta-only.yaml")), "meta-only (external-negative)")
+}
+
+// External-negative: `spec` mistyped as `specc` — fails canonical (no real spec)
+// and external (missing the required diet sections). Must be rejected.
+func TestTopologyPlanSchema_RejectsTypoedCanonical(t *testing.T) {
+	expectRejected(t, mustRead(t, filepath.Join(negativeDir(), "meta-typoed-canonical.yaml")), "typoed canonical (external-negative)")
 }

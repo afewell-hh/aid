@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -131,14 +133,26 @@ spec:
 
 // --- Guardrail 2: deterministic, lossless bundled ingest ----------------------
 
-// bundledFacts extracts the load-bearing content a lossless round-trip must
-// preserve: the set of reference_data device_type ids, the server_nics and
-// server_connections counts, and expected.counts.
+// bundledFacts captures the canonical IDENTITIES a lossless round-trip must
+// preserve — not just counts. A GREEN that drops/rewrites module_types, NIC
+// identities, connection targets/speeds/transceivers, etc. must fail this.
 type bundledFacts struct {
-	deviceTypeIDs []string
-	nics          int
-	connections   int
-	expected      map[string]int
+	refIDs   map[string][]string // reference_data subsection -> sorted object ids
+	nics     []string            // sorted "server_class|nic_id|module_type"
+	conns    []string            // sorted full connection tuples
+	expected map[string]int      // expected.counts
+}
+
+func str(m map[string]any, k string) string {
+	if v, ok := m[k]; ok {
+		switch t := v.(type) {
+		case string:
+			return t
+		case int:
+			return strconv.Itoa(t)
+		}
+	}
+	return ""
 }
 
 func extractBundledFacts(t *testing.T, y []byte) bundledFacts {
@@ -147,23 +161,41 @@ func extractBundledFacts(t *testing.T, y []byte) bundledFacts {
 	if err := yaml.Unmarshal(y, &doc); err != nil {
 		t.Fatalf("parse bundled yaml: %v", err)
 	}
-	f := bundledFacts{expected: map[string]int{}}
+	f := bundledFacts{refIDs: map[string][]string{}, expected: map[string]int{}}
+
 	if rd, ok := doc["reference_data"].(map[string]any); ok {
-		if dts, ok := rd["device_types"].([]any); ok {
-			for _, dt := range dts {
-				if m, ok := dt.(map[string]any); ok {
-					if id, ok := m["id"].(string); ok {
-						f.deviceTypeIDs = append(f.deviceTypeIDs, id)
+		for _, sub := range []string{"manufacturers", "device_types", "device_type_extensions", "breakout_options", "module_types"} {
+			if arr, ok := rd[sub].([]any); ok {
+				ids := []string{}
+				for _, e := range arr {
+					if m, ok := e.(map[string]any); ok {
+						ids = append(ids, str(m, "id"))
 					}
 				}
+				sort.Strings(ids)
+				f.refIDs[sub] = ids
 			}
 		}
 	}
-	if n, ok := doc["server_nics"].([]any); ok {
-		f.nics = len(n)
+	if arr, ok := doc["server_nics"].([]any); ok {
+		for _, e := range arr {
+			if m, ok := e.(map[string]any); ok {
+				f.nics = append(f.nics, strings.Join([]string{str(m, "server_class"), str(m, "nic_id"), str(m, "module_type")}, "|"))
+			}
+		}
+		sort.Strings(f.nics)
 	}
-	if c, ok := doc["server_connections"].([]any); ok {
-		f.connections = len(c)
+	if arr, ok := doc["server_connections"].([]any); ok {
+		for _, e := range arr {
+			if m, ok := e.(map[string]any); ok {
+				f.conns = append(f.conns, strings.Join([]string{
+					str(m, "server_class"), str(m, "connection_id"), str(m, "nic"),
+					str(m, "port_index"), str(m, "ports_per_connection"),
+					str(m, "target_zone"), str(m, "speed"), str(m, "transceiver_module_type"),
+				}, "|"))
+			}
+		}
+		sort.Strings(f.conns)
 	}
 	if exp, ok := doc["expected"].(map[string]any); ok {
 		if counts, ok := exp["counts"].(map[string]any); ok {
@@ -174,7 +206,6 @@ func extractBundledFacts(t *testing.T, y []byte) bundledFacts {
 			}
 		}
 	}
-	sort.Strings(f.deviceTypeIDs)
 	return f
 }
 
@@ -190,14 +221,14 @@ func TestIngestRoundTrip_Lossless(t *testing.T) {
 	}
 	want := extractBundledFacts(t, src)
 	got := extractBundledFacts(t, out)
-	if !reflect.DeepEqual(want.deviceTypeIDs, got.deviceTypeIDs) {
-		t.Errorf("round-trip lost/changed reference_data device_type ids:\n want %v\n got  %v", want.deviceTypeIDs, got.deviceTypeIDs)
+	if !reflect.DeepEqual(want.refIDs, got.refIDs) {
+		t.Errorf("round-trip lost/changed reference_data object ids:\n want %v\n got  %v", want.refIDs, got.refIDs)
 	}
-	if want.nics != got.nics {
-		t.Errorf("round-trip changed server_nics count: want %d got %d", want.nics, got.nics)
+	if !reflect.DeepEqual(want.nics, got.nics) {
+		t.Errorf("round-trip lost/changed server_nics identities:\n want %v\n got  %v", want.nics, got.nics)
 	}
-	if want.connections != got.connections {
-		t.Errorf("round-trip changed server_connections count: want %d got %d", want.connections, got.connections)
+	if !reflect.DeepEqual(want.conns, got.conns) {
+		t.Errorf("round-trip lost/changed server_connections identities:\n want %v\n got  %v", want.conns, got.conns)
 	}
 	if !reflect.DeepEqual(want.expected, got.expected) {
 		t.Errorf("round-trip changed expected.counts: want %v got %v", want.expected, got.expected)

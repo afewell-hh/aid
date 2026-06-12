@@ -44,8 +44,8 @@
 
     "external_plan": {
       "type": "object",
-      "description": "The real diet/XOC 9-section bundled shape (no spec/status; reference_data co-located).",
-      "required": ["meta"],
+      "description": "The real diet/XOC bundled shape (no spec/status; reference_data co-located). Requires the load-bearing diet sections (HNP schema.py:158-218: meta, plan, switch_classes, server_classes, server_connections) so a meta-only or typoed-canonical document does not slip through this branch.",
+      "required": ["meta", "plan", "switch_classes", "server_classes", "server_connections"],
       "not": { "anyOf": [ { "required": ["spec"] }, { "required": ["status"] } ] },
       "properties": {
         "meta": { "$ref": "#/$defs/meta" },

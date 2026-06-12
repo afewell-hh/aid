@@ -16,9 +16,11 @@ validation contracts are enforced.
   AID-canonical pure-reference shape (`meta` + constrained `spec` with **pinned**
   `class_ref{name,version}` + optional `status`/`expected`). The branches are mutually
   exclusive, so a malformed `spec`/`status` matches neither and is **rejected**. Verified
-  against all five fixtures with a JSON-Schema validator: the two external files and the two
-  canonical files validate; `tests/oracle/canonical/plan-malformed-spec.yaml` (a `class_ref`
-  missing its pinned `version`) is rejected.
+  against all **seven** fixtures with a JSON-Schema validator: the two external files and the
+  two canonical files validate; the malformed canonical spec (`class_ref` missing its pinned
+  `version`) and two external-negatives (`meta`-only, and `spec` mistyped as `specc`) are
+  rejected. The external branch requires the load-bearing diet sections (`meta`, `plan`,
+  `switch_classes`, `server_classes`, `server_connections`), so a non-plan cannot slip through.
 - **General extensible object substrate** (`internal/objectmodel`, §4.2/D19): every modelled
   thing is a typed `Object{Kind, ID, Attributes: map[namespace]map[field]any, Relations[]}`
   with **open namespaced attributes** (`calc_profile`/`purchase_profile`; future
@@ -75,17 +77,19 @@ deterministic `ports_per_connection>1` — `topology.ExpandPorts` (defined now, 
 
 ## 5. RED state (what devb is reviewing)
 
-`go test ./internal/... ./cmd/... ./embed/...` on this branch — **6 PASS / 19 FAIL / 2 SKIP**:
+`go test ./internal/... ./cmd/... ./embed/...` on this branch — **6 PASS / 21 FAIL / 2 SKIP**:
 - **PASS (6, model-of-record + wiring):** substrate dedup (IDs, kinds); `catalog`
   `TestModel_ExpressesRealServer` (the model represents the owner's real B200 server — 8× CX-7
   as one quantity-8 slot, BF3 = 1 fixed BMC + 2 cages, 4 non-physical slots); `planschema`
   schema files are valid JSON; `oracle` Layer A/B oracles wired (counts pinned).
-- **FAIL (19, the F0 GREEN targets — failing for the right reason, `ErrNotImplemented`):**
-  - `planschema` (5): the external training.yaml + topology-plan.yaml validate; the canonical
-    input-only + input+expected validate; the malformed canonical spec is **rejected**.
+- **FAIL (21, the F0 GREEN targets — failing for the right reason, `ErrNotImplemented`):**
+  - `planschema` (7): the external training.yaml + topology-plan.yaml validate; the canonical
+    input-only + input+expected validate; the malformed canonical spec and two external-negatives
+    (meta-only, typoed `specc`) are **rejected**.
   - `topology` (8) — guardrail-locked: ingest yields **pinned** class refs that resolve (G1);
     an unpinned ref is rejected → `ErrUnpinnedRef` (G1); round-trip preserves
-    reference_data ids + nic/connection counts + expected.counts (G2); Validate resolves refs,
+    reference_data object ids by subsection + full server_nics/server_connections identity tuples
+    + expected.counts (G2); Validate resolves refs,
     rejects an unresolved ref → `ErrUnresolvedRef`, and **ignores** conflicting status (G3);
     ExpandPorts yields the exact `(server_class,nic_slot,port_index)→zone` sequence and rejects
     insufficient cages → `ErrInsufficientPorts` (G4).
@@ -98,7 +102,7 @@ The guardrail tests assert exact promised behavior (pinned refs, lossless preser
 status-ignored, deterministic expansion sequence, typed rejection errors) so a trivial or
 partially-fake GREEN cannot pass them (devb RED review, #48).
 
-At **F0 GREEN** the 12 FAILs become PASS (schema validates the real files; ingest round-trips
+At **F0 GREEN** the 21 FAILs become PASS (schema validates the real files; ingest round-trips
 losslessly; the substrate contracts hold) and only the 2 oracle comparisons remain skipped, so
 `main` stays green. No calc lands in F0.
 
@@ -111,5 +115,5 @@ losslessly; the substrate contracts hold) and only the 2 oracle comparisons rema
 Implement `planschema.Validate` (wire the validator + YAML→JSON); `topology.IngestBundled`/
 `Rebundle` (deterministic lossless split of `reference_data` → catalog, IDs preserved);
 `catalog.Contracts`/`ToObjects`/`Load`; `objectmodel.Validate`/`CheckAcyclic`/`ComposeQuantity`;
-`topology.Validate`/`ExpandPorts`. Author the AID catalog fixture. Turn the 12 RED tests green;
+`topology.Validate`/`ExpandPorts`. Author the AID catalog fixture. Turn the 21 RED tests green;
 keep the 2 oracle comparisons pending. Still no calc.
