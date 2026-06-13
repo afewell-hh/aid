@@ -282,13 +282,13 @@ Because both outputs derive from one resolved model, they cannot drift; the proj
 
 Replace the 3 toy fixtures with **two oracle layers**:
 
-**Layer A — physical/topology subset (XOC/HNP).** For each XOC composition (`xoc-64 … xoc-1024`):
+**Layer A — physical/topology subset (XOC/HNP).** For each XOC composition (`xoc-64 … xoc-1024`). **NetBox is deferred (D22, #13): `netbox_inventory.json` and `connectivity-map.csv` are NOT reproduced or used as oracles now** — the core oracles are computed quantities, `bom.csv`, `wiring/*.yaml` (`hhfab validate`), and `expected.counts`:
 
 | AID output | Compared to | Comparison |
 |---|---|---|
 | BOM **projection** | `bom.csv` | exact 19-column row match incl. suppressed-count footer |
-| connectivity map | `connectivity-map.csv` | set-equality of cable endpoint tuples (order-insensitive) |
-| inventory counts | `netbox_inventory.json .metadata.counts` | exact `devices/modules/interfaces/cables` |
+| computed quantities | `bom.csv` switch/device rows + plan quantities | exact **switches-per-class** + server/device instance counts (F2 oracle) |
+| ~~connectivity map / inventory counts~~ | ~~`connectivity-map.csv` / `netbox_inventory.json`~~ | **DEFERRED — NetBox is non-core (D22, #13); not reproduced now** |
 | wiring CRDs | `wiring/*.yaml` + `hhfab validate` | `hhfab validate` passes (existing CI harness) + CRD-kind counts |
 | self-check | `expected.counts` | exact `server_classes/switch_classes/connections` |
 
@@ -329,9 +329,9 @@ Smallest real composition first; never frankenstein. Each phase is its own RED�
   > 3. **`status`/`expected` never drives production calculation.** It is ignored except in an explicit validation/self-check mode that compares expected vs computed (D21).
   > 4. **Deterministic `ports_per_connection > 1` expansion.** Expanding a multi-port connection into per-port cage bindings must be deterministic and validated against the configured class (§4.3).
 - **Phase F1 — Ingest + catalog load.** Parse the real `training_*.yaml`/`topology-plan.yaml` into the topology model; load the AID catalog (incl. `server_nics` join, non-physical kinds, port/cage templates); reproduce `expected.counts`. Oracle: `xoc-64` self-check.
-- **Phase F2 — Calculation kernel (re-derived).** Switch-count derivation, zone port allocation (comma-list `port_spec`, breakouts, strategies), mesh links, distribution (incl. rail-optimized), per-cage transceiver selection. Oracle: `xoc-64` device/interface/cable counts vs `netbox_inventory.json .metadata.counts`. Re-establish `moon prove` goals for the *real* invariants.
-- **Phase F3 — BOM reducer (full + projection) + connectivity-map.** The deterministic reducer (§4.4) emitting **(a) the full purchasable BOM** and **(b) the HNP 19-column projection**, plus connectivity-map. Oracles: exact `bom.csv` (projection) + `connectivity-map.csv` for `xoc-64` **and** `real-server-bom.csv` for the full BOM **incl. 1×/2× linear-scaling tests**.
-- **Phase F4 — Inventory + wiring + hhfab.** `netbox_inventory.json`; hhfab CRD generation; `hhfab validate` passes. Oracle: wiring + counts for `xoc-64` (both fabrics).
+- **Phase F2 — Calculation kernel (re-derived).** Switch-count derivation, zone port allocation (comma-list `port_spec`, breakouts, strategies), mesh links, distribution (incl. rail-optimized), per-cage transceiver selection. Oracle: `xoc-64` computed **switches-per-class + server/device quantities** vs the committed `bom.csv` (NetBox `netbox_inventory.json` deferred — **D22**). Re-establish `moon prove` goals for the *real* invariants.
+- **Phase F3 — BOM reducer (full + projection).** The deterministic reducer (§4.4) emitting **(a) the full purchasable BOM** and **(b) the HNP 19-column projection**. Oracles: exact `bom.csv` (projection) for `xoc-64` **and** `real-server-bom.csv` for the full BOM **incl. 1×/2× linear-scaling tests**. (`connectivity-map.csv` is NetBox-inventory-derived — deferred, D22.)
+- **Phase F4 — Wiring + hhfab.** hhfab CRD generation; AID produces **equivalent** `wiring/*.yaml`; `hhfab validate` passes. Oracle: wiring equivalence + `hhfab validate` for `xoc-64` (both fabrics). (NetBox `netbox_inventory.json` deferred — **D22**, #13.)
 - **Phase F5 — Scale-out.** Add `xoc-128/256/512/1024` and clos/dual-plane/SH/RO/liquid/storage variants; close the authored `topology-plan.yaml → training` normalization as its **own gated milestone with mapping tests** (§4.5). Each new composition is a new oracle row.
 - **Phase F6 — Surfaces.** Retarget CLI/REST/UI to the corrected model; the GUI must author a real plan **and select transceivers from the catalog to populate cages** (§4.2-4).
 
