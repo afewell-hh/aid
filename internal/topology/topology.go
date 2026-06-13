@@ -772,6 +772,9 @@ func ResolvePlan(p *Plan, cat *catalog.Catalog) error {
 		return fmt.Errorf("%w: ResolvePlan needs a plan and a catalog", ErrInvalidPlan)
 	}
 	// Server class uses: pinned, resolvable, and every NIC component_slot resolves.
+	// Index the resolved configured class by its plan-level id so the connection
+	// loop can resolve each connection's (server class, nic slot, NIC type) path.
+	serverClassItem := map[string]catalog.Item{}
 	for _, sc := range p.Spec.ServerClasses {
 		if !isPinned(sc.ClassRef) {
 			return fmt.Errorf("%w: server class %q", ErrUnpinnedRef, sc.ServerClassID)
@@ -785,6 +788,7 @@ func ResolvePlan(p *Plan, cat *catalog.Catalog) error {
 				return fmt.Errorf("%w: server class %q nic slot %q target %s", ErrUnresolvedRef, sc.ServerClassID, slot.SlotID, slot.Target.ID)
 			}
 		}
+		serverClassItem[sc.ServerClassID] = item
 	}
 	// Switch class uses: pinned + resolvable.
 	for _, sw := range p.Spec.SwitchClasses {
@@ -804,9 +808,21 @@ func ResolvePlan(p *Plan, cat *catalog.Catalog) error {
 			return fmt.Errorf("%w: zone %s/%s transceiver %q", ErrUnresolvedRef, z.SwitchClassID, z.ZoneName, z.Transceiver)
 		}
 	}
-	// Connections: the connection-level transceiver resolves against the catalog,
-	// and the (switch class, zone) target resolves to an ingested port zone.
+	// Connections: the (server class, nic slot, NIC type) path resolves against the
+	// configured class, the connection-level transceiver resolves against the
+	// catalog, and the (switch class, zone) target resolves to an ingested port zone.
 	for _, c := range p.Spec.Connections {
+		item, ok := serverClassItem[c.ServerClassID]
+		if !ok {
+			return fmt.Errorf("%w: connection %q server class %q", ErrUnresolvedRef, c.ConnectionID, c.ServerClassID)
+		}
+		slot, ok := findSlot(item, c.NICSlotID)
+		if !ok {
+			return fmt.Errorf("%w: connection %q nic slot %q on server class %q", ErrUnresolvedRef, c.ConnectionID, c.NICSlotID, c.ServerClassID)
+		}
+		if _, ok := cat.Get(slot.Target.ID); !ok {
+			return fmt.Errorf("%w: connection %q nic type %s for slot %q", ErrUnresolvedRef, c.ConnectionID, slot.Target.ID, c.NICSlotID)
+		}
 		if c.TransceiverID != "" {
 			if _, ok := cat.ByName(c.TransceiverID); !ok {
 				return fmt.Errorf("%w: connection %q transceiver %q", ErrUnresolvedRef, c.ConnectionID, c.TransceiverID)

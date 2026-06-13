@@ -98,11 +98,11 @@ func TestF1_HardwareTypes_InCatalog(t *testing.T) {
 
 	// NIC types with their expected cage counts (= interface_templates).
 	nicCages := map[string]int{
-		"nic_xpu_scale_out_8x400":  8,
+		"nic_xpu_scale_out_8x400":   8,
 		"nic_xpu_soc_storage_2x200": 2,
-		"nic_dual_200g":            2,
-		"nic_dual_25g":             2,
-		"bmc_module":               1,
+		"nic_dual_200g":             2,
+		"nic_dual_25g":              2,
+		"bmc_module":                1,
 	}
 	for id, cages := range nicCages {
 		it, ok := cat.ByName(id)
@@ -189,6 +189,22 @@ func TestF1_ResolvePlan_AllRefsResolve(t *testing.T) {
 	// 3 collapsed switch classes ingested (training form).
 	if len(plan.Spec.SwitchClasses) != 3 {
 		t.Errorf("switch classes ingested: %d, want 3", len(plan.Spec.SwitchClasses))
+	}
+}
+
+func TestF1_ResolvePlan_RejectsDanglingServerClass(t *testing.T) {
+	plan, cat := ingestTraining(t)
+	plan.Spec.Connections[0].ServerClassID = "does_not_exist"
+	if err := ResolvePlan(plan, cat); !errors.Is(err, ErrUnresolvedRef) {
+		t.Fatalf("dangling connection server class: want ErrUnresolvedRef, got %v", err)
+	}
+}
+
+func TestF1_ResolvePlan_RejectsDanglingNICSlot(t *testing.T) {
+	plan, cat := ingestTraining(t)
+	plan.Spec.Connections[0].NICSlotID = "no_such_nic_slot"
+	if err := ResolvePlan(plan, cat); !errors.Is(err, ErrUnresolvedRef) {
+		t.Fatalf("dangling connection nic slot: want ErrUnresolvedRef, got %v", err)
 	}
 }
 
