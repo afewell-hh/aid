@@ -230,6 +230,15 @@ func TestF1_MeshIntentIngested(t *testing.T) {
 	if !mesh {
 		t.Error("expected a mesh-type port zone to be ingested")
 	}
+	// Faithful ingestion: the training.yaml has NO top-level mesh_links /
+	// mclag_domains sections (the mesh pair is derived in calc, F2). Ingest must
+	// not fabricate intent absent from the source file.
+	if len(plan.Spec.MeshLinks) != 0 {
+		t.Errorf("training.yaml has no mesh_links; ingest fabricated %d: %+v", len(plan.Spec.MeshLinks), plan.Spec.MeshLinks)
+	}
+	if len(plan.Spec.MCLAGDomains) != 0 {
+		t.Errorf("training.yaml has no mclag_domains; ingest fabricated %d: %+v", len(plan.Spec.MCLAGDomains), plan.Spec.MCLAGDomains)
+	}
 }
 
 // --- zone transceivers resolved ----------------------------------------------
