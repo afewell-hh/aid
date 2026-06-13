@@ -11,14 +11,22 @@
 package planschema
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/santhosh-tekuri/jsonschema/v5"
+	"gopkg.in/yaml.v3"
 )
 
 // ErrNotImplemented marks the F0 RED stub.
 var ErrNotImplemented = errors.New("planschema: not implemented (F0 GREEN)")
+
+// ErrInvalid marks a document that failed schema validation.
+var ErrInvalid = errors.New("planschema: document does not validate")
 
 // Schema names (files under schema/).
 const (
@@ -35,9 +43,69 @@ func SchemaDir() string {
 // SchemaPath returns the absolute path to a named schema.
 func SchemaPath(name string) string { return filepath.Join(SchemaDir(), name) }
 
-// Validate validates a YAML or JSON document against the named schema. F0 RED
-// stub — F0 GREEN loads the schema, normalizes YAML→JSON, and validates,
-// returning a clear, path-pointed error on mismatch.
+// Validate validates a YAML or JSON document against the named schema. It loads
+// the JSON Schema under schema/, normalizes the YAML/JSON document into the
+// JSON-compatible value tree the validator expects, and validates. A schema
+// mismatch returns an error wrapping ErrInvalid with the validator's path-pointed
+// detail; a valid document returns nil.
 func Validate(schemaName string, doc []byte) error {
-	return fmt.Errorf("%w: Validate(%s)", ErrNotImplemented, schemaName)
+	schemaBytes, err := os.ReadFile(SchemaPath(schemaName))
+	if err != nil {
+		return fmt.Errorf("planschema: read schema %s: %w", schemaName, err)
+	}
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource(schemaName, bytes.NewReader(schemaBytes)); err != nil {
+		return fmt.Errorf("planschema: load schema %s: %w", schemaName, err)
+	}
+	schema, err := compiler.Compile(schemaName)
+	if err != nil {
+		return fmt.Errorf("planschema: compile schema %s: %w", schemaName, err)
+	}
+
+	v, err := normalize(doc)
+	if err != nil {
+		return fmt.Errorf("planschema: parse document: %w", err)
+	}
+	if err := schema.Validate(v); err != nil {
+		return fmt.Errorf("%w against %s: %v", ErrInvalid, schemaName, err)
+	}
+	return nil
+}
+
+// normalize parses a YAML (or JSON, a YAML subset) document into the
+// JSON-compatible value tree the validator consumes: map[string]any keys,
+// []any sequences, and scalar leaves. yaml.v3 already produces string-keyed maps,
+// but we coerce defensively so a document authored with non-string keys cannot
+// slip through.
+func normalize(doc []byte) (any, error) {
+	var raw any
+	if err := yaml.Unmarshal(doc, &raw); err != nil {
+		return nil, err
+	}
+	return coerce(raw), nil
+}
+
+func coerce(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		m := make(map[string]any, len(t))
+		for k, val := range t {
+			m[k] = coerce(val)
+		}
+		return m
+	case map[any]any:
+		m := make(map[string]any, len(t))
+		for k, val := range t {
+			m[fmt.Sprintf("%v", k)] = coerce(val)
+		}
+		return m
+	case []any:
+		s := make([]any, len(t))
+		for i, val := range t {
+			s[i] = coerce(val)
+		}
+		return s
+	default:
+		return v
+	}
 }

@@ -117,3 +117,35 @@ Implement `planschema.Validate` (wire the validator + YAML→JSON); `topology.In
 `catalog.Contracts`/`ToObjects`/`Load`; `objectmodel.Validate`/`CheckAcyclic`/`ComposeQuantity`;
 `topology.Validate`/`ExpandPorts`. Author the AID catalog fixture. Turn the 21 RED tests green;
 keep the 2 oracle comparisons pending. Still no calc.
+
+## 7. F0 GREEN result (implemented)
+
+All 21 RED targets are green; the 2 oracle comparisons stay skipped (pending calc, F2+), so
+the suite is green for what F0 lands. **No calc** was added.
+
+- **`planschema.Validate`** loads the JSON Schema, normalizes YAML→JSON-compatible values, and
+  validates via `github.com/santhosh-tekuri/jsonschema/v5` (the only new runtime dep; pure-Go,
+  draft 2020-12). The real **`training.yaml` validates**, the authored `topology-plan.yaml`
+  validates, the two canonical fixtures (input-only / input+expected) validate, and the three
+  negatives (malformed canonical spec, meta-only, typoed `specc`) are rejected with real
+  validation errors.
+- **`topology.IngestBundled`/`Rebundle`** split the bundled plan into a pure-reference `Plan` +
+  the extracted `Catalog`: every server/switch class becomes a **pinned** (`id@version`)
+  catalog ref that resolves into the extracted catalog (G1), and the `reference_data`/
+  `server_nics` are retained on the catalog verbatim while connections (with `target_zone` split
+  into `class`+`zone`) and `expected.counts` are modeled on the plan — so the bundle round-trips
+  losslessly by canonical identity (G2). `IngestPureReference` rejects an unpinned ref
+  (`ErrUnpinnedRef`).
+- **`topology.Validate`** resolves refs to catalog classes and **never reads `Status`** (G3): a
+  conflicting `status.expected` does not affect validation. **`topology.ExpandPorts`** yields the
+  exact ascending `(server_class, nic_slot, port_index) → zone` sequence and rejects a
+  connection that overflows the NIC's cages (`ErrInsufficientPorts`) (G4).
+- **`objectmodel`** enforces required-fields-per-projection (`ErrContract`), `component_slot`
+  acyclicity (`ErrCycle`, DFS three-color), and the quantity multiply (`ComposeQuantity`).
+- **`catalog`** declares the contracts (acyclic, quantity-bearing `component_slot`; `bom`
+  projection requires the SKU), projects items onto the substrate (`ToObjects`), and parses the
+  authored `tests/oracle/xoc-64-mesh-conv-ro/catalog.yaml` (`Load`, via the YAML→JSON tag bridge).
+
+**Result:** `go test ./internal/... ./cmd/... ./embed/...` → **27 PASS / 0 FAIL / 2 SKIP**
+(the 6 model-of-record/wired + 21 former-RED targets pass; the 2 oracle comparisons skip,
+pending calc). `go build ./cmd/aid` and `go vet` clean.

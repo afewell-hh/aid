@@ -18,14 +18,27 @@
 package catalog
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/afewell-hh/aid/internal/objectmodel"
 )
 
 // ErrNotImplemented marks an F0 RED stub.
 var ErrNotImplemented = errors.New("catalog: not implemented (F0 GREEN)")
+
+// RelComponentSlot / RelPortTemplate are the substrate relation kinds catalog
+// items project onto (objectmodel.Relation.Kind values).
+const (
+	RelComponentSlot = "component_slot"
+	RelPortTemplate  = "port_template"
+)
 
 // Layer distinguishes a bare hardware type from a configured class.
 type Layer string
@@ -134,9 +147,15 @@ type Item struct {
 	CageBindings []CageBinding `json:"cage_bindings,omitempty"`
 }
 
-// Catalog is a set of items keyed by pinned ID.
+// Catalog is a set of items keyed by pinned ID. When a catalog is produced by
+// extracting a bundled plan (topology.IngestBundled), it also RETAINS the
+// extracted reference_data block and server_nics verbatim so the extraction
+// round-trips losslessly (deliverable 6, guardrail 2); these carriers are empty
+// for hand-authored catalogs.
 type Catalog struct {
-	items map[objectmodel.ID]Item
+	items      map[objectmodel.ID]Item
+	refData    map[string]any // extracted reference_data, retained for lossless rebundle
+	serverNics []any          // extracted server_nics, retained for lossless rebundle
 }
 
 // New builds a catalog; duplicate IDs are a hard error.
@@ -154,24 +173,192 @@ func New(items ...Item) (*Catalog, error) {
 // Get returns the item for id.
 func (c *Catalog) Get(id objectmodel.ID) (Item, bool) { it, ok := c.items[id]; return it, ok }
 
+// ByName returns the (first) item whose pinned ID has the given Name, regardless
+// of version. Used where only a plan-level class id (not a full pinned ref) is in
+// hand, e.g. resolving a connection's server_class for port expansion.
+func (c *Catalog) ByName(name string) (Item, bool) {
+	for id, it := range c.items {
+		if id.Name == name {
+			return it, true
+		}
+	}
+	return Item{}, false
+}
+
 // Len reports the item count.
 func (c *Catalog) Len() int { return len(c.items) }
 
-// Load reads a catalog artifact (the AID-owned catalog YAML/JSON) from path.
-// F0 RED stub (F0 GREEN parses the real catalog).
+// SetExtracted attaches the reference_data block and server_nics extracted from a
+// bundled plan so they can be re-embedded losslessly (deliverable 6). Called by
+// topology.IngestBundled; a no-op carrier for hand-authored catalogs.
+func (c *Catalog) SetExtracted(refData map[string]any, serverNics []any) {
+	c.refData = refData
+	c.serverNics = serverNics
+}
+
+// ReferenceData returns the retained extracted reference_data block (nil if the
+// catalog was not produced from a bundled plan).
+func (c *Catalog) ReferenceData() map[string]any { return c.refData }
+
+// ServerNics returns the retained extracted server_nics (nil if not from a bundle).
+func (c *Catalog) ServerNics() []any { return c.serverNics }
+
+// catalogFile is the on-disk shape of the AID-owned catalog artifact: a list of
+// items. Parsed via a YAML→JSON bridge so the items' `json` field tags (the wire
+// contract shared with the JSON Schema) drive decoding.
+type catalogFile struct {
+	Items []Item `json:"items"`
+}
+
+// Load reads a catalog artifact (the AID-owned catalog YAML/JSON) from path and
+// returns a populated catalog. Relative paths are resolved against the current
+// working directory first, then against the repo root, so callers can name the
+// vendored fixture by its repo-relative path from any package's test cwd.
 func Load(path string) (*Catalog, error) {
-	return nil, fmt.Errorf("%w: Load(%s)", ErrNotImplemented, path)
+	b, err := readResolved(path)
+	if err != nil {
+		return nil, err
+	}
+	// YAML→generic→JSON→typed so the json field tags apply (yaml.v3 alone would
+	// lowercase struct field names and miss snake_case tags).
+	var raw any
+	if err := yaml.Unmarshal(b, &raw); err != nil {
+		return nil, fmt.Errorf("catalog: parse %s: %w", path, err)
+	}
+	jsonBytes, err := json.Marshal(jsonify(raw))
+	if err != nil {
+		return nil, fmt.Errorf("catalog: normalize %s: %w", path, err)
+	}
+	var cf catalogFile
+	if err := json.Unmarshal(jsonBytes, &cf); err != nil {
+		return nil, fmt.Errorf("catalog: decode %s: %w", path, err)
+	}
+	return New(cf.Items...)
+}
+
+// readResolved reads path, falling back to repo-root resolution for relative
+// paths that do not exist relative to the working directory.
+func readResolved(path string) ([]byte, error) {
+	if b, err := os.ReadFile(path); err == nil {
+		return b, nil
+	} else if filepath.IsAbs(path) {
+		return nil, err
+	}
+	rooted := filepath.Join(repoRoot(), path)
+	b, err := os.ReadFile(rooted)
+	if err != nil {
+		return nil, fmt.Errorf("catalog: read %s (also tried %s): %w", path, rooted, err)
+	}
+	return b, nil
+}
+
+func repoRoot() string {
+	_, file, _, _ := runtime.Caller(0)
+	return filepath.Dir(filepath.Dir(filepath.Dir(file)))
+}
+
+// jsonify coerces yaml.v3's value tree (which may carry map[any]any) into a
+// JSON-marshalable tree (string-keyed maps).
+func jsonify(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		m := make(map[string]any, len(t))
+		for k, val := range t {
+			m[k] = jsonify(val)
+		}
+		return m
+	case map[any]any:
+		m := make(map[string]any, len(t))
+		for k, val := range t {
+			m[fmt.Sprintf("%v", k)] = jsonify(val)
+		}
+		return m
+	case []any:
+		s := make([]any, len(t))
+		for i, val := range t {
+			s[i] = jsonify(val)
+		}
+		return s
+	default:
+		return v
+	}
 }
 
 // ToObjects maps catalog items onto the general substrate so the objectmodel
-// contracts can validate them. F0 RED stub.
+// contracts can validate them. Each item becomes a typed Object: its
+// calc_profile/purchase_profile become attribute namespaces, its component_slots
+// and port_templates become typed relations (component_slots carry the quantity
+// used by ComposeQuantity).
 func (c *Catalog) ToObjects() ([]objectmodel.Object, error) {
-	return nil, fmt.Errorf("%w: ToObjects", ErrNotImplemented)
+	objs := make([]objectmodel.Object, 0, len(c.items))
+	for _, it := range c.items {
+		o := objectmodel.Object{Kind: it.Kind, ID: it.ID}
+		o.Attributes = map[string]map[string]any{}
+		if len(it.CalcProfile) > 0 {
+			o.Attributes["calc_profile"] = it.CalcProfile
+		}
+		if len(it.PurchaseProfile) > 0 {
+			o.Attributes["purchase_profile"] = it.PurchaseProfile
+		}
+		// Surface the SKU into purchase_profile so the bom projection contract can
+		// require it without reaching into struct internals.
+		if it.PartNumber != "" {
+			if o.Attributes["purchase_profile"] == nil {
+				o.Attributes["purchase_profile"] = map[string]any{}
+			}
+			if _, ok := o.Attributes["purchase_profile"]["part_number"]; !ok {
+				o.Attributes["purchase_profile"]["part_number"] = it.PartNumber
+			}
+		}
+		if len(o.Attributes) == 0 {
+			o.Attributes = nil
+		}
+		for _, s := range it.ComponentSlots {
+			o.Relations = append(o.Relations, objectmodel.Relation{
+				Kind:   RelComponentSlot,
+				Target: s.Target,
+				Fields: map[string]any{"quantity": s.Quantity, "required": s.Required, "slot_id": s.SlotID},
+			})
+		}
+		for _, p := range it.PortTemplates {
+			o.Relations = append(o.Relations, objectmodel.Relation{
+				Kind:   RelPortTemplate,
+				Fields: map[string]any{"name": p.Name, "port_kind": string(p.PortKind)},
+			})
+		}
+		objs = append(objs, o)
+	}
+	return objs, nil
 }
 
-// Contracts returns the objectmodel contracts for the catalog kinds (required
-// fields per projection, component_slot acyclicity + quantity composition).
-// F0 RED stub.
+// Contracts returns the objectmodel contracts for the catalog kinds. The
+// composite kinds (server, switch) declare an ACYCLIC, QUANTITY-BEARING
+// component_slot relation (the 8× CX-7 multiply) and require their purchasable
+// SKU under the "bom" projection — the F0 implementation gate ("open attributes"
+// is not "anything goes").
 func Contracts() ([]objectmodel.Contract, error) {
-	return nil, fmt.Errorf("%w: Contracts", ErrNotImplemented)
+	slotRel := map[string]objectmodel.RelationContract{
+		RelComponentSlot: {Kind: RelComponentSlot, Acyclic: true, QuantityField: "quantity"},
+		RelPortTemplate:  {Kind: RelPortTemplate},
+	}
+	composite := func(kind string) objectmodel.Contract {
+		return objectmodel.Contract{
+			Kind:                 kind,
+			RequiredByProjection: map[string][]string{"bom": {"purchase_profile.part_number"}},
+			Relations:            slotRel,
+		}
+	}
+	hwType := func(kind string) objectmodel.Contract {
+		return objectmodel.Contract{Kind: kind, Relations: map[string]objectmodel.RelationContract{
+			RelPortTemplate: {Kind: RelPortTemplate},
+		}}
+	}
+	return []objectmodel.Contract{
+		composite(KindServer),
+		composite(KindSwitch),
+		hwType(KindNIC),
+		hwType(KindDPU),
+		hwType(KindTransceiver),
+		hwType(KindComponent),
+	}, nil
 }

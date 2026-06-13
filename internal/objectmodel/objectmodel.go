@@ -131,22 +131,170 @@ func NewRegistry(cs ...Contract) (*Registry, error) {
 // Contract returns the contract for a kind.
 func (r *Registry) Contract(kind string) (Contract, bool) { c, ok := r.contracts[kind]; return c, ok }
 
-// Validate checks every object against its kind's contract: stable/known IDs,
-// required-fields-per-projection presence, and relation contracts. F0 RED stub.
+// Validate checks every object against its kind's contract: required-fields-per-
+// projection presence and relation contracts. A kind with no declared contract is
+// skipped (the substrate is open); a kind that DOES declare a contract must honor
+// it — that is what keeps "open attributes" from becoming "anything goes". The
+// returned error wraps ErrContract and names the offending object/path.
 func (r *Registry) Validate(g *Graph, projection string) error {
-	return fmt.Errorf("%w: Validate", ErrNotImplemented)
+	for _, o := range g.objects {
+		c, ok := r.contracts[o.Kind]
+		if !ok {
+			continue // open substrate: no contract declared for this kind
+		}
+		for _, path := range c.RequiredByProjection[projection] {
+			ns, field, ok := splitPath(path)
+			if !ok {
+				return fmt.Errorf("%w: malformed required path %q for kind %q", ErrContract, path, o.Kind)
+			}
+			fields, ok := o.Attributes[ns]
+			if !ok {
+				return fmt.Errorf("%w: object %s missing attribute namespace %q required by projection %q", ErrContract, o.ID, ns, projection)
+			}
+			if _, ok := fields[field]; !ok {
+				return fmt.Errorf("%w: object %s missing required field %s for projection %q", ErrContract, o.ID, path, projection)
+			}
+		}
+		// Relation contracts: every relation kind present on the object must be
+		// declared, and acyclic relations are checked graph-wide below.
+		for _, rel := range o.Relations {
+			if _, ok := c.Relations[rel.Kind]; !ok {
+				return fmt.Errorf("%w: object %s has undeclared relation kind %q", ErrContract, o.ID, rel.Kind)
+			}
+		}
+	}
+	// Acyclicity for every declared acyclic relation kind.
+	seen := map[string]bool{}
+	for _, c := range r.contracts {
+		for _, rc := range c.Relations {
+			if rc.Acyclic && !seen[rc.Kind] {
+				seen[rc.Kind] = true
+				if err := r.CheckAcyclic(g, rc.Kind); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // CheckAcyclic verifies the given relation kind forms no cycles across the graph
-// (component_slots must be acyclic). F0 RED stub.
+// (component_slots must be acyclic). Edges follow Relation.Target.ID for relations
+// whose Kind matches relationKind; targets absent from the graph are leaf edges.
 func (r *Registry) CheckAcyclic(g *Graph, relationKind string) error {
-	return fmt.Errorf("%w: CheckAcyclic(%s)", ErrNotImplemented, relationKind)
+	const (
+		white = 0 // unvisited
+		gray  = 1 // on the current DFS stack
+		black = 2 // fully explored
+	)
+	color := make(map[ID]int, len(g.objects))
+
+	var visit func(id ID) error
+	visit = func(id ID) error {
+		color[id] = gray
+		o, ok := g.objects[id]
+		if ok {
+			for _, rel := range o.Relations {
+				if rel.Kind != relationKind {
+					continue
+				}
+				t := rel.Target.ID
+				switch color[t] {
+				case gray:
+					return fmt.Errorf("%w: %s via %s back to %s", ErrCycle, id, relationKind, t)
+				case white:
+					if err := visit(t); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		color[id] = black
+		return nil
+	}
+
+	for id := range g.objects {
+		if color[id] == white {
+			if err := visit(id); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // ComposeQuantity returns the effective quantity of a nested object reached from
 // root via a chain of quantity-bearing relations (the per-unit multiply used by
-// the BOM reducer in F3). F0 RED stub — defined here so the composition
-// semantics have one home; no calc is performed in F0.
+// the BOM reducer in F3). It walks root → path[0] → path[1] → …, multiplying the
+// quantity carried by each traversed relation (per the relation's contract
+// QuantityField). No calc is performed beyond this composition.
 func (r *Registry) ComposeQuantity(g *Graph, root ID, path []ID) (int, error) {
-	return 0, fmt.Errorf("%w: ComposeQuantity", ErrNotImplemented)
+	product := 1
+	cur := root
+	for _, next := range path {
+		o, ok := g.objects[cur]
+		if !ok {
+			return 0, fmt.Errorf("%w: object %s not in graph", ErrInvalidGraph, cur)
+		}
+		rel, ok := findRelation(o, next)
+		if !ok {
+			return 0, fmt.Errorf("%w: no relation from %s to %s", ErrInvalidGraph, cur, next)
+		}
+		qField := r.quantityField(o.Kind, rel.Kind)
+		if qField == "" {
+			return 0, fmt.Errorf("%w: relation %q (kind %s) is not quantity-bearing", ErrContract, rel.Kind, o.Kind)
+		}
+		q, ok := asInt(rel.Fields[qField])
+		if !ok {
+			return 0, fmt.Errorf("%w: relation %s→%s missing integer quantity field %q", ErrContract, cur, next, qField)
+		}
+		product *= q
+		cur = next
+	}
+	return product, nil
+}
+
+// quantityField returns the QuantityField declared for relationKind on objKind,
+// or "" if undeclared.
+func (r *Registry) quantityField(objKind, relationKind string) string {
+	if c, ok := r.contracts[objKind]; ok {
+		if rc, ok := c.Relations[relationKind]; ok {
+			return rc.QuantityField
+		}
+	}
+	return ""
+}
+
+// findRelation returns o's relation whose Target resolves to id.
+func findRelation(o Object, id ID) (Relation, bool) {
+	for _, rel := range o.Relations {
+		if rel.Target.ID == id {
+			return rel, true
+		}
+	}
+	return Relation{}, false
+}
+
+// splitPath splits a "namespace.field" required path.
+func splitPath(path string) (ns, field string, ok bool) {
+	for i := 0; i < len(path); i++ {
+		if path[i] == '.' {
+			return path[:i], path[i+1:], true
+		}
+	}
+	return "", "", false
+}
+
+// asInt coerces the common numeric encodings (int / int64 / float64, e.g. from
+// JSON/YAML) to int.
+func asInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	}
+	return 0, false
 }

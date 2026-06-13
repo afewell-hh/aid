@@ -1,0 +1,51 @@
+# AID-owned component catalog (a small slice for the xoc-64 composition).
+# Two layers: bare hardware TYPES (capability only) and configured CLASSES that
+# bind specific transceivers into specific NIC ports. Topology plans reference the
+# CLASSES by pinned id+version. This is an authored F0 fixture proving the catalog
+# parser + model; it is NOT calc input (calc is F2+).
+items:
+  # --- bare hardware types (capability only) --------------------------------
+  - id: { name: nic-xpu-scale-out-1x400, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: nvidia
+    model: Generic xPU Scale-Out 400G NIC (one cage)
+    port_templates:
+      - { name: p0, port_kind: transceiver_cage, max_speed_gbps: 400, cage_type: QSFP112, requires_transceiver: true }
+
+  - id: { name: osfp-400g-dr4, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: nvidia
+    model: OSFP-400G-DR4
+    part_number: OSFP-400G-DR4
+
+  - id: { name: celestica-ds5000, version: "1" }
+    kind: switch
+    layer: hardware_type
+    manufacturer: celestica
+    model: celestica-ds5000
+
+  # --- configured classes (reusable inventory; pinned, self-describing) ------
+  - id: { name: celestica-ds5000-leaf, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: celestica
+    model: celestica-ds5000
+    part_number: DS5000-LEAF
+    purchase_profile: { unit_of_measure: each }
+    component_slots:
+      - { slot_id: chassis, target: { name: celestica-ds5000, version: "1" }, quantity: 1, required: true }
+
+  - id: { name: smc-b200-8gpu, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Supermicro
+    model: AS-4126GS-NBR-LCC
+    part_number: AS-4126GS-NBR-LCC
+    purchase_profile: { unit_of_measure: each }
+    component_slots:
+      # 8× CX-7 as ONE quantity-bearing slot (not a synthetic 8-port NIC).
+      - { slot_id: nic-scale-out, target: { name: nic-xpu-scale-out-1x400, version: "1" }, quantity: 8, required: true }
+    cage_bindings:
+      - { nic_slot_id: nic-scale-out, port_index: 0, selected_transceiver: { name: osfp-400g-dr4, version: "1" } }
