@@ -32,9 +32,6 @@ import (
 // reproducible (id+version), never a bare mutable name.
 const classVersion = "1"
 
-// ErrNotImplemented marks an F0 RED stub.
-var ErrNotImplemented = errors.New("topology: not implemented (F0 GREEN)")
-
 // Distinguishable validation errors (the F0 contract). GREEN returns these; the
 // RED tests assert them so a trivial implementation cannot pass.
 var (
@@ -68,13 +65,13 @@ type Meta struct {
 
 // Spec is the authored input: class references + topology intent.
 type Spec struct {
-	Name          string            `json:"name"`
-	ServerClasses []ServerClassUse  `json:"server_classes"`
-	SwitchClasses []SwitchClassUse  `json:"switch_classes"`
-	PortZones     []SwitchPortZone  `json:"switch_port_zones"`
+	Name          string             `json:"name"`
+	ServerClasses []ServerClassUse   `json:"server_classes"`
+	SwitchClasses []SwitchClassUse   `json:"switch_classes"`
+	PortZones     []SwitchPortZone   `json:"switch_port_zones"`
 	Connections   []ServerConnection `json:"server_connections"`
-	MeshLinks     []MeshLink        `json:"mesh_links,omitempty"`
-	MCLAGDomains  []MCLAGDomain     `json:"mclag_domains,omitempty"`
+	MeshLinks     []MeshLink         `json:"mesh_links,omitempty"`
+	MCLAGDomains  []MCLAGDomain      `json:"mclag_domains,omitempty"`
 }
 
 // ServerClassUse references a catalog server CLASS (by pinned ID) and gives the
@@ -160,8 +157,8 @@ type Status struct {
 // Expected is the author-supplied oracle for self-check (generalizes the real
 // format's expected.counts).
 type Expected struct {
-	Counts          Counts         `json:"counts"`
-	SwitchQuantity  map[string]int `json:"switch_quantity,omitempty"` // per switch_class_id
+	Counts         Counts         `json:"counts"`
+	SwitchQuantity map[string]int `json:"switch_quantity,omitempty"` // per switch_class_id
 }
 
 // Computed is what AID populated (F2+ fills it; empty in F0).
@@ -183,20 +180,57 @@ type Counts struct {
 // server_nics are retained verbatim (as generic trees) so the split is lossless;
 // the load-bearing sections are decoded into typed views.
 type bundledDoc struct {
-	Meta          map[string]any     `json:"meta"`
-	Plan          map[string]any     `json:"plan"`
-	ReferenceData map[string]any     `json:"reference_data"`
-	SwitchClasses []rawSwitchClass   `json:"switch_classes"`
-	PortZones     []SwitchPortZone   `json:"switch_port_zones"`
-	ServerClasses []rawServerClass   `json:"server_classes"`
-	ServerNics    []any              `json:"server_nics"`
-	Connections   []rawConnection    `json:"server_connections"`
-	Expected      *rawExpected       `json:"expected"`
+	Meta          map[string]any   `json:"meta"`
+	Plan          map[string]any   `json:"plan"`
+	ReferenceData map[string]any   `json:"reference_data"`
+	SwitchClasses []rawSwitchClass `json:"switch_classes"`
+	PortZones     []SwitchPortZone `json:"switch_port_zones"`
+	ServerClasses []rawServerClass `json:"server_classes"`
+	ServerNics    []any            `json:"server_nics"`
+	Connections   []rawConnection  `json:"server_connections"`
+	Expected      *rawExpected     `json:"expected"`
 }
 
 type rawServerClass struct {
-	ServerClassID string `json:"server_class_id"`
-	Quantity      int    `json:"quantity"`
+	ServerClassID    string `json:"server_class_id"`
+	Quantity         int    `json:"quantity"`
+	ServerDeviceType string `json:"server_device_type"`
+}
+
+// rawRefData is the typed view of the bundled reference_data block needed to
+// extract the hardware-type catalog layer (device/NIC/transceiver types). The
+// block is also retained verbatim (doc.ReferenceData) for lossless rebundle; this
+// typed view is read-only and never re-emitted.
+type rawRefData struct {
+	DeviceTypes          []rawHardwareType `json:"device_types"`
+	ModuleTypes          []rawHardwareType `json:"module_types"`
+	DeviceTypeExtensions []struct {
+		ID         string `json:"id"`
+		DeviceType string `json:"device_type"`
+	} `json:"device_type_extensions"`
+}
+
+// rawHardwareType is a device_type or module_type entry. A module_type WITH
+// interface_templates is a NIC; without, a transceiver (§4.2). A device_type is a
+// chassis (server/switch) hardware type.
+type rawHardwareType struct {
+	ID                 string             `json:"id"`
+	Manufacturer       string             `json:"manufacturer"`
+	Model              string             `json:"model"`
+	InterfaceTemplates []rawIfaceTemplate `json:"interface_templates"`
+}
+
+type rawIfaceTemplate struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// rawServerNic is one row of the server_nics join: a NIC module bound to a named
+// slot on a server class.
+type rawServerNic struct {
+	ServerClass string `json:"server_class"`
+	NicID       string `json:"nic_id"`
+	ModuleType  string `json:"module_type"`
 }
 
 type rawSwitchClass struct {
@@ -241,14 +275,110 @@ func IngestBundled(yamlBytes []byte) (*Plan, *catalog.Catalog, error) {
 		return nil, nil, fmt.Errorf("%w: parse bundled plan: %v", ErrInvalidPlan, err)
 	}
 
-	// --- catalog: a configured class per server/switch class, pinned by id+version.
+	// --- typed views of the bundled hardware layer + joins (read-only; the
+	// verbatim blocks are still retained for lossless rebundle below).
+	var rd rawRefData
+	if err := remarshal(doc.ReferenceData, &rd); err != nil {
+		return nil, nil, fmt.Errorf("%w: decode reference_data: %v", ErrInvalidPlan, err)
+	}
+	var nics []rawServerNic
+	if err := remarshal(doc.ServerNics, &nics); err != nil {
+		return nil, nil, fmt.Errorf("%w: decode server_nics: %v", ErrInvalidPlan, err)
+	}
+
+	// --- catalog layer 1: bare hardware TYPES extracted from reference_data.
+	//   - module_types WITH interface_templates → NIC types (cages = templates);
+	//     WITHOUT → transceiver types (§4.2 capability layer).
+	//   - device_types → server/switch chassis hardware types (classified by the
+	//     server_classes / device_type_extensions references).
 	var items []catalog.Item
+	for _, mt := range rd.ModuleTypes {
+		if len(mt.InterfaceTemplates) > 0 {
+			items = append(items, nicHardwareType(mt))
+		} else {
+			items = append(items, catalog.Item{
+				ID:           objectmodel.ID{Name: mt.ID, Version: classVersion},
+				Kind:         catalog.KindTransceiver,
+				Layer:        catalog.LayerHardwareType,
+				Manufacturer: mt.Manufacturer,
+				Model:        mt.Model,
+			})
+		}
+	}
+	switchDT := map[string]bool{}
+	for _, ext := range rd.DeviceTypeExtensions {
+		switchDT[ext.DeviceType] = true
+	}
+	serverDT := map[string]bool{}
 	for _, sc := range doc.ServerClasses {
-		items = append(items, catalog.Item{
+		if sc.ServerDeviceType != "" {
+			serverDT[sc.ServerDeviceType] = true
+		}
+	}
+	for _, dt := range rd.DeviceTypes {
+		kind := catalog.KindComponent
+		switch {
+		case switchDT[dt.ID]:
+			kind = catalog.KindSwitch
+		case serverDT[dt.ID]:
+			kind = catalog.KindServer
+		}
+		it := catalog.Item{
+			ID:           objectmodel.ID{Name: dt.ID, Version: classVersion},
+			Kind:         kind,
+			Layer:        catalog.LayerHardwareType,
+			Manufacturer: dt.Manufacturer,
+			Model:        dt.Model,
+		}
+		for _, tmpl := range dt.InterfaceTemplates {
+			it.PortTemplates = append(it.PortTemplates, portTemplate(tmpl))
+		}
+		items = append(items, it)
+	}
+
+	// --- catalog layer 2: configured server/switch CLASSES, pinned by id+version.
+	// Server classes carry the server_nics join (→ NIC component_slots) and the
+	// per-NIC-port connection transceivers resolved INTO the class (→ cage
+	// bindings, ports_per_connection expanded).
+	nicsByClass := map[string][]rawServerNic{}
+	for _, n := range nics {
+		nicsByClass[n.ServerClass] = append(nicsByClass[n.ServerClass], n)
+	}
+	connsByClass := map[string][]rawConnection{}
+	for _, c := range doc.Connections {
+		connsByClass[c.ServerClass] = append(connsByClass[c.ServerClass], c)
+	}
+	for _, sc := range doc.ServerClasses {
+		it := catalog.Item{
 			ID:    objectmodel.ID{Name: sc.ServerClassID, Version: classVersion},
 			Kind:  catalog.KindServer,
 			Layer: catalog.LayerClass,
-		})
+		}
+		for _, n := range nicsByClass[sc.ServerClassID] {
+			it.ComponentSlots = append(it.ComponentSlots, catalog.ComponentSlot{
+				SlotID:   n.NicID,
+				Target:   objectmodel.Ref{ID: objectmodel.ID{Name: n.ModuleType, Version: classVersion}},
+				Quantity: 1,
+				Required: true,
+			})
+		}
+		for _, c := range connsByClass[sc.ServerClassID] {
+			if c.Transceiver == "" {
+				continue
+			}
+			ppc := c.PortsPerConnection
+			if ppc < 1 {
+				ppc = 1
+			}
+			for i := 0; i < ppc; i++ {
+				it.CageBindings = append(it.CageBindings, catalog.CageBinding{
+					NICSlotID:           c.Nic,
+					PortIndex:           c.PortIndex + i,
+					SelectedTransceiver: objectmodel.Ref{ID: objectmodel.ID{Name: c.Transceiver, Version: classVersion}},
+				})
+			}
+		}
+		items = append(items, it)
 	}
 	for _, sw := range doc.SwitchClasses {
 		items = append(items, catalog.Item{
@@ -537,6 +667,46 @@ func jsonify(v any) any {
 	}
 }
 
+// remarshal converts an already-JSON-friendly generic tree (a map/slice produced
+// by decodeYAML's jsonify bridge) into a typed view via a JSON round-trip, so the
+// typed struct's json tags drive decoding. Used to read the verbatim
+// reference_data/server_nics into their typed extraction views.
+func remarshal(in, out any) error {
+	b, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, out)
+}
+
+// nicHardwareType builds a NIC hardware type from a module_type: each
+// interface_template becomes a transceiver cage (capability only; the selected
+// optic is bound per NIC-port on the configured class).
+func nicHardwareType(mt rawHardwareType) catalog.Item {
+	it := catalog.Item{
+		ID:           objectmodel.ID{Name: mt.ID, Version: classVersion},
+		Kind:         catalog.KindNIC,
+		Layer:        catalog.LayerHardwareType,
+		Manufacturer: mt.Manufacturer,
+		Model:        mt.Model,
+	}
+	for _, tmpl := range mt.InterfaceTemplates {
+		t := portTemplate(tmpl)
+		t.RequiresTransceiver = true
+		it.PortTemplates = append(it.PortTemplates, t)
+	}
+	return it
+}
+
+// portTemplate maps an interface_template to a transceiver cage port template.
+func portTemplate(tmpl rawIfaceTemplate) catalog.PortTemplate {
+	return catalog.PortTemplate{
+		Name:          tmpl.Name,
+		PortKind:      catalog.TransceiverCage,
+		InterfaceType: tmpl.Type,
+	}
+}
+
 func isPinned(r objectmodel.Ref) bool { return r.Name != "" && r.Version != "" }
 
 func splitZone(s string) (cls, zone string, ok bool) {
@@ -597,10 +767,66 @@ func asInt(v any) int {
 // class + zone, transceiver), and each zone transceiver. It returns
 // ErrUnresolvedRef naming the first dangling reference. This is the F1
 // "catalog-ref resolution" gate over the relational model.
-//
-// F1 RED stub: implemented in GREEN.
 func ResolvePlan(p *Plan, cat *catalog.Catalog) error {
-	return ErrNotImplemented
+	if p == nil || cat == nil {
+		return fmt.Errorf("%w: ResolvePlan needs a plan and a catalog", ErrInvalidPlan)
+	}
+	// Server class uses: pinned, resolvable, and every NIC component_slot resolves.
+	for _, sc := range p.Spec.ServerClasses {
+		if !isPinned(sc.ClassRef) {
+			return fmt.Errorf("%w: server class %q", ErrUnpinnedRef, sc.ServerClassID)
+		}
+		item, ok := cat.Get(sc.ClassRef.ID)
+		if !ok {
+			return fmt.Errorf("%w: server class ref %s", ErrUnresolvedRef, sc.ClassRef.ID)
+		}
+		for _, slot := range item.ComponentSlots {
+			if _, ok := cat.Get(slot.Target.ID); !ok {
+				return fmt.Errorf("%w: server class %q nic slot %q target %s", ErrUnresolvedRef, sc.ServerClassID, slot.SlotID, slot.Target.ID)
+			}
+		}
+	}
+	// Switch class uses: pinned + resolvable.
+	for _, sw := range p.Spec.SwitchClasses {
+		if !isPinned(sw.ClassRef) {
+			return fmt.Errorf("%w: switch class %q", ErrUnpinnedRef, sw.SwitchClassID)
+		}
+		if _, ok := cat.Get(sw.ClassRef.ID); !ok {
+			return fmt.Errorf("%w: switch class ref %s", ErrUnresolvedRef, sw.ClassRef.ID)
+		}
+	}
+	// Zone-level transceivers resolve against the catalog.
+	for _, z := range p.Spec.PortZones {
+		if z.Transceiver == "" {
+			continue
+		}
+		if _, ok := cat.ByName(z.Transceiver); !ok {
+			return fmt.Errorf("%w: zone %s/%s transceiver %q", ErrUnresolvedRef, z.SwitchClassID, z.ZoneName, z.Transceiver)
+		}
+	}
+	// Connections: the connection-level transceiver resolves against the catalog,
+	// and the (switch class, zone) target resolves to an ingested port zone.
+	for _, c := range p.Spec.Connections {
+		if c.TransceiverID != "" {
+			if _, ok := cat.ByName(c.TransceiverID); !ok {
+				return fmt.Errorf("%w: connection %q transceiver %q", ErrUnresolvedRef, c.ConnectionID, c.TransceiverID)
+			}
+		}
+		if !zoneExists(p, c.TargetSwitchClass, c.TargetZone) {
+			return fmt.Errorf("%w: connection %q target zone %s/%s", ErrUnresolvedRef, c.ConnectionID, c.TargetSwitchClass, c.TargetZone)
+		}
+	}
+	return nil
+}
+
+// zoneExists reports whether the plan carries a port zone (switchClass, zoneName).
+func zoneExists(p *Plan, switchClass, zoneName string) bool {
+	for _, z := range p.Spec.PortZones {
+		if z.SwitchClassID == switchClass && z.ZoneName == zoneName {
+			return true
+		}
+	}
+	return false
 }
 
 // SelfCheck is the explicit expected.counts self-check mode (D21, guardrail 3):
@@ -609,10 +835,23 @@ func ResolvePlan(p *Plan, cat *catalog.Catalog) error {
 // Status.Computed. Returns ErrNoExpected if the plan carries no expected block
 // and ErrSelfCheckMismatch on divergence. In F1 the computed counts are the
 // ingested counts (no calc yet).
-//
-// F1 RED stub: implemented in GREEN.
 func SelfCheck(p *Plan) (Counts, error) {
-	return Counts{}, ErrNotImplemented
+	if p == nil || p.Status == nil || p.Status.Expected == nil {
+		return Counts{}, ErrNoExpected
+	}
+	got := Counts{
+		ServerClasses: len(p.Spec.ServerClasses),
+		SwitchClasses: len(p.Spec.SwitchClasses),
+		Connections:   len(p.Spec.Connections),
+	}
+	if p.Status.Computed == nil {
+		p.Status.Computed = &Computed{}
+	}
+	p.Status.Computed.Counts = got
+	if got != p.Status.Expected.Counts {
+		return got, fmt.Errorf("%w: computed %+v != expected %+v", ErrSelfCheckMismatch, got, p.Status.Expected.Counts)
+	}
+	return got, nil
 }
 
 // CageBindingRef is one resolved (server class, nic slot, port index) → zone

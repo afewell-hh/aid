@@ -29,12 +29,6 @@ import (
 // failure.
 var ErrNotImplemented = errors.New("oracle: comparison not implemented (needs calc, F2+)")
 
-// ErrNotImplementedIngest marks an INGESTION-level comparison still stubbed in
-// RED. It is distinct from ErrNotImplemented because such a row needs only F1
-// ingestion (no calc) and must move SKIP→PASS in F1 — so the phase boundary is
-// not misstated as "needs calc, F2+".
-var ErrNotImplementedIngest = errors.New("oracle: comparison not implemented (F1 GREEN — ingestion only, no calc)")
-
 // Root returns the vendored oracle directory (tests/oracle), located from any
 // working dir.
 func Root() string {
@@ -123,10 +117,18 @@ type ExpectedCounts struct {
 // relational model to the plan's committed expected.counts (Layer A's
 // expected.counts row, D20/D21). Unlike the other Layer A comparisons it needs
 // only ingestion (F1), so it is IMPLEMENTED here and PASSES for xoc-64.
-//
-// F1 RED stub: implemented in GREEN (ingestion only — NOT gated on calc).
 func CompareExpectedCounts(computed, oracle ExpectedCounts) (Diff, error) {
-	return Diff{}, fmt.Errorf("%w: CompareExpectedCounts", ErrNotImplementedIngest)
+	var details []string
+	if computed.ServerClasses != oracle.ServerClasses {
+		details = append(details, fmt.Sprintf("server_classes: computed %d != expected %d", computed.ServerClasses, oracle.ServerClasses))
+	}
+	if computed.SwitchClasses != oracle.SwitchClasses {
+		details = append(details, fmt.Sprintf("switch_classes: computed %d != expected %d", computed.SwitchClasses, oracle.SwitchClasses))
+	}
+	if computed.Connections != oracle.Connections {
+		details = append(details, fmt.Sprintf("connections: computed %d != expected %d", computed.Connections, oracle.Connections))
+	}
+	return Diff{Equal: len(details) == 0, Details: details}, nil
 }
 
 // CompareWiringHhfab generates wiring CRDs and runs the existing hhfab validate
