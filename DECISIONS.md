@@ -464,3 +464,17 @@ seed convenience (`ingest.py:61-326`). Separation gives CRD-style independent, r
 oracle story. Guardrails (catalog pinning; deterministic lossless ingest; status-never-drives-calc;
 deterministic `ports_per_connection>1` expansion) are enforced in F0+. Full analysis:
 `docs/foundation-redesign.md` §4.1, §4.5.
+
+---
+
+## D22: NetBox is deferred (non-core); `netbox_inventory.json`/`connectivity-map.csv` are not foundation-rebuild oracles (amends D20)
+
+**Decision.** NetBox integration — both the publish adapter and reproduction of NetBox-inventory artifacts — is **not a core feature** and is **deferred** to the intentionally-last NetBox phase (#13). The foundation rebuild does **not** target `netbox_inventory.json`, and AID does **not** attempt to reproduce it. The rebuild's behavioral oracles, drawn from the core XOC assets, are:
+- **Topology-plan `expected.counts`** — the ingestion self-check (F1).
+- **Computed quantities** — for the specified inputs, AID produces the same outputs, chiefly **quantities of switches per class** (and server/device instance quantities), validated against the committed **`bom.csv`** (F2) and the plan's derived/override quantities.
+- **`bom.csv`** — the procurement BOM projection (F3), plus the owner full-purchasable-BOM artifact `real-server-bom.csv`.
+- **`wiring/*.yaml`** — AID must produce **equivalent wiring**, validated by `hhfab validate` + structural CRD equivalence (F4).
+
+`netbox_inventory.json` (and its NetBox-inventory-derived `connectivity-map.csv` / per-interface counts) are **not** validation targets for the rebuild; they return only with the NetBox phase (#13).
+
+**Rationale (owner directive).** NetBox is not core, and replicating the NetBox inventory file now is impractical and premature. The core value — correct topology *quantities*, a complete purchasable BOM, and valid/equivalent *wiring* — is fully validated by the topology-plan, `bom.csv`, and `wiring/*.yaml` assets without it. This amends D20's Layer-A oracle list (drop `netbox_inventory.json` and `connectivity-map.csv`; keep `bom.csv`, `wiring`/`hhfab validate`, `expected.counts`, and add the computed-quantities check).
