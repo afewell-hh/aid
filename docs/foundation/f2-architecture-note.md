@@ -34,6 +34,11 @@ bar before RED.
    allocation completeness/in-bounds. The pure-arithmetic cores already proved
    (`ceil_div_pos`, `ports_distinct`, `leaf_adjust_*`) are **reused**; BOM-scaling
    cores defer to F3; mesh-cable core defers to F4.
+   **(Scope) Mesh-link pairing/cabling is deferred to F4** (§2.6): it is
+   switch↔switch *wiring*, the same category F4 owns. F2 keeps only the mesh
+   **structural gate** (2-or-3 switches) as a validation/proof invariant and emits
+   **no** mesh-link IR. The acceptance plan also adds an explicit **derived count
+   > 1** case so the non-override path is exercised beyond `ceil=1` (§6).
 5. **Oracle bar:** for `xoc-64`, computed **switches per class** = `soc_storage_scale_out_leaf ×2,
    inb_mgmt_leaf ×1, oob_leaf ×1` and **server quantities** =
    `compute_xpu ×8, storage_srv ×3, metadata_srv ×3, hh_gateway ×2, hh_controller ×1`,
@@ -80,25 +85,48 @@ ingested plan + catalog            kernel (pure, provable)              Go
   Status.Computed.SwitchQuantity / Counts   ──►  derived-quantities oracle vs bom.csv
 ```
 
+**Identity is preserved across the boundary (devb gate).** Distribution keys on
+`port_index` directly (`device_generator.py:1245-1257`) and the real input is keyed
+per `connection_id` / `nic` / `port_index` (`training.yaml:607-745`); a single
+connection *definition* fans out across `server_class.quantity` server instances,
+and `same-switch`/`rail-optimized` send different server instances to different
+switch instances. So the calc-plan carries **full per-connection identity in**, and
+the calc-output emits **one record per realized endpoint** (per server instance ×
+per port), never a per-definition summary.
+
 **`calc-plan` JSON (Go → kernel) — the resolved, numeric input.** Per switch class:
 `{ switch_class_id, override_quantity?, redundancy (none|mclag|eslag), topology_mode,
 zones[] }` where each zone is `{ zone_name, zone_type, port_spec (string),
 breakout_logical_ports (int, resolved by Go), allocation_strategy, transceiver_attrs }`.
-Per server class: `{ server_class_id, quantity }`. Per connection:
-`{ server_class_id, server_quantity, target_switch_class, target_zone,
-ports_per_connection, distribution, rail?, server_transceiver_attrs }`. Go resolves
-every catalog-dependent scalar (notably `breakout_option` → `logical_ports`, and
-the optic `attribute_data` for both ends) so the **kernel never touches the
-catalog** — it consumes typed numbers + the raw `port_spec` string it is required
-to parse.
+Per server class: `{ server_class_id, quantity }`. Per connection (the **full
+relational identity**, not a reduced view):
+```
+{ connection_id, server_class_id, server_quantity,
+  nic_slot_id, port_index, ports_per_connection, speed,
+  distribution, rail?, target_switch_class, target_zone,
+  server_transceiver_attrs }      // optic attribute_data resolved by Go
+```
+Go resolves every catalog-dependent scalar (notably `breakout_option` →
+`logical_ports`, and the optic `attribute_data` for both ends) so the **kernel
+never touches the catalog** — it consumes typed numbers + the raw `port_spec`
+string it is required to parse.
 
-**`calc-output` JSON (kernel → Go).** `{ switch_quantity: { class_id → int },
-server_quantity: { class_id → int }, allocations: [ { switch_class, zone,
-switch_index, connection_id, port_slots: [ {physical_port, breakout_index?, name} ] } ],
-transceiver_verdicts: [ { connection_id, outcome (match|needs_review|blocked),
-reason_code } ] }`. F2's headline consumer is `switch_quantity`/`server_quantity`
-(the oracle); `allocations`/`verdicts` are the IR that F4 (wiring) consumes — F2
-computes them and proves their invariants but need not emit wiring.
+**`calc-output` JSON (kernel → Go).** Quantities for the oracle plus a
+**per-realized-endpoint** allocation list (the F4-consumable IR):
+```
+{ switch_quantity: { class_id → int },
+  server_quantity: { class_id → int },
+  endpoints: [ {                       // one per (server instance, connection, port)
+    server_class_id, server_index, connection_id, nic_slot_id, port_index,
+    switch_class_id, switch_index, zone,
+    port_slot: { physical_port, breakout_index?, name }   // name = E1/{p} | E1/{p}/{lane}
+  } ],
+  transceiver_verdicts: [ { connection_id, outcome (match|needs_review|blocked), reason_code } ] }
+```
+Every endpoint names *which* server instance got *which* switch instance and port
+slot, so F4 can build wiring without re-running distribution. F2's headline
+consumer is `switch_quantity`/`server_quantity` (the oracle); `endpoints`/`verdicts`
+are computed and proved here but F2 emits no wiring CRDs.
 
 This keeps the boundary identical to D16 (UTF-8 JSON over linear memory,
 `alloc`/`dealloc`/`export_calculate`), so `internal/wasmhost` and `embed` are
@@ -169,6 +197,32 @@ code.
   (`:237-244`); connector mismatch → `needs_review` (`:246-253`); else match.
   Only **BLOCKED** halts generation (`device_generator.py:1121-1137`).
 
+### 2.6 Mesh — deferred to F4 (structural gate kept in F2)
+HNP mesh is **not** a byproduct of generic server-port allocation; it is its own
+deterministic switch↔switch *cabling* flow:
+`utils/mesh_allocator.py:39-121` (`allocate_mesh_links`) pairs **physical switch
+instances** via `combinations(all_switch_names, 2)` (full mesh), assigns each pair a
+stable `link_index`, leaves `subnet` blank (hhfab hydrates IPs), and
+`services/device_generator.py:1659-1819` (`_create_mesh_connections`) allocates the
+per-pair ports from the mesh zone and emits the mesh connections/CRDs.
+
+That output is **wiring** — switch↔switch links validated by `hhfab validate` —
+which is exactly F4's remit (foundation-redesign §5 F4). **Decision: F2 defers mesh
+pairing + per-pair port allocation + mesh-link IR to F4.** F2 retains only:
+- the **mesh structural gate** — a mesh fabric must have **2 or 3 switches**
+  (`device_generator.py` mesh guard; the existing `mesh_cable_count`
+  core in `kernel/proofs/cores.mbt:150-161` already encodes the `{2,3}` precondition)
+  — surfaced as a validation result, since it is a topology-soundness invariant, not
+  wiring; and
+- **mesh-zone capacity awareness** in switch-count derivation *only if* a mesh class
+  is on the derived (non-override) path. In `xoc-64` the sole mesh class
+  (`soc_storage_scale_out_leaf`) is `override_quantity: 2`, so no mesh-derived count
+  arises here; full mesh-zone-derived counting rides with the F4 mesh work.
+
+Consequently `calc-output` carries **no mesh-link field** (its `endpoints` are
+server↔switch only). The earlier note's "F2 computes mesh links / feeds F4" framing
+is corrected to this explicit deferral.
+
 ---
 
 ## 3. Oracle / acceptance bar (core XOC assets — NOT netbox_inventory)
@@ -189,6 +243,23 @@ real per-zone `ceil(demand/logical_capacity)` path; `soc_storage` exercises the
 override path. (17 = 8+3+3+2+1; matches `bom.csv` server-transceiver rows
 `RJ45-1000BASE-T ×17`, `SFP28-25GBASE-SR ×17`.) 21 connections = 8 rail-optimized
 scale-out + 3 soc-storage (`ppc=2`) + 5 inb-mgmt + 5 oob.
+
+**Required: a derived count > 1 case (lead + devb gate).** xoc-64's derived
+classes both land at `ceil=1`, which does not stress the orchestration around
+`effective = override ?? calculated` (a class that only ever returns 1 could pass
+with broken zone-demand/capacity wiring). So the acceptance bar **additionally
+requires** at least one explicit case on the **non-override** path with
+`calculated_quantity > 1`, asserted independently of xoc-64:
+- **Kernel unit fixture** `derived_multi`: a single server zone, `port_spec` giving
+  e.g. 4 logical ports/switch, same-switch demand 10 → `ceil(10/4) = 3` switches; a
+  variant adds the `alternating` floor (demand 1, but `alternating` ⇒ ≥ 2) and an
+  MCLAG even-rounding variant (`ceil → 3` ⇒ rounded to 4). These hit
+  `effective = calculated` with `> 1`, the alternating floor (`:655-658`), and
+  redundancy rounding (`:662`).
+- This is wired as a kernel `moon test` case **and** an I3 proof obligation (below),
+  so both the runtime path and the proof exercise `calculated > 1`, not only the
+  `ceil=1` xoc-64 values. (Synthetic fixture only — not a new XOC composition;
+  scale-out compositions arrive in F5.)
 
 **Also computed (proved, not asserted against an oracle until F4):** port
 allocations (incl. `brk_2x400_osfp`=2-lane and `brk_4x200_osfp`=4-lane breakout
@@ -218,7 +289,8 @@ Re-establish against the diet model; **discard** invariants tied to the invented
   (`q·cap ≥ demand`) and is minimal — `ceil_div_pos` (`cores.mbt:46-62`) already
   proves this; restate the wrapper as `effective = override ?? calculated` and keep
   `leaf_adjust_non_eslag`/`leaf_clamp_eslag` (`:72-108`) for the alternating/MCLAG/
-  ESLAG floors.
+  ESLAG floors. **The I3 obligation must be discharged at `calculated > 1`** (the
+  `derived_multi` fixture, §3), not only the xoc-64 `ceil=1` values.
 - **I-new — Allocation completeness / in-bounds.** New pure core:
   `demand ≤ capacity ⇒ allocated == demand ∧ cursor_end ≤ |sequence|` (cursor never
   runs past the parsed sequence; every demanded port gets exactly one slot).
@@ -239,7 +311,7 @@ still turn it red.
 | `kernel/proofs/cores.mbt` (ceil_div, ports_distinct, leaf_adjust/clamp) | **reuse** (pure arithmetic; restate wrappers for I1/I3/I-new) |
 | `switch_count.mbt`, `alloc.mbt`, `distribution.mbt`, `oversubscription.mbt` | **reuse logic**, re-anchor inputs to diet zones/connections; add real `port_spec` parse + breakout expand (new `port_spec.mbt`) |
 | `types.mbt`, `decode.mbt` | **rebuild** to the `calc-plan` shape (§1.1); drop invented `device_catalog`/`fabric_domains`/`entries` |
-| `calculate.mbt`, `encode.mbt` | **rebuild** orchestration + `calc-output` shape (switch/server qty + allocations + verdicts) |
+| `calculate.mbt`, `encode.mbt` | **rebuild** orchestration + `calc-output` shape (switch/server qty + per-realized-endpoint records + verdicts; §1.1) |
 | `bom.mbt`, `mesh.mbt`, `validate.mbt` (BOM/mesh parts) | **defer** to F3/F4 (keep compiling/proved; not on F2 path) |
 | `internal/wasmhost`, `internal/components`, `embed`, ABI `kernel/wasm/abi.mbt` | **unchanged** (D16 boundary intact) |
 | `internal/orchestrate` (invented path) | **rewire** to feed the new `calc-plan` from `internal/topology`+`catalog`, or add a parallel F2 entry; flagged for devb in RED |
@@ -255,12 +327,19 @@ issue constraint.
 - **RED:** (a) Go `oracle.CompareDerivedQuantities(computed, bom.csv)` + a new
   failing `TestLayerA_DerivedQuantities` (SKIP→fail without calc); (b) kernel
   `port_spec`/alloc/distribution/switch-count tests over xoc-64-shaped fixtures
-  (failing); (c) inverted `moon prove` negative control. Push, PAUSE for devb.
-- **GREEN:** implement §1.1 calc-plan resolver (Go), the kernel calc (§2), the
-  `calc-output` decode + `Status.Computed` population, and the re-established
-  proofs (§4). xoc-64 derived-quantities row PASS; `moon prove` `N==M`; full
-  `go test ./...` + `cd kernel && moon test` + CI green; BOM/wiring/netbox rows
-  still SKIP. Push, PAUSE for devb; lead merges.
+  (failing), **incl. the `derived_multi` `calculated > 1` fixture (§3)**; (c) a
+  kernel test asserting `calc-output` **endpoint identity** — for a same-switch and
+  a rail-optimized connection, distinct `server_index` values land on the expected
+  distinct `switch_index`/`port_slot` (proves the boundary preserves per-instance
+  identity, devb finding 1); (d) inverted `moon prove` negative control. Push,
+  PAUSE for devb.
+- **GREEN:** implement §1.1 calc-plan resolver (Go) carrying full per-connection
+  identity, the kernel calc (§2) emitting per-realized-endpoint records, the
+  `calc-output` decode + `Status.Computed` population, and the re-established proofs
+  (§4) incl. the `calculated > 1` I3 obligation. xoc-64 derived-quantities row PASS;
+  `derived_multi` PASS; endpoint-identity test PASS; `moon prove` `N==M`; full
+  `go test ./...` + `cd kernel && moon test` + CI green; BOM/wiring/mesh-link/netbox
+  rows still SKIP/deferred. Push, PAUSE for devb; lead merges.
 
 **Reproduction commands (to be recorded on the issue at GREEN):**
 `cd kernel && moon test`; `bash scripts/moon-prove-gate.sh`; `make wasm && go test ./...`;
