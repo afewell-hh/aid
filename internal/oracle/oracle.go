@@ -105,6 +105,32 @@ func CompareCounts(computed NetboxCounts, oracle NetboxCounts) (Diff, error) {
 	return Diff{}, fmt.Errorf("%w: CompareCounts", ErrNotImplemented)
 }
 
+// ExpectedCounts is the plan's self-check oracle (the real format's
+// expected.counts). A local type avoids an import cycle with internal/topology.
+type ExpectedCounts struct {
+	ServerClasses int `json:"server_classes"`
+	SwitchClasses int `json:"switch_classes"`
+	Connections   int `json:"connections"`
+}
+
+// CompareExpectedCounts compares the counts AID derived from the ingested
+// relational model to the plan's committed expected.counts (Layer A's
+// expected.counts row, D20/D21). Unlike the other Layer A comparisons it needs
+// only ingestion (F1), so it is IMPLEMENTED here and PASSES for xoc-64.
+func CompareExpectedCounts(computed, oracle ExpectedCounts) (Diff, error) {
+	var details []string
+	if computed.ServerClasses != oracle.ServerClasses {
+		details = append(details, fmt.Sprintf("server_classes: computed %d != expected %d", computed.ServerClasses, oracle.ServerClasses))
+	}
+	if computed.SwitchClasses != oracle.SwitchClasses {
+		details = append(details, fmt.Sprintf("switch_classes: computed %d != expected %d", computed.SwitchClasses, oracle.SwitchClasses))
+	}
+	if computed.Connections != oracle.Connections {
+		details = append(details, fmt.Sprintf("connections: computed %d != expected %d", computed.Connections, oracle.Connections))
+	}
+	return Diff{Equal: len(details) == 0, Details: details}, nil
+}
+
 // CompareWiringHhfab generates wiring CRDs and runs the existing hhfab validate
 // harness against them. F0: pending.
 func CompareWiringHhfab(computedWiringDir, oracleWiringDir string) (Diff, error) {
