@@ -2,9 +2,12 @@ package oracle
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/afewell-hh/aid/internal/topology"
 )
 
 // repoRoot is the parent of tests/oracle.
@@ -51,6 +54,46 @@ func TestLayerB_RealServerBOMWired(t *testing.T) {
 		if !strings.Contains(blob, sku) {
 			t.Errorf("real-server-bom.csv missing expected line %q", sku)
 		}
+	}
+}
+
+// --- REAL (pass): expected.counts row moves SKIP→PASS in F1 -------------------
+
+// TestLayerA_ExpectedCounts_SelfCheck ingests the xoc-64 training form into the
+// relational topology model and reproduces the plan's committed expected.counts.
+// This Layer A row needs only ingestion (F1), so unlike the device/cable/inventory
+// rows it PASSES rather than skipping.
+func TestLayerA_ExpectedCounts_SelfCheck(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(LayerADir(), "training.yaml"))
+	if err != nil {
+		t.Fatalf("read training.yaml: %v", err)
+	}
+	plan, _, err := topology.IngestBundled(b)
+	if err != nil {
+		t.Fatalf("IngestBundled(xoc-64): %v", err)
+	}
+	if plan.Status == nil || plan.Status.Expected == nil {
+		t.Fatal("xoc-64 training form must carry expected.counts")
+	}
+	computed := ExpectedCounts{
+		ServerClasses: len(plan.Spec.ServerClasses),
+		SwitchClasses: len(plan.Spec.SwitchClasses),
+		Connections:   len(plan.Spec.Connections),
+	}
+	want := ExpectedCounts{
+		ServerClasses: plan.Status.Expected.Counts.ServerClasses,
+		SwitchClasses: plan.Status.Expected.Counts.SwitchClasses,
+		Connections:   plan.Status.Expected.Counts.Connections,
+	}
+	diff, err := CompareExpectedCounts(computed, want)
+	if err != nil {
+		t.Fatalf("CompareExpectedCounts: %v", err)
+	}
+	if !diff.Equal {
+		t.Errorf("xoc-64 expected.counts mismatch: %v (computed %+v want %+v)", diff.Details, computed, want)
+	}
+	if want != (ExpectedCounts{ServerClasses: 5, SwitchClasses: 3, Connections: 21}) {
+		t.Errorf("xoc-64 committed expected.counts = %+v, want {5 3 21}", want)
 	}
 }
 

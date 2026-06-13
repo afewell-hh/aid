@@ -46,6 +46,10 @@ var (
 	ErrInvalidPlan = errors.New("topology: invalid plan")
 	// ErrInsufficientPorts: a connection needs more ports than the class provides (guardrail 4).
 	ErrInsufficientPorts = errors.New("topology: connection requires more ports than the configured class provides")
+	// ErrSelfCheckMismatch: computed counts diverge from the plan's expected counts (D21 self-check).
+	ErrSelfCheckMismatch = errors.New("topology: self-check failed (computed counts != expected)")
+	// ErrNoExpected: a self-check was requested but the plan carries no expected block.
+	ErrNoExpected = errors.New("topology: plan has no expected counts to self-check against")
 )
 
 // Plan is the top-level document: spec (inputs) + optional status/expected.
@@ -101,6 +105,10 @@ type SwitchPortZone struct {
 	BreakoutID    string `json:"breakout_option,omitempty"`
 	Allocation    string `json:"allocation_strategy,omitempty"`
 	Priority      int    `json:"priority,omitempty"`
+	// Transceiver is the zone-level optic (real-format transceiver_module_type),
+	// resolved against the catalog on ingest. Kept on the zone (not a class
+	// binding) because it is a switch-side, per-zone selection.
+	Transceiver string `json:"transceiver_module_type,omitempty"`
 }
 
 // ServerConnection is connection intent keyed on (nic, port_index) → zone. A
@@ -581,6 +589,30 @@ func asInt(v any) int {
 		return int(n)
 	}
 	return 0
+}
+
+// ResolvePlan verifies every catalog reference the ingested plan carries
+// resolves against cat: each server/switch class use, each server_nics-join NIC
+// type, each connection's (server class, nic slot, NIC type, target switch
+// class + zone, transceiver), and each zone transceiver. It returns
+// ErrUnresolvedRef naming the first dangling reference. This is the F1
+// "catalog-ref resolution" gate over the relational model.
+//
+// F1 RED stub: implemented in GREEN.
+func ResolvePlan(p *Plan, cat *catalog.Catalog) error {
+	return ErrNotImplemented
+}
+
+// SelfCheck is the explicit expected.counts self-check mode (D21, guardrail 3):
+// the ONLY place Status/Expected is read. It derives counts from the ingested
+// relational model and compares them to the plan's Expected counts, populating
+// Status.Computed. Returns ErrNoExpected if the plan carries no expected block
+// and ErrSelfCheckMismatch on divergence. In F1 the computed counts are the
+// ingested counts (no calc yet).
+//
+// F1 RED stub: implemented in GREEN.
+func SelfCheck(p *Plan) (Counts, error) {
+	return Counts{}, ErrNotImplemented
 }
 
 // CageBindingRef is one resolved (server class, nic slot, port index) → zone
