@@ -1,0 +1,23 @@
+# AID-canonical plan WITH a populated status/expected plane → a self-checking
+# test oracle (D21). Same inputs as plan-input-only plus expected counts.
+meta:
+  case_id: canonical_with_expected
+  name: Canonical plan with expected
+spec:
+  name: Canonical plan with expected
+  server_classes:
+    - server_class_id: compute
+      class_ref: { name: smc-b200-8gpu, version: "1" }
+      quantity: 8
+  server_connections:
+    - server_class: compute
+      connection_id: scale-out-rail-0
+      nic: scale_out
+      port_index: 0
+      ports_per_connection: 1
+      target_zone: soc_storage_scale_out_leaf/scale_out_server_2x400
+      speed: 400
+status:
+  expected:
+    counts: { server_classes: 1, switch_classes: 1, connections: 1 }
+    switch_quantity: { soc_storage_scale_out_leaf: 2 }

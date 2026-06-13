@@ -147,6 +147,10 @@ a new export adapter (e.g., for a different network fabric) by implementing the
 
 ## D9: Plan YAML as canonical input format
 
+> **⚠ SUPERSEDED by D18 (Foundation Redesign, #46).** The version-controllable-YAML
+> intent is retained, but the *invented* schema is replaced by the real OCP/diet
+> topology-plan shape + a separate AID-owned catalog. See D18.
+
 **Decision:** The topology plan YAML file is the canonical user-authored input to AID.
 AID does not require a GUI or a database to create or edit plans.
 
@@ -157,6 +161,10 @@ format. The schema is published as a JSON Schema specification (see D10).
 ---
 
 ## D10: Topology plan schema published as OCP community artifact
+
+> **⚠ SUPERSEDED by D18 (Foundation Redesign, #46).** AID adopts + documents the
+> *community* topology-plan schema (and publishes its own catalog + plan-status
+> schema) rather than publishing an AID-invented plan schema. See D18.
 
 **Decision:** The topology plan YAML schema is published as a versioned JSON Schema
 specification under an Apache 2.0 license, separate from the AID implementation.
@@ -196,6 +204,11 @@ internal predecessor adds confusion with no benefit to users.
 ---
 
 ## D13: Generic recursive DeviceClass composite — no server-first special casing
+
+> **⚠ SUPERSEDED by D19 (Foundation Redesign, #46).** The universal recursive
+> `DeviceClass` is dropped as the *topology root* in favor of the relational
+> diet model; a corrected component-graph composite is retained for the *catalog*
+> only. See D19.
 
 **Decision:** AID's hardware model uses a single `DeviceClass` type as the universal
 building block. Any hardware component — server, switch, NIC, GPU, PDU, rack unit,
@@ -351,3 +364,103 @@ capacity as the denominator.
   `mesh-two-switch` and `switch-bom` = **N/A** (no spine/uplink tier). These are pinned into
   the fixtures' `expected.json` as the lead-approved baseline addition.
 - Decided with the project owner during the Phase 3 GREEN review (issue #6).
+
+---
+
+## D18: Real OCP/diet topology-plan shape canonical for topology intent + an AID-owned catalog (supersedes D9, D10)
+
+**Decision:** AID's canonical *topology* input is the published OCP/diet `topology-plan.yaml`
+shape (`meta, reference_data, plan, switch_classes, switch_port_zones, server_classes,
+server_nics, server_connections, expected`), validated against `schema/topology-plan-v2.json`
+which describes that real format plus an optional Kubernetes-style `spec`/`status` plane
+(D21). AID does **not** invent a topology vocabulary. **Additionally**, AID owns a
+NetBox-independent **component catalog** (`schema/catalog-v1.json`) as a **separate,
+versioned artifact** that the plan **references by pinned id** — because HNP delegated the
+catalog to NetBox (`reference_data.py:142-158`; the plan FK-references it) and AID has no
+NetBox. AID ingests a real *bundled* `topology-plan.yaml` by **losslessly extracting** its
+`reference_data` into the catalog; canonical authoring is pure-reference. This is **not a
+converter** — the topology shape is adopted as-is; the catalog is a separate, additive
+layer AID owns to carry hardware/SKU/component identity and emit a purchasable BOM.
+
+**Rationale:** The invented `topology-plan-v1.json` (now retired to `schema/superseded/`)
+shared zero top-level keys with the real input and could not parse a single reference file;
+the real format and the diet engine format are identical; committed oracles exist only for
+the real format. D9's version-controllable-YAML intent is preserved; D10's "publish an AID
+schema" becomes "adopt + document the community topology schema, and publish the AID catalog
++ plan-status schema." Full analysis: `docs/foundation-redesign.md` §4.1, §2.1.
+
+---
+
+## D19: Relational topology classes + a two-layer component-graph catalog (supersedes D13)
+
+**Decision:** Two halves. **(Topology)** AID's topology model is the diet relational model —
+`ServerClass`-ref (+ NIC join), `SwitchClass`-ref, `SwitchPortZone`, `ServerConnection`
+(per-NIC-port), `MeshLink`, `MCLAGDomain` — with switch quantities derived later. The
+universal recursive `DeviceClass` is **dropped as the topology root**. **(Catalog/BOM)** AID
+retains a corrected recursive/component composite for the *catalog*, expressed as a **general
+extensible object model** (`internal/objectmodel`): typed objects with **open, namespaced
+attribute sets** (`calc_profile`/`purchase_profile`; future planes added the same way) +
+**arbitrary typed nested relationships**. The catalog has **two layers**: bare hardware
+*types* (capability only, reusable) and configured **server/switch classes** (reusable
+inventory objects that bind specific transceivers into specific **NIC-port** cages, with
+complete context-free BOMs). The binding lives on the class, per NIC port, never on the bare
+type; **a different transceiver selection ⇒ a distinct class**. Future features extend the
+model by adding attribute namespaces, relation kinds, and projections — never by
+re-foundationing.
+
+**Rationale:** D13's "single universal recursive `DeviceClass`, no `ServerClass`/`ServerNIC`"
+is contradicted *as a topology root* by the authoritative relational model (NIC-first
+connections, switch-count derivation, zone allocation — `topology_plans.py`). But a bounded
+component graph is exactly right *for the catalog*: it is the only way to express the owner's
+nested purchasable parts, non-physical line items, and per-cage transceivers
+(`docs/requirements/real-server-bom.csv`) that HNP's Module-aggregation BOM cannot. Plan-time
+BOM derivation (D6) is retained via the BOM reducer. Full analysis:
+`docs/foundation-redesign.md` §4.2–§4.4.
+
+---
+
+## D20: Two oracle layers — XOC/HNP physical subset + the owner full-purchasable-BOM artifact (supersedes the toy-fixture strategy)
+
+**Decision:** The behavioral contract has two layers. **Layer A (physical/topology subset):**
+the XOC composition matrix (`xoc-64 … xoc-1024`) — AID reproduces the committed `bom.csv` (as
+the BOM **projection**), `connectivity-map.csv`, `netbox_inventory.json` counts, `wiring/*.yaml`
+(`hhfab validate`), and `expected.counts`. **Layer B (full purchasable BOM):**
+`docs/requirements/real-server-bom.csv` — AID's full BOM reproduces the complete line set
+(incl. non-physical and nested CX-7/BF3 + per-cage transceivers) **with 1×/2× linear-scaling
+tests**. The hand-authored toy fixtures (`clos-small`/`mesh-two-switch`/`switch-bom`) are
+removed as the old calc path is replaced. **Provenance is a hard gate:** the first oracle
+milestone targets `generated/inputs/training_*.yaml` exactly (1:1 with the committed outputs,
+which use the *collapsed* class set); the authored `topology-plan.yaml → training`
+normalization is a separate gated milestone with mapping tests.
+
+**Rationale:** The toy fixtures admitted they "do not reproduce real device/cable/switch
+counts" (`tests/fixtures/README.md`); Layer A validates HNP-compatible behavior, but only
+Layer B exercises the full-BOM requirements (catalog, planes, non-physical lines, nesting,
+scaling). Harness: `internal/oracle`; vendored oracles under `tests/oracle/`. Full analysis:
+`docs/foundation-redesign.md` §4.5.
+
+---
+
+## D21: Catalog is a separate artifact; plan schema is `spec` + `status`/`expected` (double-duty test documents)
+
+**Decision:** **(a) Catalog separation.** The component catalog (`schema/catalog-v1.json`) is
+a **separate, versioned, AID-owned artifact** of independent objects; topology plans carry
+only **pointers** (server/switch **class** ids + catalog refs) plus topology intent. Catalog
+refs **pin identity + version/digest** (not a mutable friendly id) for reproducibility. AID
+ingests a real *bundled* `topology-plan.yaml` by **deterministically and losslessly** extracting
+`reference_data` into the catalog. **(b) Plan spec/status.** An AID plan has an input (`spec`)
+plane and an optional `status`/`expected` plane of computed values (Kubernetes-style).
+Inputs-only ⇒ valid input; inputs + populated expected ⇒ a self-checking **test oracle**.
+`status`/`expected` **never drives production calculation** — it is read only in an explicit
+self-check/validation mode. Scalar/summary computed values (derived switch counts, totals,
+validation, `expected.counts`) live in the plan; bulky outputs (full inventory, wiring CRDs,
+full BOM rows) stay separate artifacts.
+
+**Rationale:** HNP's real architecture already separates the catalog (NetBox DCIM) from the
+plan and references it by FK (`topology_plans.py:164,323,746`); `reference_data` in the YAML is
+seed convenience (`ingest.py:61-326`). Separation gives CRD-style independent, reusable objects
+(a switch object is a switch object); the spec/status plane generalizes the real format's
+`expected.counts` so the same document authors input *and* asserts output — strengthening D20's
+oracle story. Guardrails (catalog pinning; deterministic lossless ingest; status-never-drives-calc;
+deterministic `ports_per_connection>1` expansion) are enforced in F0+. Full analysis:
+`docs/foundation-redesign.md` §4.1, §4.5.

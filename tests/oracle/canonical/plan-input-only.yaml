@@ -1,0 +1,30 @@
+# AID-canonical pure-reference plan (inputs only). References catalog classes by
+# pinned id+version. Valid input AID can ingest; no status/expected.
+meta:
+  case_id: canonical_input_only
+  name: Canonical input-only plan
+spec:
+  name: Canonical input-only plan
+  server_classes:
+    - server_class_id: compute
+      class_ref: { name: smc-b200-8gpu, version: "1" }
+      quantity: 8
+  switch_classes:
+    - switch_class_id: soc_storage_scale_out_leaf
+      class_ref: { name: celestica-ds5000-leaf, version: "1" }
+      fabric_name: soc-storage-scale-out
+      override_quantity: 2
+      topology_mode: mesh
+  switch_port_zones:
+    - switch_class: soc_storage_scale_out_leaf
+      zone_name: scale_out_server_2x400
+      zone_type: server
+      port_spec: "1-16"
+  server_connections:
+    - server_class: compute
+      connection_id: scale-out-rail-0
+      nic: scale_out
+      port_index: 0
+      ports_per_connection: 1
+      target_zone: soc_storage_scale_out_leaf/scale_out_server_2x400
+      speed: 400

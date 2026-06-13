@@ -1,0 +1,12 @@
+# MALFORMED: the class_ref omits the required pinned `version` (guardrail 1), and
+# `spec` is present so the document is not the external shape either. The schema's
+# oneOf(external,canonical) must REJECT this (it matches neither branch).
+meta:
+  case_id: canonical_malformed
+  name: Malformed canonical plan
+spec:
+  name: Malformed canonical plan
+  server_classes:
+    - server_class_id: compute
+      class_ref: { name: smc-b200-8gpu }
+      quantity: 8

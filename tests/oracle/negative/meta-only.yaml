@@ -1,0 +1,6 @@
+# NEGATIVE: a meta-only document is neither a real bundled diet/XOC plan (missing
+# plan/switch_classes/server_classes/server_connections) nor an AID-canonical
+# plan (no spec). The oneOf must REJECT it.
+meta:
+  case_id: meta_only
+  name: Not a plan

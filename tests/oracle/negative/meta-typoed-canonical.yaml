@@ -1,0 +1,11 @@
+# NEGATIVE: looks canonical but `spec` is mistyped as `specc`, so there is no real
+# spec (fails canonical) and the bundled diet sections are absent (fails external).
+# Must be REJECTED rather than silently passing the external branch.
+meta:
+  case_id: typoed
+  name: Typoed canonical
+specc:
+  server_classes:
+    - server_class_id: compute
+      class_ref: { name: smc-b200-8gpu, version: "1" }
+      quantity: 8

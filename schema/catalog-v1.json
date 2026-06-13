@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aid.opencompute.org/schema/catalog-v1.json",
+  "title": "AID Component Catalog (v1)",
+  "description": "AID's NetBox-independent component catalog (docs/foundation-redesign.md §4.2, D18/D19/D21): a separate, versioned artifact of independent objects referenced by topology plans via pinned id. Two layers: bare hardware TYPES (capability only) and configured server/switch CLASSES (reusable, per-NIC-port transceiver bindings, complete context-free BOM). Objects carry open, namespaced attribute planes (calc_profile/purchase_profile; future planes added the same way) and typed nested relationships (port_templates, component_slots).",
+  "type": "object",
+  "required": ["catalog_version", "items"],
+  "properties": {
+    "catalog_version": { "type": "string", "description": "Pinned catalog version (guardrail 1: reproducibility)." },
+    "items": { "type": "array", "items": { "$ref": "#/$defs/item" } }
+  },
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "description": "Pinned reference: id + version (+ optional digest).",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "digest": { "type": "string" }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["id", "kind", "layer"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ref" },
+        "kind": {
+          "type": "string",
+          "description": "Open set; F0 models: server, switch, nic, dpu, transceiver, component, accessory, warranty, software_support, assembly, onsite_service.",
+          "examples": ["server", "switch", "nic", "dpu", "transceiver", "component", "accessory", "warranty", "software_support", "assembly", "onsite_service"]
+        },
+        "layer": { "type": "string", "enum": ["hardware_type", "class"] },
+        "manufacturer": { "type": "string" },
+        "model": { "type": "string" },
+        "part_number": { "type": "string" },
+        "description": { "type": "string" },
+        "orderable": { "type": "boolean" },
+
+        "calc_profile": { "type": "object", "description": "Attribute namespace: ports/speeds/cages/breakouts/role/transceiver-compat." },
+        "purchase_profile": { "type": "object", "description": "Attribute namespace: SKU/UoM/qty-rules/power/capacity/arbitrary." },
+
+        "port_templates": { "type": "array", "items": { "$ref": "#/$defs/port_template" } },
+        "component_slots": { "type": "array", "items": { "$ref": "#/$defs/component_slot" } },
+        "bom_line_templates": { "type": "array", "items": { "$ref": "#/$defs/bom_line_template" } },
+        "cage_bindings": {
+          "type": "array",
+          "description": "Class-only: per-NIC-port transceiver selections. Must be empty on hardware types (capability-vs-binding gate).",
+          "items": { "$ref": "#/$defs/cage_binding" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "layer": { "const": "hardware_type" } } },
+          "then": {
+            "description": "Bare types declare capability only; no per-design bindings.",
+            "properties": { "cage_bindings": { "maxItems": 0 } }
+          }
+        }
+      ]
+    },
+    "port_template": {
+      "type": "object",
+      "required": ["name", "port_kind"],
+      "properties": {
+        "name": { "type": "string" },
+        "port_kind": { "type": "string", "enum": ["fixed_interface", "transceiver_cage"] },
+        "max_speed_gbps": { "type": "integer", "minimum": 1 },
+        "interface_type": { "type": "string" },
+        "cage_type": { "type": "string" },
+        "requires_transceiver": { "type": "boolean" },
+        "allowed_transceivers": { "type": "array", "items": { "$ref": "#/$defs/ref" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "port_kind": { "const": "transceiver_cage" } } },
+          "then": { "properties": { "requires_transceiver": { "const": true } } }
+        },
+        {
+          "if": { "properties": { "port_kind": { "const": "fixed_interface" } } },
+          "then": { "properties": { "requires_transceiver": { "const": false } } }
+        }
+      ]
+    },
+    "component_slot": {
+      "type": "object",
+      "required": ["slot_id", "target", "quantity"],
+      "properties": {
+        "slot_id": { "type": "string" },
+        "target": { "$ref": "#/$defs/ref" },
+        "quantity": { "type": "integer", "minimum": 1, "description": "Quantity-bearing slot (e.g. 8× CX-7 = one slot, quantity 8)." },
+        "required": { "type": "boolean" },
+        "selection_constraints": { "type": "object" }
+      }
+    },
+    "bom_line_template": {
+      "type": "object",
+      "required": ["category", "quantity_per_instance", "physical"],
+      "properties": {
+        "category": { "type": "string" },
+        "target_ref": { "$ref": "#/$defs/ref" },
+        "inline_sku": { "type": "string" },
+        "quantity_per_instance": { "type": "integer", "minimum": 1 },
+        "physical": { "type": "boolean" },
+        "attributes": { "type": "object" }
+      }
+    },
+    "cage_binding": {
+      "type": "object",
+      "required": ["nic_slot_id", "port_index", "selected_transceiver"],
+      "properties": {
+        "nic_slot_id": { "type": "string" },
+        "port_index": { "type": "integer", "minimum": 0 },
+        "selected_transceiver": { "$ref": "#/$defs/ref" }
+      }
+    }
+  }
+}
