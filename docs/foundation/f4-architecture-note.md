@@ -45,8 +45,12 @@ Render(plan *topology.Plan, cat *catalog.Catalog, calcOut *calc.CalcOutput) ([]D
    `mesh.links[].{leaf1,leaf2}`, `Switch.spec{boot,profile,role}` with **ecmp and
    redundancy deliberately omitted**) — those shapes are confirmed against the
    committed oracle and `hhfab validate`.
-4. **D16 untouched.** No new boundary types; no kernel change. (Consistent with
-   the F3 note §7.4 "additive accessor over the same F2 output.")
+4. **D16 / F2 / kernel untouched.** No new boundary types; no calc change. The
+   only model change is an **additive F1-ingest extension** (§2.1.1): two
+   read-only plan-intent fields (`hedgehog_role`, `fabric_class`) the current
+   ingest drops, surfaced on `SwitchClassUse` so the Switch CRD can be rendered
+   and gated faithfully. This is read-only w.r.t. calc and mirrors the existing
+   `FabricName`/`TopologyMode`/`OverrideQuantity` fields already there.
 
 The legacy `internal/orchestrate` golden path (Rust adapter + old kernel) is left
 **as-is** — not extended, not deleted — for this phase.
@@ -62,21 +66,51 @@ time (the class is `soc_storage_scale_out_leaf`, **not** AID-merged from
 `scale_out_leaf` + `soc_storage_leaf`). So **F4 does no convergence** — it speaks
 the IR's class ids directly.
 
-One wiring document **per managed switch class** (`fabric_class: managed`):
+One wiring document **per managed `fabric_name`** (devb review finding 1). The
+input model carries `fabric_name` separately from `switch_class_id`
+(`training.yaml:449-467`); a fabric may contain **multiple** switch classes, so
+the grouping key is the **fabric**, not the class. A Doc =
+`wiring-{fabric_name}.yaml` and contains every switch instance / server /
+endpoint / mesh link belonging to **all switch classes whose `fabric_name`
+matches** (and whose `fabric_class: managed`). Endpoints route to a Doc via
+`SwitchClassID → FabricName` (looked up on `plan.Spec.SwitchClasses`).
 
-| Switch class | fabric_class | Doc | qty |
-|---|---|---|---|
-| `soc_storage_scale_out_leaf` | managed | `wiring-soc-storage-scale-out.yaml` | 2 |
-| `inb_mgmt_leaf` | managed | `wiring-inb-mgmt.yaml` | 1 |
-| `oob_leaf` | **unmanaged** | *(excluded)* | 1 |
+| fabric_name | member switch class(es) | fabric_class | Doc | switches |
+|---|---|---|---|---|
+| `soc-storage-scale-out` | `soc_storage_scale_out_leaf` | managed | `wiring-soc-storage-scale-out.yaml` | 2 |
+| `inb-mgmt` | `inb_mgmt_leaf` | managed | `wiring-inb-mgmt.yaml` | 1 |
+| `oob-mgmt` | `oob_leaf` | **unmanaged** | *(excluded)* | 1 |
 
-A Doc contains the endpoints/switches/servers whose `SwitchClassID` is that class.
-`oob_leaf` is unmanaged → no wiring (matches the committed oracle: only two files).
+In xoc-64 fabric↔class is 1:1, so the rendered output is identical either way —
+but keying on `fabric_name` is the model-correct rule and won't split a single
+managed fabric the moment two classes share it. `oob-mgmt` is unmanaged → no
+wiring (matches the committed oracle: exactly two files).
+
+#### 2.1.1 Additive F1-ingest extension (read-only, no calc/D16 change)
+
+The grouping + Switch bar need three switch attributes; today the ingest model
+keeps only `FabricName`. Required additions on `SwitchClassUse` (and
+`rawSwitchClass`), re-emitted in `Rebundle` for a lossless round-trip:
+
+| field | source in bundle | used for |
+|---|---|---|
+| `FabricName` *(already present)* | `switch_classes[].fabric_name` | doc grouping |
+| **`FabricClass`** *(add)* | `switch_classes[].fabric_class` | managed gate |
+| **`HedgehogRole`** *(add)* | `switch_classes[].hedgehog_role` | `Switch.spec.role` |
+
+`spec.profile` needs **no** ingest change — it resolves from the merged catalog
+(§2.4). These are plan-intent scalars parsed from the same block as the existing
+fields; GREEN must keep F1 `expected.counts` + the rebundle round-trip green
+(covered by "no F0–F3 regression").
 
 ### 2.2 Device-name normalization (§2.5)
 
 - **Switch device name** = `hyphenate(switch_class_id) + "-" + pad2(switchIndex+1)`
-  → `soc_storage_scale_out_leaf` → `soc-storage-scale-out-leaf-01` / `-02`.
+  → `soc_storage_scale_out_leaf` → `soc-storage-scale-out-leaf-01` / `-02`. Note
+  the device name keys on `switch_class_id` (it carries the `-leaf` suffix), so
+  multiple classes sharing one fabric still get distinct, collision-free device
+  names — doc grouping (per `fabric_name`) and device naming (per class) are
+  independent.
 - **Server device name** = `hyphenate(server_class_id) + "-" + pad3(serverIndex+1)`
   → `compute_xpu` → `compute-xpu-001`. (`metadata_srv`→`metadata-srv-001`, …)
 - **Port suffixes preserve underscores**: server port =
@@ -92,7 +126,7 @@ A Doc contains the endpoints/switches/servers whose `SwitchClassID` is that clas
 |---|---|
 | `VLANNamespace` (wiring) | constant: `ranges: [{from: 1000, to: 2999}]`, name/ns `default`. One per Doc. |
 | `IPv4Namespace` (vpc) | constant: `subnets: [10.0.0.0/16]`. One per Doc. |
-| `Switch` (wiring) | one per switch instance (`switchIndex` 0..qty-1). `spec.role` = `hedgehog_role`; `spec.profile` = catalog profile (`celestica-ds5000`/`-ds2000`); `spec.boot.mac` (§2.4); `portBreakouts`/`portSpeeds` (§2.5). **No `ecmp`, no `redundancy`** (xoc-64 has `mclag_pair: false`, no MCLAG domain). |
+| `Switch` (wiring) | one per switch instance (`switchIndex` 0..qty-1). `metadata.name` = switch device name (§2.2); `spec.role` = `SwitchClassUse.HedgehogRole` (§2.1.1, `server-leaf`); `spec.profile` = merged-catalog `Item.Model` (§2.4: `celestica-ds5000`/`-ds2000`); `spec.boot.mac` (§2.4); `portBreakouts`/`portSpeeds` (§2.5). **No `ecmp`, no `redundancy`** (xoc-64 has `mclag_pair: false`, no MCLAG domain). All four identity fields are checked by the bar (§3B). |
 | `Server` (wiring) | one per distinct server instance that has ≥1 endpoint on this fabric. `spec: {}`. |
 | `Connection` (wiring) | server→switch + mesh (§2.6). |
 
@@ -106,12 +140,22 @@ Verified against the oracle:
 - `soc_storage_scale_out_leaf-02` → `02:b7:11:db:8a:74` ✓
 - `inb_mgmt_leaf-01` → `02:95:80:2f:70:b5` ✓
 
-(Structural equivalence does **not** require byte-identical MACs, but reproducing
-them exactly is free and makes the output faithful.)
+The exact MAC **is part of the acceptance bar** (§3B) — not relaxed (devb review
+finding 2). The committed oracle's MACs are the target; the formula above
+reproduces them, so a wrong MAC fails the oracle rather than slipping through
+`hhfab validate`.
+
+**Profile source (§3B dependency):** `spec.profile` = the merged-catalog switch
+`Item.Model`, which the AID-owned overlay sets to `celestica-ds5000` /
+`celestica-ds2000` for the managed classes (`tests/fixtures/f3/optic-overlay.yaml`,
+the same overlay F3's oracle test merges). F4's oracle merges that overlay before
+rendering — no new profile source, no ingest change. (`oob_leaf`'s `Item.Model`
+is `Celestica DS1000`, not a valid hhfab profile — but oob is unmanaged/excluded,
+so it never reaches a Switch CRD.)
 
 ### 2.5 `portBreakouts` vs `portSpeeds`
 
-Union over **all zones** of the switch class. For each zone, for each physical
+Union over **all zones** of every switch class in the fabric. For each zone, for each physical
 port in `port_spec` (the diet grammar: comma-list + `A-B` + `A-B:step`), resolve
 the zone's `breakout_option` from catalog `reference_data.breakout_options`:
 
@@ -196,21 +240,31 @@ byte-identical — naming/ordering may differ):
    - server links: `(server_port, switch_port, "unbundled")`.
    - mesh: the set of `{leaf1_port, leaf2_port}` link pairs.
    Must equal the committed files' set exactly.
-3. **Switch `portBreakouts` / `portSpeeds`** — equal as maps (key→label),
-   order-insensitive.
+3. **Switch identity + spec** (devb review finding 2) — keyed by `metadata.name`,
+   the per-switch tuple **`(metadata.name, spec.profile, spec.role, spec.boot.mac)`**
+   must equal the committed oracle's, AND `spec.portBreakouts` / `spec.portSpeeds`
+   must be equal as maps (key→label, order-insensitive). This closes the
+   "wrong-but-schema-valid switch spec passes" gap: a renderer that emits the
+   wrong profile/role/MAC fails the oracle even though `hhfab validate` would
+   accept it. (`metadata.name` must therefore match exactly, so the switch
+   device-naming rule §2.2 is itself under test — unlike Connection names, which
+   are not.)
 
 This comparison is implemented in `internal/oracle.CompareWiringHhfab` (currently
 `ErrNotImplemented` / SKIP) → it parses both AID's render and the committed file
-and asserts (1)+(2)+(3), then shells `hhfab validate`. The **wiring oracle row
-flips SKIP→PASS**.
+and asserts (1)+(2)+(3) — the latter now including the per-switch
+`(name, profile, role, boot.mac)` identity tuple — then shells `hhfab validate`.
+The **wiring oracle row flips SKIP→PASS**.
 
 ---
 
 ## 4. Oracle / acceptance wiring
 
 - `internal/oracle.CompareWiringHhfab(computedDir, oracleDir)` → renders via
-  `internal/wiring`, runs `hhfab validate` (hard gate), and runs the structural
-  comparison (§3B) for **both** managed fabrics.
+  `internal/wiring` (over the overlay-merged catalog, so `spec.profile` resolves),
+  runs `hhfab validate` (hard gate), and runs the structural comparison (§3B —
+  kind counts + Connection set + per-switch identity tuple + portBreakouts) for
+  **both** managed fabrics, grouped by `fabric_name`.
 - The CI `hhfab validate` harness actually runs (not skipped) — same skip-guard
   posture as the existing golden test (CI asserts no `--- SKIP`).
 - No `netbox_inventory.json` produced (D22). No empty `ecmp: {}` (field omitted
@@ -220,14 +274,18 @@ flips SKIP→PASS**.
 
 ## 5. RED → GREEN plan (after sign-off)
 
-- **RED:** add `internal/wiring` with the type + a stub `Render` returning
-  `ErrNotImplemented`; add `internal/wiring` tests asserting the §3B structural
-  facts (kind counts, endpoint set, portBreakouts) + a `hhfab validate` test, all
+- **RED:** add the additive `SwitchClassUse.{FabricClass,HedgehogRole}` ingest
+  fields (§2.1.1) wired through `Rebundle`; add `internal/wiring` with the type +
+  a stub `Render` returning `ErrNotImplemented`; add `internal/wiring` tests
+  asserting the §3B facts (kind counts, endpoint set, **per-switch
+  (name,profile,role,boot.mac)**, portBreakouts) + a `hhfab validate` test, all
   failing; flip `CompareWiringHhfab` to call the (stub) renderer so the oracle row
   is RED. Push, PAUSE for devb.
-- **GREEN:** implement `Render` (per-fabric walk over endpoints + mesh zone +
-  switch portBreakouts/boot.mac); turn the oracle row PASS; full suite + CI green;
-  no F0–F3 regression. Push, PAUSE for devb → lead merges.
+- **GREEN:** implement `Render` (group by `fabric_name`/managed; per-switch
+  identity + portBreakouts/boot.mac; per-endpoint `unbundled` + per-mesh-zone
+  `mesh`); turn the oracle row PASS; full suite + CI green; no F0–F3 regression
+  (incl. F1 `expected.counts` + rebundle round-trip). Push, PAUSE for devb → lead
+  merges.
 
 No new calc; reuse `internal/bom`'s port-spec parsing approach (extended from
 *count* to *enumerate* for mesh ports). YAML via the existing `yaml.v3` dep.
@@ -248,5 +306,14 @@ No new calc; reuse `internal/bom`'s port-spec parsing approach (extended from
 - **breakout_options** carry `breakout_id` + `from_speed` + `logical_speed`
   (label derivation §2.5); **fabric_class** gates managed vs unmanaged; NIC
   `PortTemplates[].Name` supplies `so0…/ss0…/mgmt0` server port suffixes.
+- **Profile source** (added this review round): the switch class `Item.Model` is
+  empty after ingest, but the AID-owned overlay `tests/fixtures/f3/optic-overlay.yaml`
+  sets `soc_storage_scale_out_leaf→celestica-ds5000`, `inb_mgmt_leaf→celestica-ds2000`
+  — so `spec.profile` = merged-catalog `Item.Model`, reusing F3's path (§2.4).
+- **Ingest gap** (added this review round): `SwitchClassUse` keeps `FabricName`
+  but drops `hedgehog_role` + `fabric_class` (`rawSwitchClass` parses neither, and
+  `Rebundle` already omits them) — hence the additive §2.1.1 ingest fields. The
+  `switch_class→device_type_extension` link is likewise dropped, which is why the
+  profile is taken from the overlay rather than `hedgehog_profile_name`.
 - Reference: HNP `yaml_generator.py` (naming/trunc/variants), Rust
   `hhfab-adapter/src/crds.rs` (CRD struct shapes, ecmp/redundancy omitted).
