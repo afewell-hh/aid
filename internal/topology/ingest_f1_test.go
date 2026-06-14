@@ -257,6 +257,70 @@ func TestF1_MeshIntentIngested(t *testing.T) {
 	}
 }
 
+// --- F4 prerequisite: switch fabric_class + hedgehog_role ingested -------------
+
+// switchByID returns the ingested switch class with the given id.
+func switchByID(t *testing.T, plan *Plan, id string) *SwitchClassUse {
+	t.Helper()
+	for i := range plan.Spec.SwitchClasses {
+		if plan.Spec.SwitchClasses[i].SwitchClassID == id {
+			return &plan.Spec.SwitchClasses[i]
+		}
+	}
+	t.Fatalf("switch class %q not ingested", id)
+	return nil
+}
+
+// TestF1_SwitchFabricClassAndRoleIngested pins the additive F4 ingest extension
+// (note §2.1.1): SwitchClassUse must carry fabric_class (the managed-fabric gate)
+// and hedgehog_role (Switch.spec.role) from the plan, so F4 keys on model-correct
+// sources rather than xoc-64-inferred constants. These are real plan fields in
+// the committed training.yaml — this test PASSES (it is the ingest contract; only
+// the wiring renderer stays stubbed in RED).
+func TestF1_SwitchFabricClassAndRoleIngested(t *testing.T) {
+	plan, _ := ingestTraining(t)
+	cases := []struct {
+		id          string
+		fabricClass string
+		role        string
+	}{
+		{"soc_storage_scale_out_leaf", "managed", "server-leaf"},
+		{"inb_mgmt_leaf", "managed", "server-leaf"},
+		{"oob_leaf", "unmanaged", "server-leaf"},
+	}
+	for _, c := range cases {
+		sw := switchByID(t, plan, c.id)
+		if sw.FabricClass != c.fabricClass {
+			t.Errorf("%s FabricClass = %q, want %q", c.id, sw.FabricClass, c.fabricClass)
+		}
+		if sw.HedgehogRole != c.role {
+			t.Errorf("%s HedgehogRole = %q, want %q", c.id, sw.HedgehogRole, c.role)
+		}
+	}
+}
+
+// TestF1_SwitchFabricClassAndRoleRoundTrip pins that the additive fields survive
+// Rebundle → re-ingest (lossless, note §2.1.1) — so the model-correct source of
+// truth is durable, not dropped on the round trip.
+func TestF1_SwitchFabricClassAndRoleRoundTrip(t *testing.T) {
+	plan, cat := ingestTraining(t)
+	out, err := Rebundle(plan, cat)
+	if err != nil {
+		t.Fatalf("Rebundle: %v", err)
+	}
+	plan2, _, err := IngestBundled(out)
+	if err != nil {
+		t.Fatalf("re-IngestBundled: %v", err)
+	}
+	for _, id := range []string{"soc_storage_scale_out_leaf", "inb_mgmt_leaf", "oob_leaf"} {
+		a, b := switchByID(t, plan, id), switchByID(t, plan2, id)
+		if a.FabricClass != b.FabricClass || a.HedgehogRole != b.HedgehogRole {
+			t.Errorf("%s round-trip changed fabric_class/hedgehog_role: before {%q,%q} after {%q,%q}",
+				id, a.FabricClass, a.HedgehogRole, b.FabricClass, b.HedgehogRole)
+		}
+	}
+}
+
 // --- zone transceivers resolved ----------------------------------------------
 
 func TestF1_ZoneTransceiversResolved(t *testing.T) {

@@ -3,6 +3,7 @@ package oracle
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/afewell-hh/aid/internal/catalog"
 	"github.com/afewell-hh/aid/internal/objectmodel"
 	"github.com/afewell-hh/aid/internal/topology"
+	"github.com/afewell-hh/aid/internal/wiring"
 )
 
 // repoRoot is the parent of tests/oracle.
@@ -240,6 +242,105 @@ func TestLayerB_Scaling(t *testing.T) {
 			t.Errorf("B200 full BOM %d× != real-server-bom.csv: %v", scale, diff.Details)
 		}
 	}
+}
+
+// --- F4 RED: the wiring oracle row moves pending(skip) → executing(fail) -------
+
+// TestLayerA_WiringHhfab is the headline F4 Layer-A oracle (note §3B, Issue #60,
+// D22/D23): AID's rendered wiring (internal/wiring.Render) must be structurally
+// equivalent to the committed tests/oracle/.../wiring/*.yaml for BOTH managed
+// fabrics — CRD-kind counts, the order-insensitive Connection endpoint set, and
+// the per-switch (metadata.name, profile, role, boot.mac) tuple + portBreakouts/
+// portSpeeds maps (CompareWiringHhfab) — AND each fabric must pass `hhfab
+// validate` (the hard gate, via the golden hhfabValidate harness). The comparator
+// + gate are REAL; the COMPUTED side (wiring.Render) is a stub in RED, so this
+// FAILS for the right reason — renderer not implemented — until GREEN, rather
+// than skipping. Wiring only (D22): no netbox_inventory.json; no empty ecmp.
+func TestLayerA_WiringHhfab(t *testing.T) {
+	dir := LayerADir()
+	b, err := os.ReadFile(filepath.Join(dir, "training.yaml"))
+	if err != nil {
+		t.Fatalf("read training.yaml: %v", err)
+	}
+	plan, cat, err := topology.IngestBundled(b)
+	if err != nil {
+		t.Fatalf("IngestBundled(xoc-64): %v", err)
+	}
+	calcOut, err := calc.Compute(plan, cat)
+	if err != nil {
+		t.Fatalf("calc.Compute(xoc-64): %v", err)
+	}
+	// Merge the AID optic overlay so the switch Item.Model resolves to the hhfab
+	// profile (note §2.4) — the renderer consumes the overlay-merged catalog.
+	overlay, err := catalog.Load(filepath.Join(repoRoot(), "tests", "fixtures", "f3", "optic-overlay.yaml"))
+	if err != nil {
+		t.Fatalf("load optic overlay: %v", err)
+	}
+	cat.Merge(overlay)
+
+	docs, err := wiring.Render(plan, cat, calcOut)
+	if err != nil {
+		// RED: the F4 wiring renderer is not wired yet. GREEN makes this pass.
+		t.Fatalf("F4 RED — wiring renderer not implemented: %v", err)
+	}
+
+	// (§3B) structural equivalence vs the committed wiring/*.yaml (both fabrics).
+	computed := map[string][]byte{}
+	for _, d := range docs {
+		computed[d.Fabric] = d.YAML
+	}
+	diff, err := CompareWiringHhfab(computed, filepath.Join(dir, "wiring"))
+	if err != nil {
+		t.Fatalf("CompareWiringHhfab: %v", err)
+	}
+	if !diff.Equal {
+		t.Errorf("xoc-64 wiring not structurally equivalent to committed wiring/*.yaml: %v", diff.Details)
+	}
+
+	// (hard gate) every managed fabric must pass `hhfab validate`.
+	managed := map[string]bool{"soc-storage-scale-out": true, "inb-mgmt": true}
+	seen := map[string]bool{}
+	for _, d := range docs {
+		seen[d.Fabric] = true
+		if ok, log := hhfabValidate(t, string(d.YAML)); !ok {
+			t.Errorf("hhfab validate rejected fabric %q:\n%s", d.Fabric, log)
+		}
+	}
+	for f := range managed {
+		if !seen[f] {
+			t.Errorf("no computed wiring doc for managed fabric %q", f)
+		}
+	}
+}
+
+// hhfabValidate replicates the golden harness (internal/orchestrate/golden_test.go):
+// `hhfab init --dev`, write the wiring to include/wiring.yaml, then `hhfab
+// validate --brief`. Returns the combined log and success.
+func hhfabValidate(t *testing.T, wiringYAML string) (bool, string) {
+	t.Helper()
+	if _, err := exec.LookPath("hhfab"); err != nil {
+		t.Skip("hhfab not on PATH; skipping F4 hhfab validate")
+	}
+	d := t.TempDir()
+	if out, err := runIn(d, "hhfab", "init", "--dev"); err != nil {
+		t.Fatalf("hhfab init: %v\n%s", err, out)
+	}
+	if err := os.MkdirAll(filepath.Join(d, "include"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(d, "include", "wiring.yaml"), []byte(wiringYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runIn(d, "hhfab", "validate", "--brief")
+	t.Logf("hhfab validate (exit ok=%v):\n%s", err == nil, out)
+	return err == nil, out
+}
+
+func runIn(dir, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	b, err := cmd.CombinedOutput()
+	return string(b), err
 }
 
 // --- PENDING (skip, not red): comparisons need calc (F2+) ---------------------

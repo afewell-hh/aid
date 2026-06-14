@@ -86,11 +86,17 @@ type ServerClassUse struct {
 // SwitchClassUse references a catalog switch CLASS. Switch quantity is DERIVED
 // later (F2); override_quantity is the plan-level override.
 type SwitchClassUse struct {
-	SwitchClassID    string          `json:"switch_class_id"`
-	ClassRef         objectmodel.Ref `json:"class_ref"`
-	FabricName       string          `json:"fabric_name"`
-	OverrideQuantity *int            `json:"override_quantity,omitempty"`
-	TopologyMode     string          `json:"topology_mode,omitempty"` // spine-leaf | mesh
+	SwitchClassID string          `json:"switch_class_id"`
+	ClassRef      objectmodel.Ref `json:"class_ref"`
+	FabricName    string          `json:"fabric_name"`
+	// FabricClass (managed|unmanaged) gates which fabrics F4 renders as hhfab
+	// wiring; HedgehogRole is the Switch CRD spec.role. Both are read-only
+	// plan-intent the F4 renderer keys on (note §2.1.1) — model-correct sources
+	// rather than xoc-64-inferred constants. Re-emitted by Rebundle.
+	FabricClass      string `json:"fabric_class,omitempty"`
+	HedgehogRole     string `json:"hedgehog_role,omitempty"`
+	OverrideQuantity *int   `json:"override_quantity,omitempty"`
+	TopologyMode     string `json:"topology_mode,omitempty"` // spine-leaf | mesh
 }
 
 // SwitchPortZone is a port-allocation zone on a switch class.
@@ -236,6 +242,8 @@ type rawServerNic struct {
 type rawSwitchClass struct {
 	SwitchClassID    string `json:"switch_class_id"`
 	FabricName       string `json:"fabric_name"`
+	FabricClass      string `json:"fabric_class"`
+	HedgehogRole     string `json:"hedgehog_role"`
 	OverrideQuantity *int   `json:"override_quantity"`
 	TopologyMode     string `json:"topology_mode"`
 }
@@ -414,6 +422,8 @@ func IngestBundled(yamlBytes []byte) (*Plan, *catalog.Catalog, error) {
 			SwitchClassID:    sw.SwitchClassID,
 			ClassRef:         objectmodel.Ref{ID: objectmodel.ID{Name: sw.SwitchClassID, Version: classVersion}},
 			FabricName:       sw.FabricName,
+			FabricClass:      sw.FabricClass,
+			HedgehogRole:     sw.HedgehogRole,
 			OverrideQuantity: sw.OverrideQuantity,
 			TopologyMode:     sw.TopologyMode,
 		})
@@ -528,6 +538,8 @@ func Rebundle(p *Plan, cat *catalog.Catalog) ([]byte, error) {
 	var switchClasses []any
 	for _, sw := range p.Spec.SwitchClasses {
 		entry := map[string]any{"switch_class_id": sw.SwitchClassID, "fabric_name": sw.FabricName}
+		putIf(entry, "fabric_class", sw.FabricClass)
+		putIf(entry, "hedgehog_role", sw.HedgehogRole)
 		putIf(entry, "topology_mode", sw.TopologyMode)
 		if sw.OverrideQuantity != nil {
 			entry["override_quantity"] = *sw.OverrideQuantity

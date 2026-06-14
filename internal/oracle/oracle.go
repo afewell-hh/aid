@@ -16,14 +16,20 @@
 package oracle
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
+	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ErrNotImplemented marks a comparison that needs calc (F2+) — pending, not a
@@ -139,10 +145,260 @@ func CompareExpectedCounts(computed, oracle ExpectedCounts) (Diff, error) {
 	return Diff{Equal: len(details) == 0, Details: details}, nil
 }
 
-// CompareWiringHhfab generates wiring CRDs and runs the existing hhfab validate
-// harness against them. F0: pending.
-func CompareWiringHhfab(computedWiringDir, oracleWiringDir string) (Diff, error) {
-	return Diff{}, fmt.Errorf("%w: CompareWiringHhfab", ErrNotImplemented)
+// CompareWiringHhfab is the F4 structural-equivalence comparator (note §3B,
+// Issue #60): for every committed managed-fabric wiring file in oracleWiringDir
+// (`wiring-{fabric}.yaml`), it matches the renderer's computed Doc for that
+// fabric and asserts, semantically (not byte-identically):
+//
+//	(1) CRD-kind counts (Connection / Server / Switch / VLANNamespace / IPv4Namespace),
+//	(2) the order-insensitive Connection endpoint set — unbundled (server,switch)
+//	    port tuples + mesh {leaf1,leaf2} link pairs,
+//	(3) per-switch identity keyed by metadata.name — the
+//	    (profile, role, boot.mac) tuple AND the portBreakouts/portSpeeds maps.
+//
+// The comparator is REAL (it parses the committed oracle); the COMPUTED side is
+// `wiring.Render`, a stub in RED — so the F4 oracle row FAILS for the right
+// reason (renderer absent) until GREEN, rather than skipping. The hhfab-validate
+// hard gate is applied by the caller (oracle_test) via the golden hhfabValidate
+// harness. D22: wiring only.
+//
+// `computed` maps managed fabric_name → rendered wiring YAML. It is passed as raw
+// bytes (not internal/wiring.Doc) so this comparator imports neither the renderer
+// nor internal/topology — keeping internal/oracle free of the import cycle that
+// internal/topology's tests would otherwise form (cf. the local ExpectedCounts).
+func CompareWiringHhfab(computed map[string][]byte, oracleWiringDir string) (Diff, error) {
+	entries, err := filepath.Glob(filepath.Join(oracleWiringDir, "wiring-*.yaml"))
+	if err != nil {
+		return Diff{}, err
+	}
+	if len(entries) == 0 {
+		return Diff{}, fmt.Errorf("oracle: no committed wiring-*.yaml in %s", oracleWiringDir)
+	}
+
+	var details []string
+	for _, path := range entries {
+		fabric := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(path), "wiring-"), ".yaml")
+		wantBytes, err := os.ReadFile(path)
+		if err != nil {
+			return Diff{}, err
+		}
+		want, err := decodeWiringCRDs(wantBytes)
+		if err != nil {
+			return Diff{}, fmt.Errorf("oracle: parse committed %s: %w", filepath.Base(path), err)
+		}
+		yamlBytes, ok := computed[fabric]
+		if !ok {
+			details = append(details, fmt.Sprintf("%s: no computed wiring doc", fabric))
+			continue
+		}
+		got, err := decodeWiringCRDs(yamlBytes)
+		if err != nil {
+			details = append(details, fmt.Sprintf("%s: parse computed wiring: %v", fabric, err))
+			continue
+		}
+		details = append(details, diffWiring(fabric, got, want)...)
+	}
+	return Diff{Equal: len(details) == 0, Details: details}, nil
+}
+
+// --- §3B structural comparison helpers (REAL oracle infra) -------------------
+
+type wiringCRD struct {
+	Kind     string `yaml:"kind"`
+	Metadata struct {
+		Name string `yaml:"name"`
+	} `yaml:"metadata"`
+	Spec map[string]any `yaml:"spec"`
+}
+
+// decodeWiringCRDs reads a multi-document wiring YAML stream into CRDs.
+func decodeWiringCRDs(y []byte) ([]wiringCRD, error) {
+	dec := yaml.NewDecoder(bytes.NewReader(y))
+	var out []wiringCRD
+	for {
+		var c wiringCRD
+		err := dec.Decode(&c)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if c.Kind == "" {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+var wiringKinds = []string{"Connection", "Server", "Switch", "VLANNamespace", "IPv4Namespace"}
+
+// diffWiring reports §3B differences between computed (got) and committed (want).
+func diffWiring(fabric string, got, want []wiringCRD) []string {
+	var d []string
+	pfx := func(s string) string { return fabric + ": " + s }
+
+	// (1) CRD-kind counts.
+	for _, k := range wiringKinds {
+		if g, w := kindCount(got, k), kindCount(want, k); g != w {
+			d = append(d, pfx(fmt.Sprintf("%s count = %d, want %d", k, g, w)))
+		}
+	}
+
+	// (2) Connection endpoint set (order-insensitive).
+	gset, wset := connectionSet(got), connectionSet(want)
+	for k := range wset {
+		if !gset[k] {
+			d = append(d, pfx("missing connection "+k))
+		}
+	}
+	for k := range gset {
+		if !wset[k] {
+			d = append(d, pfx("unexpected connection "+k))
+		}
+	}
+
+	// (3) per-switch identity tuple + portBreakouts/portSpeeds maps.
+	gsw, wsw := switchFacts(got), switchFacts(want)
+	for name, wf := range wsw {
+		gf, ok := gsw[name]
+		if !ok {
+			d = append(d, pfx("missing Switch "+name))
+			continue
+		}
+		if gf.profile != wf.profile {
+			d = append(d, pfx(fmt.Sprintf("Switch %s profile=%q want %q", name, gf.profile, wf.profile)))
+		}
+		if gf.role != wf.role {
+			d = append(d, pfx(fmt.Sprintf("Switch %s role=%q want %q", name, gf.role, wf.role)))
+		}
+		if gf.mac != wf.mac {
+			d = append(d, pfx(fmt.Sprintf("Switch %s boot.mac=%q want %q", name, gf.mac, wf.mac)))
+		}
+		d = append(d, diffStrMap(pfx(fmt.Sprintf("Switch %s portBreakouts", name)), gf.breakouts, wf.breakouts)...)
+		d = append(d, diffStrMap(pfx(fmt.Sprintf("Switch %s portSpeeds", name)), gf.speeds, wf.speeds)...)
+	}
+	for name := range gsw {
+		if _, ok := wsw[name]; !ok {
+			d = append(d, pfx("unexpected Switch "+name))
+		}
+	}
+	sort.Strings(d)
+	return d
+}
+
+func kindCount(crds []wiringCRD, kind string) int {
+	n := 0
+	for _, c := range crds {
+		if c.Kind == kind {
+			n++
+		}
+	}
+	return n
+}
+
+// connectionSet is the order-insensitive set of Connection endpoints: unbundled
+// links as "U|server|switch", mesh links as "M|portA|portB" (ports sorted).
+func connectionSet(crds []wiringCRD) map[string]bool {
+	set := map[string]bool{}
+	for _, c := range crds {
+		if c.Kind != "Connection" {
+			continue
+		}
+		if sp, ok1 := digStr(c.Spec, "unbundled", "link", "server", "port"); ok1 {
+			if wp, ok2 := digStr(c.Spec, "unbundled", "link", "switch", "port"); ok2 {
+				set["U|"+sp+"|"+wp] = true
+			}
+		}
+		if mesh, ok := c.Spec["mesh"].(map[string]any); ok {
+			if links, ok := mesh["links"].([]any); ok {
+				for _, l := range links {
+					lm, ok := l.(map[string]any)
+					if !ok {
+						continue
+					}
+					p1, _ := digStr(lm, "leaf1", "port")
+					p2, _ := digStr(lm, "leaf2", "port")
+					a, b := p1, p2
+					if b < a {
+						a, b = b, a
+					}
+					set["M|"+a+"|"+b] = true
+				}
+			}
+		}
+	}
+	return set
+}
+
+type switchFact struct {
+	profile, role, mac string
+	breakouts, speeds  map[string]string
+}
+
+func switchFacts(crds []wiringCRD) map[string]switchFact {
+	out := map[string]switchFact{}
+	for _, c := range crds {
+		if c.Kind != "Switch" {
+			continue
+		}
+		profile, _ := digStr(c.Spec, "profile")
+		role, _ := digStr(c.Spec, "role")
+		mac, _ := digStr(c.Spec, "boot", "mac")
+		out[c.Metadata.Name] = switchFact{
+			profile:   profile,
+			role:      role,
+			mac:       mac,
+			breakouts: stringMap(c.Spec["portBreakouts"]),
+			speeds:    stringMap(c.Spec["portSpeeds"]),
+		}
+	}
+	return out
+}
+
+// digStr walks nested string-keyed maps and returns the terminal string.
+func digStr(m map[string]any, keys ...string) (string, bool) {
+	var cur any = m
+	for _, k := range keys {
+		mm, ok := cur.(map[string]any)
+		if !ok {
+			return "", false
+		}
+		cur, ok = mm[k]
+		if !ok {
+			return "", false
+		}
+	}
+	s, ok := cur.(string)
+	return s, ok
+}
+
+func stringMap(v any) map[string]string {
+	out := map[string]string{}
+	if m, ok := v.(map[string]any); ok {
+		for k, vv := range m {
+			out[k] = fmt.Sprint(vv)
+		}
+	}
+	return out
+}
+
+func diffStrMap(label string, got, want map[string]string) []string {
+	var d []string
+	for k, w := range want {
+		if g, ok := got[k]; !ok {
+			d = append(d, fmt.Sprintf("%s: missing %s (want %q)", label, k, w))
+		} else if g != w {
+			d = append(d, fmt.Sprintf("%s[%s] = %q, want %q", label, k, g, w))
+		}
+	}
+	for k := range got {
+		if _, ok := want[k]; !ok {
+			d = append(d, fmt.Sprintf("%s: unexpected %s", label, k))
+		}
+	}
+	return d
 }
 
 // --- F2 derived-quantities row (the headline F2 oracle, D22) -----------------

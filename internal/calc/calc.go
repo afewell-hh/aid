@@ -19,6 +19,7 @@ package calc
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/afewell-hh/aid/internal/catalog"
 	"github.com/afewell-hh/aid/internal/components"
@@ -282,6 +283,21 @@ func BuildCalcPlan(plan *topology.Plan, cat *catalog.Catalog) (CalcPlan, error) 
 			ServerTransceiverAttrs: resolveXcvr(cat, c.TransceiverID),
 		})
 	}
+
+	// Allocation-order fidelity (Issue #61, fix 1): the kernel's per-(switch,zone)
+	// port cursor consumes server classes in HNP's order —
+	// PlanServerClass.Meta.ordering = ['plan','server_class_id'], walked by
+	// device_generator._create_connections. Reproduce it by STABLE-sorting the
+	// connections (and the server-class echo) by server_class_id; the stable sort
+	// preserves each class's intra-class connection order (rail-0..rail-N). This is
+	// feed-order only — quantities and counts are unaffected (the kernel
+	// reorders consumption to server-outer/rail-inner to match HNP, Issue #61 fix 2).
+	sort.SliceStable(cp.ServerClasses, func(i, j int) bool {
+		return cp.ServerClasses[i].ServerClassID < cp.ServerClasses[j].ServerClassID
+	})
+	sort.SliceStable(cp.Connections, func(i, j int) bool {
+		return cp.Connections[i].ServerClassID < cp.Connections[j].ServerClassID
+	})
 
 	return cp, nil
 }
