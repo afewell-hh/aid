@@ -434,6 +434,17 @@ fn qty_for(qtys : Array[ClassQty], class_id : String) -> Int {
   0
 }
 
+// Membership test over a string array (used to collect the distinct server
+// classes feeding a zone, in arrival order — Issue #61 fix 2).
+fn contains_str(xs : Array[String], s : String) -> Bool {
+  for x in xs {
+    if x == s {
+      return true
+    }
+  }
+  false
+}
+
 // Allocate the next slot for switch instance `sw` from this zone's expanded
 // sequence, advancing that switch's own cursor (port_allocator.py keys the
 // cursor on (switch, zone)). Returns (slot, in_bounds): the bool is false when
@@ -496,29 +507,58 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
       // One cursor per switch instance — port_allocator.py keys (switch, zone).
       let cursors = Array::make(if eff > 0 { eff } else { 1 }, 0)
       let mut overflowed = false
+      // Allocation order — HNP's per-(switch,zone) linear cursor is consumed
+      // server_class -> server_index -> connection(rail) -> ppc
+      // (device_generator.py:390 _create_connections). Connections arrive already
+      // sorted by server_class_id (calc.go BuildCalcPlan, Issue #61 fix 1), so
+      // collecting the distinct classes in ARRIVAL order reproduces HNP's
+      // alphabetical order; the shared `cursors` then fills consecutive slots per
+      // server (Issue #61 fix 2). alloc_slot / f2_switch_index / expand_breakout
+      // are unchanged — only the consumption order changes.
+      let zone_classes = []
       for c in plan.connections {
         if c.target_switch_class == sc.switch_class_id && c.target_zone == z.zone_name {
-          // total_rails for THIS server class targeting this zone
-          // (_get_total_rails_for_target, device_generator.py:432-435): one rail
-          // per rail-optimized connection from the server class to the zone.
-          let mut total_rails = 0
-          for c2 in plan.connections {
-            if c2.target_switch_class == sc.switch_class_id &&
-              c2.target_zone == z.zone_name &&
-              c2.server_class_id == c.server_class_id &&
-              c2.distribution == "rail-optimized" {
-              total_rails = total_rails + 1
+          if contains_str(zone_classes, c.server_class_id) {
+            ()
+          } else {
+            zone_classes.push(c.server_class_id)
+          }
+        }
+      }
+      for scid in zone_classes {
+        // This class's connections to this zone, in arrival (rail) order.
+        let conns_sc = []
+        for c in plan.connections {
+          if c.target_switch_class == sc.switch_class_id &&
+            c.target_zone == z.zone_name &&
+            c.server_class_id == scid {
+            conns_sc.push(c)
+          }
+        }
+        // server_quantity is identical across a class's connections.
+        let sq = conns_sc[0].server_quantity
+        // total_rails for THIS (server class, zone): one per rail-optimized
+        // connection (_get_total_rails_for_target, device_generator.py:432-435).
+        let mut total_rails = 0
+        for c in conns_sc {
+          if c.distribution == "rail-optimized" {
+            total_rails = total_rails + 1
+          }
+        }
+        for si in 0..<sq {
+          for c in conns_sc {
+            let ppc = if c.ports_per_connection > 0 {
+              c.ports_per_connection
+            } else {
+              1
             }
-          }
-          let ppc = if c.ports_per_connection > 0 { c.ports_per_connection } else { 1 }
-          // Domain-based pre-compute (device_generator.py:438-443) — used only on
-          // the n >= total_rails branch of f2_switch_index.
-          let spd = servers_per_domain(zone_capacity, ppc)
-          let rail = match c.rail {
-            Some(r) => r
-            None => 0
-          }
-          for si in 0..<c.server_quantity {
+            // Domain-based pre-compute (device_generator.py:438-443) — used only
+            // on the n >= total_rails branch of f2_switch_index.
+            let spd = servers_per_domain(zone_capacity, ppc)
+            let rail = match c.rail {
+              Some(r) => r
+              None => 0
+            }
             for pp in 0..<ppc {
               let port_index = c.port_index + pp
               let switch_index = f2_switch_index(
@@ -528,7 +568,7 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
                 rail,
                 eff,
                 total_rails,
-                c.server_quantity,
+                sq,
                 spd,
               )
               let (slot, in_bounds) = alloc_slot(zone_ports, cursors, switch_index)
@@ -550,6 +590,11 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
               }
             }
           }
+        }
+      }
+      // Transceiver verdicts — one per connection, in arrival order.
+      for c in plan.connections {
+        if c.target_switch_class == sc.switch_class_id && c.target_zone == z.zone_name {
           let (outcome, reason_code) = f2_xcvr_verdict(
             c.server_transceiver_attrs,
             z.transceiver_attrs,
