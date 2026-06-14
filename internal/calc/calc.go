@@ -28,15 +28,29 @@ var ErrNotImplemented = errors.New("calc: F2 kernel calculation not implemented 
 
 // --- calc-plan (Go → kernel): the resolved, numeric input -------------------
 
+// XcvrAttrs is the optic attribute_data Go resolves from the catalog and passes
+// to the kernel so it can verdict transceivers WITHOUT touching the catalog (note
+// §1.1, §2.5). The fields are exactly the keys the verdict rules read: Medium
+// (mismatch BLOCKS), CageType / Connector (mismatch → needs_review). A nil
+// *XcvrAttrs means the end carries no optic intent. (Cable-assembly far_end_*
+// attrs extend this in GREEN if a fixture needs them.)
+type XcvrAttrs struct {
+	Medium    string `json:"medium"`
+	CageType  string `json:"cage_type"`
+	Connector string `json:"connector"`
+}
+
 // ZoneIn is a port-allocation zone. PortSpec is the RAW string the kernel parses
 // (comma-list + range + start-end:step); BreakoutLogicalPorts is resolved by Go
-// from the catalog breakout_option.
+// from the catalog breakout_option. TransceiverAttrs is the zone-side (switch-end)
+// optic, resolved by Go (note §1.1).
 type ZoneIn struct {
-	ZoneName             string `json:"zone_name"`
-	ZoneType             string `json:"zone_type"`
-	PortSpec             string `json:"port_spec"`
-	BreakoutLogicalPorts int    `json:"breakout_logical_ports"`
-	AllocationStrategy   string `json:"allocation_strategy"`
+	ZoneName             string     `json:"zone_name"`
+	ZoneType             string     `json:"zone_type"`
+	PortSpec             string     `json:"port_spec"`
+	BreakoutLogicalPorts int        `json:"breakout_logical_ports"`
+	AllocationStrategy   string     `json:"allocation_strategy"`
+	TransceiverAttrs     *XcvrAttrs `json:"transceiver_attrs,omitempty"`
 }
 
 // SwitchClassIn carries the derivation inputs. OverrideQuantity is nil on the
@@ -57,22 +71,22 @@ type ServerClassIn struct {
 // ConnIn carries the FULL per-connection identity (devb finding 1): ConnectionID,
 // NICSlotID, PortIndex and Speed are preserved so alternating (which keys on
 // port_index) and per-instance fan-out are faithfully re-derivable. Rail is nil
-// unless Distribution == "rail-optimized". ServerTransceiverAttrs is the optic
-// attribute_data Go resolved from the catalog (zone-end attrs ride on the zone in
-// GREEN).
+// unless Distribution == "rail-optimized". ServerTransceiverAttrs is the server-end
+// optic Go resolved from the catalog; it is paired against the target zone's
+// TransceiverAttrs to produce a transceiver verdict (§2.5).
 type ConnIn struct {
-	ConnectionID           string            `json:"connection_id"`
-	ServerClassID          string            `json:"server_class_id"`
-	ServerQuantity         int               `json:"server_quantity"`
-	NICSlotID              string            `json:"nic_slot_id"`
-	PortIndex              int               `json:"port_index"`
-	PortsPerConnection     int               `json:"ports_per_connection"`
-	Speed                  int               `json:"speed"`
-	Distribution           string            `json:"distribution"`
-	Rail                   *int              `json:"rail,omitempty"`
-	TargetSwitchClass      string            `json:"target_switch_class"`
-	TargetZone             string            `json:"target_zone"`
-	ServerTransceiverAttrs map[string]string `json:"server_transceiver_attrs,omitempty"`
+	ConnectionID           string     `json:"connection_id"`
+	ServerClassID          string     `json:"server_class_id"`
+	ServerQuantity         int        `json:"server_quantity"`
+	NICSlotID              string     `json:"nic_slot_id"`
+	PortIndex              int        `json:"port_index"`
+	PortsPerConnection     int        `json:"ports_per_connection"`
+	Speed                  int        `json:"speed"`
+	Distribution           string     `json:"distribution"`
+	Rail                   *int       `json:"rail,omitempty"`
+	TargetSwitchClass      string     `json:"target_switch_class"`
+	TargetZone             string     `json:"target_zone"`
+	ServerTransceiverAttrs *XcvrAttrs `json:"server_transceiver_attrs,omitempty"`
 }
 
 // CalcPlan is the full kernel input.

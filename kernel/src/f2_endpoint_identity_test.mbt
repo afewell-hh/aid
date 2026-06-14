@@ -26,6 +26,7 @@ test "F2 §1.1 same-switch fan-out preserves per-instance identity" {
     rail: None,
     target_switch_class: "oob_leaf",
     target_zone: "oob_server_1g",
+    server_transceiver_attrs: None,
   }
   // effective_quantity 2 so the partition splits {0,1}->sw0, {2,3}->sw1.
   let eps = f2_endpoints_for_connection(conn, 2, 0, 0, oob_zone_ports())
@@ -53,6 +54,7 @@ test "F2 §1.1 rail-optimized fan-out maps rails to distinct switches" {
     rail: Some(4),
     target_switch_class: "soc_storage_scale_out_leaf",
     target_zone: "scale_out_server_2x400",
+    server_transceiver_attrs: None,
   }
   // n 2 < total_rails 8 -> rail 4 lands on switch 1 (rail // ceil(8/2)).
   let eps = f2_endpoints_for_connection(conn, 2, 8, 0, oob_zone_ports())

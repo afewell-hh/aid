@@ -18,15 +18,30 @@
 // calc-plan (Go -> kernel)
 // ----------------------------------------------------------------------
 
+/// The optic `attribute_data` Go resolved from the catalog, passed to the kernel
+/// so it can evaluate transceiver verdicts WITHOUT touching the catalog (note
+/// §1.1, §2.5; transceiver_rules.py:160-256). The fields are exactly the keys the
+/// verdict rules read: `medium` (mismatch BLOCKS), `cage_type` / `connector`
+/// (mismatch → needs_review). An empty string means "unspecified" for that key;
+/// the option itself being `None` means the end carries no optic intent.
+/// (Cable-assembly `far_end_*` attrs extend this in GREEN if a fixture needs them.)
+pub(all) struct XcvrAttrs {
+  medium : String
+  cage_type : String
+  connector : String
+} derive(Eq, Show)
+
 /// A port-allocation zone on a switch class. `port_spec` is the RAW string the
 /// kernel parses (comma-list + range + `start-end:step`); `breakout_logical_ports`
-/// is resolved by Go from the catalog `breakout_option`.
+/// is resolved by Go from the catalog `breakout_option`. `transceiver_attrs` is
+/// the zone-side (switch-end) optic, resolved by Go (note §1.1).
 pub(all) struct ZoneIn {
   zone_name : String
   zone_type : String
   port_spec : String
   breakout_logical_ports : Int
   allocation_strategy : String
+  transceiver_attrs : XcvrAttrs?
 } derive(Eq, Show)
 
 /// A switch class with its derivation inputs. `override_quantity` is `None` on the
@@ -61,6 +76,9 @@ pub(all) struct ConnIn {
   rail : Int?
   target_switch_class : String
   target_zone : String
+  // The server-side (connection-end) optic, resolved by Go. Paired against the
+  // target zone's `transceiver_attrs` to produce a transceiver verdict (§2.5).
+  server_transceiver_attrs : XcvrAttrs?
 } derive(Eq, Show)
 
 pub(all) struct CalcPlan {

@@ -87,6 +87,26 @@ pub fn f2_switch_index(
 }
 
 // ----------------------------------------------------------------------
+// §2.5 Transceiver verdict — transceiver_rules.py:160-256
+//   Pairs the connection's server-side optic against the target zone's optic
+//   (both already catalog-resolved by Go). Returns (outcome, reason_code):
+//     both None                  -> ("match", "R_NULL")
+//     one None                   -> ("needs_review", "R_INTENT_ASYMMETRY")
+//     medium mismatch            -> ("blocked", "R_MEDIUM_MISMATCH")   [never downgraded]
+//     cage_type mismatch         -> ("needs_review", "R_CAGE_MISMATCH")
+//     connector mismatch         -> ("needs_review", "R_CONNECTOR_MISMATCH")
+//     otherwise                  -> ("match", "R_MATCH")
+//   Only "blocked" halts generation (device_generator.py:1121-1137).
+// ----------------------------------------------------------------------
+
+pub fn f2_xcvr_verdict(
+  _server : XcvrAttrs?,
+  _zone : XcvrAttrs?
+) -> (String, String) {
+  ("", "") // F2 RED stub: (outcome, reason_code)
+}
+
+// ----------------------------------------------------------------------
 // Integration — one connection definition fans out across `server_quantity`
 // server instances into per-realized-endpoint records (devb finding 1). Each
 // endpoint names the server instance, the chosen switch instance, and the
