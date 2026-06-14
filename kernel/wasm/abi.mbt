@@ -90,3 +90,13 @@ pub fn export_f2_calculate(ptr : Int, len : Int) -> Int64 {
   let json = @src.f2_calculate(plan_json)
   write_output(@utf8.encode(json[:]))
 }
+
+/// F3 bom-scale plan JSON -> F3 scaled-lines JSON (note §1.1, §4; Issue #56). Same
+/// JSON-over-linear-memory ABI; GREEN routes every qpu/fleet multiply through the
+/// proven I4 cores (@proofs.child_qpu/fleet_quantity) via @src.f3_scale. F3 RED:
+/// the kernel body (@src.f3_bom) is a stub returning an empty, well-formed output.
+pub fn export_f3_bom(ptr : Int, len : Int) -> Int64 {
+  let plan_json = @utf8.decode_lossy(read_input(ptr, len)[:])
+  let json = @src.f3_bom(plan_json)
+  write_output(@utf8.encode(json[:]))
+}

@@ -88,10 +88,17 @@ type Diff struct {
 	Details []string
 }
 
-// CompareBOMProjection compares AID's BOM projection (the HNP 19-column shape)
-// to the committed bom.csv. F0: pending (no calc).
-func CompareBOMProjection(computedCSV []byte, oracleBOMPath string) (Diff, error) {
-	return Diff{}, fmt.Errorf("%w: CompareBOMProjection", ErrNotImplemented)
+// CompareBOMProjection compares AID's BOM projection (the HNP 19-column shape,
+// produced by internal/bom.RenderProjection) to the committed bom.csv: exact
+// row-and-cell equality incl. the `# suppressed_switch_cable_assembly_count`
+// footer (F3, note §5). The comparator is REAL; the COMPUTED side is what is
+// pending until the F3 reducer lands.
+func CompareBOMProjection(computed [][]string, oracleBOMPath string) (Diff, error) {
+	want, err := LoadCSV(oracleBOMPath)
+	if err != nil {
+		return Diff{}, err
+	}
+	return diffCSV("bom.csv", computed, want, 1, -1), nil
 }
 
 // CompareConnectivityMap compares AID's connectivity map to connectivity-map.csv
@@ -211,9 +218,49 @@ func CompareDerivedQuantities(computed, oracle DerivedQuantities) (Diff, error) 
 	return Diff{Equal: len(details) == 0, Details: details}, nil
 }
 
-// CompareFullBOM compares AID's FULL purchasable BOM (Layer B) to
-// real-server-bom.csv at the given server-quantity scale (1×, 2×, …),
-// asserting linear scaling. F0: pending.
+// fullBOMQtyCol is the QTY column of real-server-bom.csv
+// (Type,SMC PN,Desc,QTY,Total Capacity(GB),Power(W),Total Power(W)).
+const fullBOMQtyCol = 3
+
+// CompareFullBOM compares AID's FULL purchasable BOM (Layer B, produced by
+// internal/bom.RenderFullBOM) to real-server-bom.csv at the given server-quantity
+// scale (1×, 2×, …), asserting linear scaling: the oracle is 1×, so at scale N the
+// QTY column of every numeric data row is expected to be N× the committed value
+// (every other cell unchanged). The comparator is REAL; the COMPUTED side is
+// pending until the F3 reducer lands.
 func CompareFullBOM(computed [][]string, oracleCSVPath string, scale int) (Diff, error) {
-	return Diff{}, fmt.Errorf("%w: CompareFullBOM(scale=%d)", ErrNotImplemented, scale)
+	want, err := LoadCSV(oracleCSVPath)
+	if err != nil {
+		return Diff{}, err
+	}
+	return diffCSV(fmt.Sprintf("real-server-bom.csv (%d×)", scale), computed, want, scale, fullBOMQtyCol), nil
+}
+
+// diffCSV reports an exact row/cell diff of got vs want. When scale > 1 and
+// qtyCol >= 0, the want side's qtyCol is multiplied by scale before comparison
+// (linear-scaling oracle); a non-numeric qtyCol cell is compared verbatim.
+func diffCSV(label string, got, want [][]string, scale, qtyCol int) Diff {
+	var d []string
+	if len(got) != len(want) {
+		d = append(d, fmt.Sprintf("%s: %d rows, want %d", label, len(got), len(want)))
+		return Diff{Equal: false, Details: d}
+	}
+	for i := range want {
+		if len(got[i]) != len(want[i]) {
+			d = append(d, fmt.Sprintf("%s row %d: %d cols, want %d", label, i, len(got[i]), len(want[i])))
+			continue
+		}
+		for j := range want[i] {
+			exp := want[i][j]
+			if scale > 1 && j == qtyCol {
+				if n, err := strconv.Atoi(exp); err == nil {
+					exp = strconv.Itoa(n * scale)
+				}
+			}
+			if got[i][j] != exp {
+				d = append(d, fmt.Sprintf("%s row %d col %d: got %q want %q", label, i, j, got[i][j], exp))
+			}
+		}
+	}
+	return Diff{Equal: len(d) == 0, Details: d}
 }

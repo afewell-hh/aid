@@ -7,7 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/afewell-hh/aid/internal/bom"
 	"github.com/afewell-hh/aid/internal/calc"
+	"github.com/afewell-hh/aid/internal/catalog"
+	"github.com/afewell-hh/aid/internal/objectmodel"
 	"github.com/afewell-hh/aid/internal/topology"
 )
 
@@ -154,6 +157,91 @@ func TestLayerA_DerivedQuantities(t *testing.T) {
 	}
 }
 
+// --- F3 RED: the BOM oracle rows move pending(skip) → executing(fail) ----------
+
+// TestLayerA_BOMProjection is the headline F3 Layer-A oracle (note §5): AID's BOM
+// PROJECTION (internal/bom.RenderProjection) must equal the committed bom.csv
+// EXACTLY — all 19 columns, every row, the suppressed-cable-assembly footer. The
+// oracle comparator (CompareBOMProjection) is REAL; the COMPUTED side calls the F3
+// reducer, a stub in RED — so this FAILS for the right reason until GREEN.
+func TestLayerA_BOMProjection(t *testing.T) {
+	dir := LayerADir()
+	b, err := os.ReadFile(filepath.Join(dir, "training.yaml"))
+	if err != nil {
+		t.Fatalf("read training.yaml: %v", err)
+	}
+	plan, cat, err := topology.IngestBundled(b)
+	if err != nil {
+		t.Fatalf("IngestBundled(xoc-64): %v", err)
+	}
+	calcOut, err := calc.Compute(plan, cat)
+	if err != nil {
+		t.Fatalf("calc.Compute(xoc-64): %v", err)
+	}
+	overlay, err := catalog.Load(filepath.Join(repoRoot(), "tests", "fixtures", "f3", "optic-overlay.yaml"))
+	if err != nil {
+		t.Fatalf("load optic overlay: %v", err)
+	}
+	cat.Merge(overlay)
+
+	model, err := bom.Resolve(plan, cat, calcOut)
+	if err != nil {
+		// RED: the F3 reducer is not wired yet. GREEN makes this pass.
+		t.Fatalf("F3 RED — BOM projection reducer not implemented: %v", err)
+	}
+	got, err := bom.RenderProjection(model)
+	if err != nil {
+		t.Fatalf("RenderProjection: %v", err)
+	}
+	diff, err := CompareBOMProjection(got, filepath.Join(dir, "bom.csv"))
+	if err != nil {
+		t.Fatalf("CompareBOMProjection: %v", err)
+	}
+	if !diff.Equal {
+		t.Errorf("xoc-64 BOM projection != bom.csv: %v", diff.Details)
+	}
+}
+
+// TestLayerB_Scaling is the F3 Layer-B oracle (note §5): AID's FULL purchasable
+// BOM (internal/bom.RenderFullBOM) must equal real-server-bom.csv exactly at 1×,
+// and scale linearly at 2×. The comparator is REAL; the COMPUTED side calls the F3
+// reducer, a stub in RED — so this FAILS for the right reason until GREEN.
+// (Replaces the former TestLayerB_Scaling_Pending skip: pending → executing.)
+func TestLayerB_Scaling(t *testing.T) {
+	oraclePath := filepath.Join(repoRoot(), "docs", "requirements", "real-server-bom.csv")
+	b200 := filepath.Join(repoRoot(), "tests", "fixtures", "f3", "b200-server.yaml")
+	cat, err := catalog.Load(b200)
+	if err != nil {
+		t.Fatalf("load b200 fixture: %v", err)
+	}
+	for _, scale := range []int{1, 2} {
+		plan := &topology.Plan{Spec: topology.Spec{
+			ServerClasses: []topology.ServerClassUse{{
+				ServerClassID: "smc-b200-8gpu",
+				ClassRef:      objectmodel.Ref{ID: objectmodel.ID{Name: "smc-b200-8gpu", Version: "1"}},
+				Quantity:      scale,
+			}},
+		}}
+		calcOut := &calc.CalcOutput{ServerQuantity: []calc.ClassQty{{ClassID: "smc-b200-8gpu", Quantity: scale}}}
+
+		model, err := bom.Resolve(plan, cat, calcOut)
+		if err != nil {
+			t.Fatalf("F3 RED — full-BOM reducer not implemented (scale=%d): %v", scale, err)
+		}
+		got, err := bom.RenderFullBOM(model)
+		if err != nil {
+			t.Fatalf("RenderFullBOM(scale=%d): %v", scale, err)
+		}
+		diff, err := CompareFullBOM(got, oraclePath, scale)
+		if err != nil {
+			t.Fatalf("CompareFullBOM(scale=%d): %v", scale, err)
+		}
+		if !diff.Equal {
+			t.Errorf("B200 full BOM %d× != real-server-bom.csv: %v", scale, diff.Details)
+		}
+	}
+}
+
 // --- PENDING (skip, not red): comparisons need calc (F2+) ---------------------
 
 func TestLayerA_Comparisons_Pending(t *testing.T) {
@@ -168,16 +256,5 @@ func TestLayerA_Comparisons_Pending(t *testing.T) {
 		t.Skip("Layer A counts comparison pending — needs calc (F2+)")
 	} else {
 		t.Fatalf("unexpected: comparison resolved before calc: %v", err)
-	}
-}
-
-func TestLayerB_Scaling_Pending(t *testing.T) {
-	path := filepath.Join(repoRoot(), "docs", "requirements", "real-server-bom.csv")
-	for _, scale := range []int{1, 2} {
-		if _, err := CompareFullBOM(nil, path, scale); errors.Is(err, ErrNotImplemented) {
-			t.Skipf("Layer B full-BOM %d× scaling comparison pending — needs calc/reducer (F3)", scale)
-		} else {
-			t.Fatalf("unexpected: full-BOM comparison resolved before reducer: %v", err)
-		}
 	}
 }

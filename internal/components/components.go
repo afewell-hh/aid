@@ -15,8 +15,12 @@ const (
 	KernelCalculate   = "export_calculate"
 	KernelValidate    = "export_validate"
 	KernelF2Calculate = "export_f2_calculate"
-	HhfabExport       = "export_wiring"
-	BomExport         = "export_bom"
+	// KernelF3Bom routes the F3 BOM-scale plan through the proven I4 cores
+	// (@proofs.child_qpu/fleet_quantity) and returns the fleet-scaled lines
+	// (note §1.1, §4). F3 RED: wired; the kernel body is a stub.
+	KernelF3Bom = "export_f3_bom"
+	HhfabExport = "export_wiring"
+	BomExport   = "export_bom"
 )
 
 type cached struct {
