@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/afewell-hh/aid/internal/calc"
 	"github.com/afewell-hh/aid/internal/topology"
 )
 
@@ -94,6 +95,62 @@ func TestLayerA_ExpectedCounts_SelfCheck(t *testing.T) {
 	}
 	if want != (ExpectedCounts{ServerClasses: 5, SwitchClasses: 3, Connections: 21}) {
 		t.Errorf("xoc-64 committed expected.counts = %+v, want {5 3 21}", want)
+	}
+}
+
+// --- F2 RED: the derived-quantities row fails until the F2 calc lands ----------
+
+// TestLayerA_DerivedQuantities is the headline F2 oracle (note §3, D22): for
+// xoc-64, AID's COMPUTED switches-per-class and server quantities must equal the
+// committed bom.csv. The oracle side (LoadBOMQuantities) is REAL and asserts the
+// known target {soc_storage_scale_out_leaf:2, inb_mgmt_leaf:1, oob_leaf:1} +
+// servers {8,3,3,2,1}. The COMPUTED side calls the F2 calc, which is a stub in
+// RED — so this test FAILS for the right reason (calc not implemented) until
+// GREEN. (Full bom.csv reproduction is F3; wiring is F4; netbox is deferred, D22.)
+func TestLayerA_DerivedQuantities(t *testing.T) {
+	dir := LayerADir()
+
+	oracleQ, err := LoadBOMQuantities(filepath.Join(dir, "bom.csv"))
+	if err != nil {
+		t.Fatalf("LoadBOMQuantities: %v", err)
+	}
+	// The committed bom.csv quantities are the F2 target — proves the oracle is
+	// wired to real data regardless of the (pending) calc.
+	wantSwitch := map[string]int{"soc_storage_scale_out_leaf": 2, "inb_mgmt_leaf": 1, "oob_leaf": 1}
+	wantServer := map[string]int{"compute_xpu": 8, "storage_srv": 3, "metadata_srv": 3, "hh_gateway": 2, "hh_controller": 1}
+	for c, w := range wantSwitch {
+		if got := oracleQ.SwitchPerClass[c]; got != w {
+			t.Fatalf("bom.csv switch %s = %d, want %d", c, got, w)
+		}
+	}
+	for c, w := range wantServer {
+		if got := oracleQ.ServerPerClass[c]; got != w {
+			t.Fatalf("bom.csv server %s = %d, want %d", c, got, w)
+		}
+	}
+
+	// Ingest the real plan and compute the topology — the F2 calc.
+	b, err := os.ReadFile(filepath.Join(dir, "training.yaml"))
+	if err != nil {
+		t.Fatalf("read training.yaml: %v", err)
+	}
+	plan, cat, err := topology.IngestBundled(b)
+	if err != nil {
+		t.Fatalf("IngestBundled(xoc-64): %v", err)
+	}
+
+	sw, srv, err := calc.DeriveQuantities(plan, cat)
+	if err != nil {
+		// RED: the F2 kernel calc is not wired yet. GREEN makes this pass.
+		t.Fatalf("F2 RED — derived-quantities calc not implemented: %v", err)
+	}
+	computed := DerivedQuantities{SwitchPerClass: sw, ServerPerClass: srv}
+	diff, err := CompareDerivedQuantities(computed, oracleQ)
+	if err != nil {
+		t.Fatalf("CompareDerivedQuantities: %v", err)
+	}
+	if !diff.Equal {
+		t.Errorf("xoc-64 derived quantities mismatch: %v", diff.Details)
 	}
 }
 

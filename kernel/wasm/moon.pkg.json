@@ -5,7 +5,7 @@
   ],
   "link": {
     "wasm": {
-      "exports": ["alloc", "dealloc", "export_calculate", "export_validate"],
+      "exports": ["alloc", "dealloc", "export_calculate", "export_validate", "export_f2_calculate"],
       "export-memory-name": "memory"
     }
   }

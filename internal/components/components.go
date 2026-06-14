@@ -12,10 +12,11 @@ import (
 
 // Entry-point export names (the JSON-over-memory `(ptr,len)->packed` functions).
 const (
-	KernelCalculate = "export_calculate"
-	KernelValidate  = "export_validate"
-	HhfabExport     = "export_wiring"
-	BomExport       = "export_bom"
+	KernelCalculate   = "export_calculate"
+	KernelValidate    = "export_validate"
+	KernelF2Calculate = "export_f2_calculate"
+	HhfabExport       = "export_wiring"
+	BomExport         = "export_bom"
 )
 
 type cached struct {

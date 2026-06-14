@@ -80,3 +80,13 @@ pub fn export_validate(ptr : Int, len : Int) -> Int64 {
   let json = @src.encode_validation_result(@src.validate(plan_json))
   write_output(@utf8.encode(json[:]))
 }
+
+/// F2 calc-plan JSON -> F2 calc-output JSON (note §1.1; Issue #52). The F2
+/// boundary uses the same JSON-over-linear-memory ABI; the kernel emits a bare
+/// calc-output envelope (no ok/err wrapper) — a malformed plan yields an empty
+/// but well-formed calc-output, so the Go host always decodes a valid result.
+pub fn export_f2_calculate(ptr : Int, len : Int) -> Int64 {
+  let plan_json = @utf8.decode_lossy(read_input(ptr, len)[:])
+  let json = @src.f2_calculate(plan_json)
+  write_output(@utf8.encode(json[:]))
+}
