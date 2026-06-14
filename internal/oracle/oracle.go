@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 )
 
 // ErrNotImplemented marks a comparison that needs calc (F2+) — pending, not a
@@ -135,6 +136,79 @@ func CompareExpectedCounts(computed, oracle ExpectedCounts) (Diff, error) {
 // harness against them. F0: pending.
 func CompareWiringHhfab(computedWiringDir, oracleWiringDir string) (Diff, error) {
 	return Diff{}, fmt.Errorf("%w: CompareWiringHhfab", ErrNotImplemented)
+}
+
+// --- F2 derived-quantities row (the headline F2 oracle, D22) -----------------
+
+// DerivedQuantities is the computed-quantity oracle: switches per class and
+// server instances per class, both keyed by hedgehog class id. For F2 this is
+// validated against the committed bom.csv (NOT netbox_inventory.json, deferred
+// per D22). The full bom.csv reproduction is F3; this row only checks the
+// per-class QUANTITIES.
+type DerivedQuantities struct {
+	SwitchPerClass map[string]int
+	ServerPerClass map[string]int
+}
+
+// LoadBOMQuantities reads the committed bom.csv and projects the switch/server
+// per-class quantities (the F2 oracle target). bom.csv columns:
+//
+//	0=section, 3=hedgehog_class, 5=quantity
+//
+// `section` ∈ {switch, server} selects the rows; `*_transceiver`/cable rows are
+// ignored (they are F3's full-BOM concern). This loader is REAL — it proves the
+// F2 oracle is wired to the committed reference, independent of any calc.
+func LoadBOMQuantities(bomPath string) (DerivedQuantities, error) {
+	rows, err := LoadCSV(bomPath)
+	if err != nil {
+		return DerivedQuantities{}, err
+	}
+	out := DerivedQuantities{SwitchPerClass: map[string]int{}, ServerPerClass: map[string]int{}}
+	for i, r := range rows {
+		if i == 0 || len(r) < 6 {
+			continue // header or short/comment row
+		}
+		class := r[3]
+		if class == "" {
+			continue
+		}
+		qty, err := strconv.Atoi(r[5])
+		if err != nil {
+			continue
+		}
+		switch r[0] {
+		case "switch":
+			out.SwitchPerClass[class] = qty
+		case "server":
+			out.ServerPerClass[class] = qty
+		}
+	}
+	return out, nil
+}
+
+// CompareDerivedQuantities compares AID's computed per-class quantities to the
+// bom.csv-derived oracle (set-equality over both class→qty maps). Implemented
+// here (the comparison is real); it is the COMPUTED side that is pending until
+// the F2 calc lands.
+func CompareDerivedQuantities(computed, oracle DerivedQuantities) (Diff, error) {
+	var details []string
+	cmp := func(kind string, got, want map[string]int) {
+		for class, w := range want {
+			if g, ok := got[class]; !ok {
+				details = append(details, fmt.Sprintf("%s %s: missing (want %d)", kind, class, w))
+			} else if g != w {
+				details = append(details, fmt.Sprintf("%s %s: computed %d != want %d", kind, class, g, w))
+			}
+		}
+		for class := range got {
+			if _, ok := want[class]; !ok {
+				details = append(details, fmt.Sprintf("%s %s: computed but not in oracle", kind, class))
+			}
+		}
+	}
+	cmp("switch", computed.SwitchPerClass, oracle.SwitchPerClass)
+	cmp("server", computed.ServerPerClass, oracle.ServerPerClass)
+	return Diff{Equal: len(details) == 0, Details: details}, nil
 }
 
 // CompareFullBOM compares AID's FULL purchasable BOM (Layer B) to

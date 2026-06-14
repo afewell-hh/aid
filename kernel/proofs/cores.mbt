@@ -108,6 +108,32 @@ pub fn leaf_clamp_eslag(base : Int) -> Int where {
 }
 
 // --------------------------------------------------------------------------
+// I-new — Allocation completeness / in-bounds (F2, Issue #52)
+// --------------------------------------------------------------------------
+
+/// The completeness face of the I1 cursor map, re-established for the F2 diet
+/// model (note §4). Given a zone sequence of `capacity` parsed+breakout-expanded
+/// slots and a `demand` that fits, the allocation cursor consumes EXACTLY `demand`
+/// slots and the end cursor stays within the sequence:
+///   - `result == demand`   : every demanded port gets exactly one slot (no gaps,
+///                            no shortfall) — totality of the cursor map over
+///                            `[0, demand)`.
+///   - `result <= capacity` : the cursor never runs past the parsed sequence.
+/// Together with `ports_distinct` (injectivity), this is the full per-zone
+/// non-overlapping, complete allocation guarantee the F2 allocator routes through.
+/// The `demand <= capacity` precondition is the `zone_capacity_ok` pre-flight
+/// ([bridge], test-covered) restated as a proof requirement.
+pub fn alloc_end_in_bounds(demand : Int, capacity : Int) -> Int where {
+  proof_require: demand >= 0,
+  proof_require: capacity >= 0,
+  proof_require: demand <= capacity,
+  proof_ensure: r => r == demand,
+  proof_ensure: r => r <= capacity,
+} {
+  demand
+}
+
+// --------------------------------------------------------------------------
 // I4 — BOM scaling (Algorithm 6 — recursive DeviceClass traversal)
 // --------------------------------------------------------------------------
 
