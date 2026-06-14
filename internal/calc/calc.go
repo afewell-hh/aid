@@ -129,12 +129,21 @@ type Verdict struct {
 	ReasonCode   string `json:"reason_code"`
 }
 
+// CalcIssue is a calc-level failure surfaced by the kernel (the analogue of
+// HNP's allocator raising — port_allocator.py:57-67). A non-empty Errors makes
+// DeriveQuantities fail the calc rather than return a silently-wrong result.
+type CalcIssue struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 // CalcOutput is the full kernel result.
 type CalcOutput struct {
-	SwitchQuantity      []ClassQty `json:"switch_quantity"`
-	ServerQuantity      []ClassQty `json:"server_quantity"`
-	Endpoints           []Endpoint `json:"endpoints"`
-	TransceiverVerdicts []Verdict  `json:"transceiver_verdicts"`
+	SwitchQuantity      []ClassQty  `json:"switch_quantity"`
+	ServerQuantity      []ClassQty  `json:"server_quantity"`
+	Endpoints           []Endpoint  `json:"endpoints"`
+	TransceiverVerdicts []Verdict   `json:"transceiver_verdicts"`
+	Errors              []CalcIssue `json:"errors"`
 }
 
 // DeriveQuantities resolves the plan+catalog into a calc-plan, runs the kernel,
@@ -162,6 +171,12 @@ func DeriveQuantities(plan *topology.Plan, cat *catalog.Catalog) (switchQty, ser
 	var co CalcOutput
 	if err := json.Unmarshal(out, &co); err != nil {
 		return nil, nil, fmt.Errorf("calc: decode calc-output: %w", err)
+	}
+	// The kernel surfaces over-allocation (and a malformed plan) as calc errors
+	// rather than wrapping/reusing ports; fail the calc, mirroring HNP's raise.
+	if len(co.Errors) > 0 {
+		return nil, nil, fmt.Errorf("calc: kernel reported %d error(s): [%s] %s",
+			len(co.Errors), co.Errors[0].Code, co.Errors[0].Message)
 	}
 	switchQty = make(map[string]int, len(co.SwitchQuantity))
 	for _, q := range co.SwitchQuantity {

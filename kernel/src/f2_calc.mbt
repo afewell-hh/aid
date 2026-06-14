@@ -199,6 +199,20 @@ fn same_switch_index(server_index : Int, total_servers : Int, n : Int) -> Int {
   n - 1
 }
 
+/// Domain-based rail pre-compute (device_generator.py:438-443): the number of
+/// servers one switch serves for its rail = `max(1, zone_capacity // ppc)`,
+/// where `zone_capacity` is the parsed+breakout-expanded slot count of the zone.
+/// Feeds the `n >= total_rails` branch of `f2_switch_index`. NOT `eff / total_rails`.
+pub fn servers_per_domain(zone_capacity : Int, ports_per_connection : Int) -> Int {
+  let ppc = if ports_per_connection > 0 { ports_per_connection } else { 1 }
+  let q = zone_capacity / ppc
+  if q < 1 {
+    1
+  } else {
+    q
+  }
+}
+
 pub fn f2_switch_index(
   distribution : String,
   port_index : Int,
@@ -299,7 +313,12 @@ pub fn f2_endpoints_for_connection(
     Some(r) => r
     None => 0
   }
-  let mut cursor = 0
+  // Per-switch-instance cursors (port_allocator.py keys on (switch, zone)), so a
+  // distinct server instance lands on a distinct switch's own port pool.
+  let cursors = Array::make(
+    if effective_quantity > 0 { effective_quantity } else { 1 },
+    0,
+  )
   for si in 0..<conn.server_quantity {
     for pp in 0..<conn.ports_per_connection {
       let port_index = conn.port_index + pp
@@ -313,12 +332,7 @@ pub fn f2_endpoints_for_connection(
         conn.server_quantity,
         servers_per_domain,
       )
-      let slot = if zone_ports.length() > 0 {
-        zone_ports[cursor % zone_ports.length()]
-      } else {
-        { physical_port: 0, breakout_index: None, name: "" }
-      }
-      cursor = cursor + 1
+      let (slot, _) = alloc_slot(zone_ports, cursors, switch_index)
       eps.push({
         server_class_id: conn.server_class_id,
         server_index: si,
@@ -345,12 +359,14 @@ pub fn f2_endpoints_for_connection(
 
 pub fn f2_calculate(plan_json : String) -> String {
   let plan = try f2_decode_plan_inner(plan_json) catch {
-    _ => return f2_encode_output({
-      switch_quantity: [],
-      server_quantity: [],
-      endpoints: [],
-      transceiver_verdicts: [],
-    })
+    _ =>
+      return f2_encode_output({
+        switch_quantity: [],
+        server_quantity: [],
+        endpoints: [],
+        transceiver_verdicts: [],
+        errors: [{ code: "INVALID_PLAN", message: "calc-plan JSON is malformed" }],
+      })
   }
   f2_encode_output(f2_run(plan))
 }
@@ -420,23 +436,34 @@ fn qty_for(qtys : Array[ClassQty], class_id : String) -> Int {
 
 // Allocate the next slot for switch instance `sw` from this zone's expanded
 // sequence, advancing that switch's own cursor (port_allocator.py keys the
-// cursor on (switch, zone)).
-fn next_slot(
+// cursor on (switch, zone)). Returns (slot, in_bounds): the bool is false when
+// the switch's cursor would run past the parsed+breakout sequence — an
+// over-allocation that mirrors port_allocator.py:57-67's raise. The caller
+// surfaces it as a calc-output error rather than silently wrapping/reusing ports.
+fn alloc_slot(
   zone_ports : Array[PortSlot],
   cursors : Array[Int],
   sw : Int
-) -> PortSlot {
-  if zone_ports.length() == 0 {
-    { physical_port: 0, breakout_index: None, name: "" }
+) -> (PortSlot, Bool) {
+  let capacity = zone_ports.length()
+  if capacity == 0 {
+    ({ physical_port: 0, breakout_index: None, name: "" }, true)
   } else {
     let idx = if sw >= 0 && sw < cursors.length() { sw } else { 0 }
     let offset = cursors[idx]
-    // The slot for this switch's cursor offset is `@proofs.port_at(0, offset)` —
-    // the cursor map proven INJECTIVE by `@proofs.ports_distinct` (I1), so two
-    // distinct offsets on one (switch, zone) never collide on a port slot.
-    let slot_index = @proofs.port_at(0, offset)
-    cursors[idx] = offset + 1
-    zone_ports[slot_index % zone_ports.length()]
+    // In-bounds guard: `zone_capacity_ok(offset+1, capacity)` is exactly the
+    // `demand <= capacity` pre-flight the `@proofs.alloc_end_in_bounds` core
+    // encodes (note §4; cores.mbt:114-134). Only on a pass do we index the slot.
+    if zone_capacity_ok(offset + 1, capacity) {
+      // The slot for this cursor offset = `@proofs.port_at(0, offset)`, the cursor
+      // map proven INJECTIVE by `@proofs.ports_distinct` (I1). `offset < capacity`
+      // by the guard, so it indexes directly — no modulo, no reuse.
+      let slot_index = @proofs.port_at(0, offset)
+      cursors[idx] = offset + 1
+      (zone_ports[slot_index], true)
+    } else {
+      ({ physical_port: -1, breakout_index: None, name: "" }, false)
+    }
   }
 }
 
@@ -457,6 +484,7 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
   // 3. per-realized-endpoint allocation + per-connection transceiver verdicts.
   let endpoints = []
   let verdicts = []
+  let errors = []
   for sc in plan.switch_classes {
     let eff = qty_for(switch_quantity, sc.switch_class_id)
     for z in sc.zones {
@@ -464,26 +492,34 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
         parse_port_spec(z.port_spec),
         z.breakout_logical_ports,
       )
+      let zone_capacity = zone_ports.length()
+      // One cursor per switch instance — port_allocator.py keys (switch, zone).
       let cursors = Array::make(if eff > 0 { eff } else { 1 }, 0)
-      // total_rails = number of rail-optimized feeders for this zone; the
-      // domain-based pre-compute splits eff switches across them (:428-443).
-      let mut total_rails = 0
-      for c in plan.connections {
-        if c.target_switch_class == sc.switch_class_id &&
-          c.target_zone == z.zone_name &&
-          c.distribution == "rail-optimized" {
-          total_rails = total_rails + 1
-        }
-      }
-      let servers_per_domain = if total_rails > 0 { eff / total_rails } else { 0 }
+      let mut overflowed = false
       for c in plan.connections {
         if c.target_switch_class == sc.switch_class_id && c.target_zone == z.zone_name {
+          // total_rails for THIS server class targeting this zone
+          // (_get_total_rails_for_target, device_generator.py:432-435): one rail
+          // per rail-optimized connection from the server class to the zone.
+          let mut total_rails = 0
+          for c2 in plan.connections {
+            if c2.target_switch_class == sc.switch_class_id &&
+              c2.target_zone == z.zone_name &&
+              c2.server_class_id == c.server_class_id &&
+              c2.distribution == "rail-optimized" {
+              total_rails = total_rails + 1
+            }
+          }
+          let ppc = if c.ports_per_connection > 0 { c.ports_per_connection } else { 1 }
+          // Domain-based pre-compute (device_generator.py:438-443) — used only on
+          // the n >= total_rails branch of f2_switch_index.
+          let spd = servers_per_domain(zone_capacity, ppc)
           let rail = match c.rail {
             Some(r) => r
             None => 0
           }
           for si in 0..<c.server_quantity {
-            for pp in 0..<c.ports_per_connection {
+            for pp in 0..<ppc {
               let port_index = c.port_index + pp
               let switch_index = f2_switch_index(
                 c.distribution,
@@ -493,8 +529,9 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
                 eff,
                 total_rails,
                 c.server_quantity,
-                servers_per_domain,
+                spd,
               )
+              let (slot, in_bounds) = alloc_slot(zone_ports, cursors, switch_index)
               endpoints.push({
                 server_class_id: c.server_class_id,
                 server_index: si,
@@ -504,8 +541,13 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
                 switch_class_id: c.target_switch_class,
                 switch_index,
                 zone: c.target_zone,
-                port_slot: next_slot(zone_ports, cursors, switch_index),
+                port_slot: slot,
               })
+              if in_bounds {
+                ()
+              } else {
+                overflowed = true
+              }
             }
           }
           let (outcome, reason_code) = f2_xcvr_verdict(
@@ -515,6 +557,18 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
           verdicts.push({ connection_id: c.connection_id, outcome, reason_code })
         }
       }
+      if overflowed {
+        errors.push({
+          code: "ZONE_OVERFLOW",
+          message: "zone '" +
+          z.zone_name +
+          "' on switch class '" +
+          sc.switch_class_id +
+          "' over-allocated: demand exceeds " +
+          zone_capacity.to_string() +
+          " port slots",
+        })
+      }
     }
   }
   {
@@ -522,6 +576,7 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
     server_quantity,
     endpoints,
     transceiver_verdicts: verdicts,
+    errors,
   }
 }
 
@@ -684,6 +739,10 @@ fn f2_j_verdict(v : Verdict) -> String {
   "}"
 }
 
+fn f2_j_issue(e : CalcIssue) -> String {
+  "{\"code\":" + j_esc(e.code) + ",\"message\":" + j_esc(e.message) + "}"
+}
+
 fn f2_encode_output(out : CalcOutput2) -> String {
   let sq = []
   for c in out.switch_quantity {
@@ -701,6 +760,10 @@ fn f2_encode_output(out : CalcOutput2) -> String {
   for v in out.transceiver_verdicts {
     vs.push(f2_j_verdict(v))
   }
+  let errs = []
+  for e in out.errors {
+    errs.push(f2_j_issue(e))
+  }
   "{\"switch_quantity\":" +
   j_arr(sq) +
   ",\"server_quantity\":" +
@@ -709,5 +772,7 @@ fn f2_encode_output(out : CalcOutput2) -> String {
   j_arr(eps) +
   ",\"transceiver_verdicts\":" +
   j_arr(vs) +
+  ",\"errors\":" +
+  j_arr(errs) +
   "}"
 }

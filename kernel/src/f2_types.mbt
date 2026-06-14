@@ -128,9 +128,19 @@ pub(all) struct Verdict {
   reason_code : String
 } derive(Eq, Show)
 
+/// A calc-level failure surfaced to the Go host (the analogue of HNP raising —
+/// port_allocator.py:57-67). F2's headline use is `ZONE_OVERFLOW`: a (switch
+/// class, zone) whose demand exceeds the parsed+breakout capacity. A non-empty
+/// `errors` makes the host fail the calc rather than emit a silently-wrong IR.
+pub(all) struct CalcIssue {
+  code : String
+  message : String
+} derive(Eq, Show)
+
 pub(all) struct CalcOutput2 {
   switch_quantity : Array[ClassQty]
   server_quantity : Array[ClassQty]
   endpoints : Array[Endpoint]
   transceiver_verdicts : Array[Verdict]
+  errors : Array[CalcIssue]
 } derive(Eq, Show)

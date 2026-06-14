@@ -20,6 +20,14 @@ test "F2 §2.4 rail-optimized capacity-sharing: n < total_rails (xoc-64 scale-ou
   assert_eq(f2_switch_index("rail-optimized", 0, 0, 4, 2, 8, 8, 0), 1) // rails 4-7 -> sw1
 }
 
+// Finding 1 (devb GREEN review): the domain-based runtime pre-compute is
+// max(1, zone_capacity // ppc) — NOT eff/total_rails (device_generator.py:438-443).
+test "F2 §2.4 servers_per_domain = max(1, zone_capacity // ppc)" {
+  assert_eq(servers_per_domain(16, 2), 8) // 2x400 server zone, ppc 2
+  assert_eq(servers_per_domain(48, 1), 48) // 1g zone, ppc 1
+  assert_eq(servers_per_domain(1, 4), 1) // floors below 1 clamp to 1
+}
+
 test "F2 §2.4 rail-optimized domain-based: n >= total_rails" {
   // n 6 >= total_rails 3, servers_per_domain 1 ->
   //   switch_index = (server_index // spd) * total_rails + rail
