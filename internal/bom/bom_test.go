@@ -266,17 +266,23 @@ func TestProjection_IsSubsetOfFullBOM(t *testing.T) {
 		t.Fatalf("F3 RED — reducer not implemented: %v", err)
 	}
 	// One resolved model; both renders are pure views of it. The full line set
-	// must contain every projected line's (kind, model, fleet qty).
+	// must account for every projected line by the APPROVED structural key
+	// (kind, model, fleet_qty) — note §2.3 / f3-architecture-note.md:139-142. The
+	// kind component is load-bearing: keying on (model, qty) alone would let a
+	// GREEN reducer drift on classification (e.g. mis-section a line) while the
+	// same model+qty appears elsewhere in the full set; (kind, model, fleet_qty)
+	// closes that hole.
 	type key struct {
+		kind  string
 		model string
 		qty   int
 	}
 	full := map[key]bool{}
 	var projected []key
 	for _, l := range model.Lines {
-		full[key{l.Model, l.FleetQuantity}] = true
+		full[key{l.Kind, l.Model, l.FleetQuantity}] = true
 		if l.Projected {
-			projected = append(projected, key{l.Model, l.FleetQuantity})
+			projected = append(projected, key{l.Kind, l.Model, l.FleetQuantity})
 		}
 	}
 	if len(projected) == 0 {
@@ -284,7 +290,7 @@ func TestProjection_IsSubsetOfFullBOM(t *testing.T) {
 	}
 	for _, p := range projected {
 		if !full[p] {
-			t.Errorf("projected line %q ×%d is not present in the full BOM — projection drifted into a second counted path", p.model, p.qty)
+			t.Errorf("projected line (kind=%q model=%q ×%d) is not present in the full BOM — projection drifted into a second counted path", p.kind, p.model, p.qty)
 		}
 	}
 }
