@@ -17,14 +17,13 @@
 package calc
 
 import (
-	"errors"
+	"encoding/json"
+	"fmt"
 
 	"github.com/afewell-hh/aid/internal/catalog"
+	"github.com/afewell-hh/aid/internal/components"
 	"github.com/afewell-hh/aid/internal/topology"
 )
-
-// ErrNotImplemented marks the F2 calc as not yet wired (RED). GREEN removes it.
-var ErrNotImplemented = errors.New("calc: F2 kernel calculation not implemented (RED)")
 
 // --- calc-plan (Go → kernel): the resolved, numeric input -------------------
 
@@ -140,16 +139,184 @@ type CalcOutput struct {
 
 // DeriveQuantities resolves the plan+catalog into a calc-plan, runs the kernel,
 // and returns the computed per-class switch and server quantities (keyed by class
-// id) — the F2 derived-quantities oracle target. F2 RED: stub. GREEN builds the
-// calc-plan (BuildCalcPlan), calls components.Kernel via wasmhost, and projects
-// CalcOutput.SwitchQuantity/ServerQuantity into the maps.
+// id) — the F2 derived-quantities oracle target. It builds the calc-plan
+// (BuildCalcPlan), calls the kernel's export_f2_calculate over the D16 wasmhost
+// boundary, and projects CalcOutput.SwitchQuantity/ServerQuantity into the maps.
 func DeriveQuantities(plan *topology.Plan, cat *catalog.Catalog) (switchQty, serverQty map[string]int, err error) {
-	return nil, nil, ErrNotImplemented
+	cp, err := BuildCalcPlan(plan, cat)
+	if err != nil {
+		return nil, nil, err
+	}
+	in, err := json.Marshal(cp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("calc: marshal calc-plan: %w", err)
+	}
+	kernel, err := components.Kernel()
+	if err != nil {
+		return nil, nil, fmt.Errorf("calc: load kernel: %w", err)
+	}
+	out, err := kernel.Call(components.KernelF2Calculate, in)
+	if err != nil {
+		return nil, nil, fmt.Errorf("calc: kernel f2_calculate: %w", err)
+	}
+	var co CalcOutput
+	if err := json.Unmarshal(out, &co); err != nil {
+		return nil, nil, fmt.Errorf("calc: decode calc-output: %w", err)
+	}
+	switchQty = make(map[string]int, len(co.SwitchQuantity))
+	for _, q := range co.SwitchQuantity {
+		switchQty[q.ClassID] = q.Quantity
+	}
+	serverQty = make(map[string]int, len(co.ServerQuantity))
+	for _, q := range co.ServerQuantity {
+		serverQty[q.ClassID] = q.Quantity
+	}
+	return switchQty, serverQty, nil
 }
 
-// BuildCalcPlan resolves the ingested model + catalog into the flat numeric
-// calc-plan. F2 RED: stub. GREEN performs the catalog resolution (breakout →
-// logical_ports, optic attribute_data) described in note §1.1.
+// BuildCalcPlan resolves the ingested model + catalog into the flat, numeric
+// calc-plan: Go performs every catalog-dependent resolution (note §1.1) —
+// breakout_option → logical_ports, the redundancy mode, and the optic
+// attribute_data for both ends — so the kernel consumes typed numbers plus the
+// raw port_spec string it parses, and never touches the catalog (D16).
 func BuildCalcPlan(plan *topology.Plan, cat *catalog.Catalog) (CalcPlan, error) {
-	return CalcPlan{}, ErrNotImplemented
+	if plan == nil || cat == nil {
+		return CalcPlan{}, fmt.Errorf("calc: BuildCalcPlan needs a plan and a catalog")
+	}
+
+	// server_classes (and the per-class quantity used for connection fan-out).
+	serverQtyByClass := make(map[string]int, len(plan.Spec.ServerClasses))
+	cp := CalcPlan{}
+	for _, sc := range plan.Spec.ServerClasses {
+		serverQtyByClass[sc.ServerClassID] = sc.Quantity
+		cp.ServerClasses = append(cp.ServerClasses, ServerClassIn{
+			ServerClassID: sc.ServerClassID,
+			Quantity:      sc.Quantity,
+		})
+	}
+
+	// Redundancy domains keyed by switch class (MCLAG/ESLAG); absent ⇒ "none".
+	redundancyByClass := map[string]string{}
+	for _, d := range plan.Spec.MCLAGDomains {
+		if d.RedundancyType != "" {
+			redundancyByClass[d.SwitchClassID] = d.RedundancyType
+		}
+	}
+
+	// Zones grouped by switch class, with the catalog-resolved scalars.
+	zonesByClass := map[string][]ZoneIn{}
+	for _, z := range plan.Spec.PortZones {
+		zonesByClass[z.SwitchClassID] = append(zonesByClass[z.SwitchClassID], ZoneIn{
+			ZoneName:             z.ZoneName,
+			ZoneType:             z.ZoneType,
+			PortSpec:             z.PortSpec,
+			BreakoutLogicalPorts: breakoutLogicalPorts(cat, z.BreakoutID),
+			AllocationStrategy:   z.Allocation,
+			TransceiverAttrs:     resolveXcvr(cat, z.Transceiver),
+		})
+	}
+
+	// switch_classes.
+	for _, sw := range plan.Spec.SwitchClasses {
+		redundancy := redundancyByClass[sw.SwitchClassID]
+		if redundancy == "" {
+			redundancy = "none"
+		}
+		mode := sw.TopologyMode
+		if mode == "" {
+			mode = "clos"
+		}
+		cp.SwitchClasses = append(cp.SwitchClasses, SwitchClassIn{
+			SwitchClassID:    sw.SwitchClassID,
+			OverrideQuantity: sw.OverrideQuantity,
+			Redundancy:       redundancy,
+			TopologyMode:     mode,
+			Zones:            zonesByClass[sw.SwitchClassID],
+		})
+	}
+
+	// connections — full per-connection identity, plus the server-end optic.
+	for _, c := range plan.Spec.Connections {
+		cp.Connections = append(cp.Connections, ConnIn{
+			ConnectionID:           c.ConnectionID,
+			ServerClassID:          c.ServerClassID,
+			ServerQuantity:         serverQtyByClass[c.ServerClassID],
+			NICSlotID:              c.NICSlotID,
+			PortIndex:              c.PortIndex,
+			PortsPerConnection:     c.PortsPerConnection,
+			Speed:                  c.Speed,
+			Distribution:           c.Distribution,
+			Rail:                   c.Rail,
+			TargetSwitchClass:      c.TargetSwitchClass,
+			TargetZone:             c.TargetZone,
+			ServerTransceiverAttrs: resolveXcvr(cat, c.TransceiverID),
+		})
+	}
+
+	return cp, nil
+}
+
+// breakoutLogicalPorts resolves a breakout_option id to its logical_ports count
+// from the catalog's retained reference_data block (the breakout_options are
+// reference data, not extracted into typed catalog items). An empty id or an
+// unknown breakout resolves to 1 (a non-breakout 1:1 port), matching the HNP
+// default of one logical port per physical port.
+func breakoutLogicalPorts(cat *catalog.Catalog, breakoutID string) int {
+	if breakoutID == "" {
+		return 1
+	}
+	rd := cat.ReferenceData()
+	opts, ok := rd["breakout_options"].([]any)
+	if !ok {
+		return 1
+	}
+	for _, o := range opts {
+		m, ok := o.(map[string]any)
+		if !ok {
+			continue
+		}
+		if id, _ := m["id"].(string); id == breakoutID {
+			if lp, ok := asInt(m["logical_ports"]); ok && lp > 0 {
+				return lp
+			}
+			return 1
+		}
+	}
+	return 1
+}
+
+// resolveXcvr resolves an optic (transceiver) selection to the kernel's
+// catalog-free XcvrAttrs — the medium/cage_type/connector the §2.5 verdict rules
+// read. The attribute keys are read from the catalog item's calc_profile if
+// present; an unresolved optic or one carrying no optic attribute_data yields nil
+// (no optic intent), which the kernel verdicts as a match. For xoc-64 the
+// module_types carry no such attributes, so both ends resolve to nil.
+func resolveXcvr(cat *catalog.Catalog, transceiverID string) *XcvrAttrs {
+	if transceiverID == "" {
+		return nil
+	}
+	item, ok := cat.ByName(transceiverID)
+	if !ok {
+		return nil
+	}
+	medium, _ := item.CalcProfile["medium"].(string)
+	cage, _ := item.CalcProfile["cage_type"].(string)
+	connector, _ := item.CalcProfile["connector"].(string)
+	if medium == "" && cage == "" && connector == "" {
+		return nil
+	}
+	return &XcvrAttrs{Medium: medium, CageType: cage, Connector: connector}
+}
+
+// asInt coerces a JSON/YAML-bridged numeric (float64/int/int64) to an int.
+func asInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	}
+	return 0, false
 }
