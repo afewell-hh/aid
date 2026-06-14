@@ -146,37 +146,52 @@ type CalcOutput struct {
 	Errors              []CalcIssue `json:"errors"`
 }
 
-// DeriveQuantities resolves the plan+catalog into a calc-plan, runs the kernel,
-// and returns the computed per-class switch and server quantities (keyed by class
-// id) — the F2 derived-quantities oracle target. It builds the calc-plan
-// (BuildCalcPlan), calls the kernel's export_f2_calculate over the D16 wasmhost
-// boundary, and projects CalcOutput.SwitchQuantity/ServerQuantity into the maps.
-func DeriveQuantities(plan *topology.Plan, cat *catalog.Catalog) (switchQty, serverQty map[string]int, err error) {
+// Compute resolves the plan+catalog into a calc-plan, runs the kernel, and
+// returns the FULL decoded calc-output (per-class switch/server quantities, the
+// per-realized-endpoint allocation IR, and transceiver verdicts). It is the
+// shared kernel-call path: DeriveQuantities projects its quantities, and the F3
+// BOM reducer (internal/bom) consumes its Endpoints for the switch-transceiver
+// projection. This is an additive accessor over the SAME F2 boundary/output — no
+// F2 boundary change (note §7.4). A kernel-reported calc error fails the call,
+// mirroring HNP's allocator raise.
+func Compute(plan *topology.Plan, cat *catalog.Catalog) (*CalcOutput, error) {
 	cp, err := BuildCalcPlan(plan, cat)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	in, err := json.Marshal(cp)
 	if err != nil {
-		return nil, nil, fmt.Errorf("calc: marshal calc-plan: %w", err)
+		return nil, fmt.Errorf("calc: marshal calc-plan: %w", err)
 	}
 	kernel, err := components.Kernel()
 	if err != nil {
-		return nil, nil, fmt.Errorf("calc: load kernel: %w", err)
+		return nil, fmt.Errorf("calc: load kernel: %w", err)
 	}
 	out, err := kernel.Call(components.KernelF2Calculate, in)
 	if err != nil {
-		return nil, nil, fmt.Errorf("calc: kernel f2_calculate: %w", err)
+		return nil, fmt.Errorf("calc: kernel f2_calculate: %w", err)
 	}
 	var co CalcOutput
 	if err := json.Unmarshal(out, &co); err != nil {
-		return nil, nil, fmt.Errorf("calc: decode calc-output: %w", err)
+		return nil, fmt.Errorf("calc: decode calc-output: %w", err)
 	}
 	// The kernel surfaces over-allocation (and a malformed plan) as calc errors
 	// rather than wrapping/reusing ports; fail the calc, mirroring HNP's raise.
 	if len(co.Errors) > 0 {
-		return nil, nil, fmt.Errorf("calc: kernel reported %d error(s): [%s] %s",
+		return nil, fmt.Errorf("calc: kernel reported %d error(s): [%s] %s",
 			len(co.Errors), co.Errors[0].Code, co.Errors[0].Message)
+	}
+	return &co, nil
+}
+
+// DeriveQuantities resolves the plan+catalog into a calc-plan, runs the kernel,
+// and returns the computed per-class switch and server quantities (keyed by class
+// id) — the F2 derived-quantities oracle target. It projects Compute's
+// CalcOutput.SwitchQuantity/ServerQuantity into the maps.
+func DeriveQuantities(plan *topology.Plan, cat *catalog.Catalog) (switchQty, serverQty map[string]int, err error) {
+	co, err := Compute(plan, cat)
+	if err != nil {
+		return nil, nil, err
 	}
 	switchQty = make(map[string]int, len(co.SwitchQuantity))
 	for _, q := range co.SwitchQuantity {

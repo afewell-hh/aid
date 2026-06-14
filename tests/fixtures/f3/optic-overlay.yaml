@@ -1,0 +1,204 @@
+# AID-owned optic/description catalog OVERLAY for the xoc-64 BOM projection (F3).
+#
+# Provenance (note §3.2, §0.4; D1/D12): training.yaml `module_types` carry only
+# {id, manufacturer, model}. bom.csv columns 7–19 (cage/medium/connector/standard/
+# reach/wavelength/lanes/breakout) and the manufacturer/description casing are
+# PUBLIC OPTICAL-STANDARD FACTS that AID OWNS in its catalog `calc_profile` plane.
+# They are authored here BY HAND from public facts — NOT read back from bom.csv
+# (circular) and NOT imported from HNP `seed_catalog.py` (D1/D12). This overlay is
+# merged (by pinned id) onto the catalog extracted from training.yaml; the F3
+# projection renderer reads these attributes into bom.csv columns 7–19.
+#
+# Integrity note (lead, Issue #56): reproducing columns 7–19 is a catalog LOOKUP of
+# static per-SKU facts, not a computed result. F3's validation teeth are the
+# COMPUTED parts (quantities, section classification, the switch-transceiver
+# distinct-physical-cage breakout dedup, the footer, and 1×/2× scaling).
+#
+# Keys mirror bom.csv columns. `gearbox_present`/`is_cable_assembly` are kept as
+# string literals so the rendered CSV round-trips ("false"/"true").
+items:
+  # --- server/switch transceiver SKUs (cols 7–19) ----------------------------
+  - id: { name: osfp_400g_dr4, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Generic
+    model: OSFP-400G-DR4
+    description: ""
+    calc_profile:
+      cage_type: OSFP
+      medium: SMF
+      connector: MPO-12
+      standard: 400GBASE-DR4
+      reach_class: DR
+      wavelength_nm: "1310"
+      host_lane_count: "4"
+      host_serdes_gbps_per_lane: "100"
+      optical_lane_pattern: DR4
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 1x
+      is_cable_assembly: "false"
+
+  - id: { name: qsfp112_200gbase_sr2, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Generic
+    model: QSFP112-200GBASE-SR2
+    description: "200G QSFP112 SR2 (MPO-12) — generic placeholder; replace with vendor SKU when qualified"
+    calc_profile:
+      cage_type: QSFP112
+      medium: MMF
+      connector: MPO-12
+      standard: 200GBASE-SR2
+      reach_class: SR
+      wavelength_nm: "850"
+      host_lane_count: "2"
+      host_serdes_gbps_per_lane: "100"
+      optical_lane_pattern: SR2
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 1x
+      is_cable_assembly: "false"
+
+  - id: { name: rj45_1000base_t, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Generic
+    model: RJ45-1000BASE-T
+    description: "1G copper RJ45 transceiver/PHY placeholder"
+    calc_profile:
+      cage_type: RJ45
+      medium: Copper
+      connector: RJ45
+      standard: 1000BASE-T
+      reach_class: Copper
+      wavelength_nm: ""
+      host_lane_count: "1"
+      host_serdes_gbps_per_lane: "1"
+      optical_lane_pattern: ""
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 1x
+      is_cable_assembly: "false"
+
+  - id: { name: sfp28_25gbase_sr, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Generic
+    model: SFP28-25GBASE-SR
+    description: "25G SFP28 SR optic (LC)"
+    calc_profile:
+      cage_type: SFP28
+      medium: MMF
+      connector: LC
+      standard: 25GBASE-SR
+      reach_class: SR
+      wavelength_nm: "850"
+      host_lane_count: "1"
+      host_serdes_gbps_per_lane: "25"
+      optical_lane_pattern: SR
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 1x
+      is_cable_assembly: "false"
+
+  # The one non-1x breakout_topology (note §3.2 edge case): 800G OSFP112 2xVR4.
+  - id: { name: r4113_a9220_vr, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Celestica
+    model: R4113-A9220-VR
+    description: "800G OSFP112 2xVR4 (2xMPO12)"
+    calc_profile:
+      cage_type: OSFP
+      medium: MMF
+      connector: Dual MPO-12
+      standard: 800GBASE-2xVR4
+      reach_class: VR
+      wavelength_nm: "850"
+      host_lane_count: "8"
+      host_serdes_gbps_per_lane: "100"
+      optical_lane_pattern: VR4
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 2x400g
+      is_cable_assembly: "false"
+
+  # --- NIC modules: cols 7–19 mostly empty; optical_lane_pattern "Unknown" ----
+  - id: { name: bmc_module, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: Generic
+    model: BMC Management Port
+    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+
+  - id: { name: nic_dual_200g, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: Generic
+    model: Generic Dual-Port 200G NIC
+    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+
+  - id: { name: nic_dual_25g, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: Generic
+    model: Generic Dual-Port 25GbE NIC
+    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+
+  - id: { name: nic_xpu_scale_out_8x400, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: NVIDIA
+    model: Generic xPU Scale-Out 8x400G NIC
+    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+
+  - id: { name: nic_xpu_soc_storage_2x200, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: NVIDIA
+    model: Generic xPU SoC/Storage 2x200G NIC
+    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+
+  # --- base device descriptive identity (projection cols 2 + 5) --------------
+  # bom.csv `module_type_model` / `manufacturer` for base server/switch rows.
+  - id: { name: compute_xpu, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OCP-Compliant xPU Server
+  - id: { name: hh_controller, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: Hedgehog Controller x86
+  - id: { name: hh_gateway, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: Hedgehog Gateway x86
+  - id: { name: metadata_srv, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OCP-Compliant Metadata Server
+  - id: { name: storage_srv, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OCP-Compliant Storage Server
+  - id: { name: inb_mgmt_leaf, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds2000
+  - id: { name: oob_leaf, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: Celestica DS1000
+  - id: { name: soc_storage_scale_out_leaf, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds5000

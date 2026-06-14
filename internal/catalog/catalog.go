@@ -79,12 +79,12 @@ const (
 // only — the selected transceiver is bound on the class, per NIC port (the
 // devb capability-vs-binding gate), except a captive/fixed SKU optic.
 type PortTemplate struct {
-	Name                string           `json:"name"`
-	PortKind            PortKind         `json:"port_kind"`
-	MaxSpeedGbps        int              `json:"max_speed_gbps"`
-	InterfaceType       string           `json:"interface_type"`
-	CageType            string           `json:"cage_type,omitempty"`
-	RequiresTransceiver bool             `json:"requires_transceiver"`
+	Name                string            `json:"name"`
+	PortKind            PortKind          `json:"port_kind"`
+	MaxSpeedGbps        int               `json:"max_speed_gbps"`
+	InterfaceType       string            `json:"interface_type"`
+	CageType            string            `json:"cage_type,omitempty"`
+	RequiresTransceiver bool              `json:"requires_transceiver"`
 	AllowedTransceivers []objectmodel.Ref `json:"allowed_transceivers,omitempty"`
 }
 
@@ -93,11 +93,11 @@ type PortTemplate struct {
 // — not a synthetic 8-port NIC). Slots may reference non-physical kinds too
 // (warranty/support/assembly/onsite).
 type ComponentSlot struct {
-	SlotID               string            `json:"slot_id"`
-	Target               objectmodel.Ref   `json:"target"`
-	Quantity             int               `json:"quantity"`
-	Required             bool              `json:"required"`
-	SelectionConstraints map[string]any    `json:"selection_constraints,omitempty"`
+	SlotID               string          `json:"slot_id"`
+	Target               objectmodel.Ref `json:"target"`
+	Quantity             int             `json:"quantity"`
+	Required             bool            `json:"required"`
+	SelectionConstraints map[string]any  `json:"selection_constraints,omitempty"`
 }
 
 // BOMLineTemplate is an arbitrary row a catalog item contributes to the
@@ -105,12 +105,12 @@ type ComponentSlot struct {
 // NON-physical (warranty, support, accessory, assembly, onsite). Scales linearly
 // with the owning item's instance count (the F3 reducer).
 type BOMLineTemplate struct {
-	Category          string         `json:"category"`
-	TargetRef         *objectmodel.Ref `json:"target_ref,omitempty"`
-	InlineSKU         string         `json:"inline_sku,omitempty"`
-	QuantityPerInstance int          `json:"quantity_per_instance"`
-	Physical          bool           `json:"physical"`
-	Attributes        map[string]any `json:"attributes,omitempty"`
+	Category            string           `json:"category"`
+	TargetRef           *objectmodel.Ref `json:"target_ref,omitempty"`
+	InlineSKU           string           `json:"inline_sku,omitempty"`
+	QuantityPerInstance int              `json:"quantity_per_instance"`
+	Physical            bool             `json:"physical"`
+	Attributes          map[string]any   `json:"attributes,omitempty"`
 }
 
 // CageBinding is a class-level selection: which transceiver populates which cage
@@ -118,9 +118,9 @@ type BOMLineTemplate struct {
 // (a NIC's ports may attach to different zones), per the owner model + HNP
 // (PlanServerConnection.nic + port_index, topology_plans.py:673,680).
 type CageBinding struct {
-	NICSlotID            string          `json:"nic_slot_id"`
-	PortIndex            int             `json:"port_index"`
-	SelectedTransceiver  objectmodel.Ref `json:"selected_transceiver"`
+	NICSlotID           string          `json:"nic_slot_id"`
+	PortIndex           int             `json:"port_index"`
+	SelectedTransceiver objectmodel.Ref `json:"selected_transceiver"`
 }
 
 // Item is a catalog object — either a bare hardware type or a configured class.
@@ -139,8 +139,8 @@ type Item struct {
 	PurchaseProfile map[string]any `json:"purchase_profile,omitempty"`
 
 	// Relations.
-	PortTemplates    []PortTemplate    `json:"port_templates,omitempty"`    // hardware types
-	ComponentSlots   []ComponentSlot   `json:"component_slots,omitempty"`   // nested parts
+	PortTemplates    []PortTemplate    `json:"port_templates,omitempty"`  // hardware types
+	ComponentSlots   []ComponentSlot   `json:"component_slots,omitempty"` // nested parts
 	BOMLineTemplates []BOMLineTemplate `json:"bom_line_templates,omitempty"`
 
 	// Class-only: per-NIC-port transceiver bindings (empty on bare types).
@@ -202,6 +202,64 @@ func (c *Catalog) ReferenceData() map[string]any { return c.refData }
 
 // ServerNics returns the retained extracted server_nics (nil if not from a bundle).
 func (c *Catalog) ServerNics() []any { return c.serverNics }
+
+// Merge applies an AID-owned OVERLAY catalog onto this one (F3, note §3.2): for
+// each overlay item, if an item with the same pinned ID already exists its
+// descriptive identity and attribute namespaces are ENRICHED from the overlay
+// (overlay wins on non-empty descriptive fields; calc_profile/purchase_profile
+// keys are merged, overlay overriding; bom_line_templates/cage_bindings appended
+// if the base had none); otherwise the overlay item is added. This is how the
+// hand-authored optic/description plane (bom.csv cols 7–19 + manufacturer/desc)
+// joins the catalog extracted from a bundled plan, keyed by id — without reading
+// bom.csv or importing HNP (D1/D12).
+func (c *Catalog) Merge(overlay *Catalog) {
+	if overlay == nil {
+		return
+	}
+	for id, ov := range overlay.items {
+		base, ok := c.items[id]
+		if !ok {
+			c.items[id] = ov
+			continue
+		}
+		if ov.Manufacturer != "" {
+			base.Manufacturer = ov.Manufacturer
+		}
+		if ov.Model != "" {
+			base.Model = ov.Model
+		}
+		if ov.PartNumber != "" {
+			base.PartNumber = ov.PartNumber
+		}
+		if ov.Description != "" {
+			base.Description = ov.Description
+		}
+		base.CalcProfile = mergeAttrs(base.CalcProfile, ov.CalcProfile)
+		base.PurchaseProfile = mergeAttrs(base.PurchaseProfile, ov.PurchaseProfile)
+		if len(base.BOMLineTemplates) == 0 {
+			base.BOMLineTemplates = ov.BOMLineTemplates
+		}
+		if len(base.CageBindings) == 0 {
+			base.CageBindings = ov.CageBindings
+		}
+		c.items[id] = base
+	}
+}
+
+// mergeAttrs returns base with overlay's keys applied (overlay wins). A nil base
+// is initialized from overlay; nil overlay leaves base untouched.
+func mergeAttrs(base, overlay map[string]any) map[string]any {
+	if len(overlay) == 0 {
+		return base
+	}
+	if base == nil {
+		base = make(map[string]any, len(overlay))
+	}
+	for k, v := range overlay {
+		base[k] = v
+	}
+	return base
+}
 
 // catalogFile is the on-disk shape of the AID-owned catalog artifact: a list of
 // items. Parsed via a YAML→JSON bridge so the items' `json` field tags (the wire
