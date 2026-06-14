@@ -130,35 +130,35 @@ items:
     layer: hardware_type
     manufacturer: Generic
     model: BMC Management Port
-    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
 
   - id: { name: nic_dual_200g, version: "1" }
     kind: nic
     layer: hardware_type
     manufacturer: Generic
     model: Generic Dual-Port 200G NIC
-    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
 
   - id: { name: nic_dual_25g, version: "1" }
     kind: nic
     layer: hardware_type
     manufacturer: Generic
     model: Generic Dual-Port 25GbE NIC
-    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
 
   - id: { name: nic_xpu_scale_out_8x400, version: "1" }
     kind: nic
     layer: hardware_type
     manufacturer: NVIDIA
     model: Generic xPU Scale-Out 8x400G NIC
-    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
 
   - id: { name: nic_xpu_soc_storage_2x200, version: "1" }
     kind: nic
     layer: hardware_type
     manufacturer: NVIDIA
     model: Generic xPU SoC/Storage 2x200G NIC
-    calc_profile: { optical_lane_pattern: Unknown, is_cable_assembly: "false" }
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
 
   # --- base device descriptive identity (projection cols 2 + 5) --------------
   # bom.csv `module_type_model` / `manufacturer` for base server/switch rows.

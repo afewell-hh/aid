@@ -6,26 +6,26 @@
 # required subcomponents (NOT flat lines), all scaling linearly with server quantity.
 #
 # Provenance (note §3.1; D1/D12): AID-owned public-fact reference data authored by
-# hand from the owner artifact — NOT imported from HNP. This is a self-contained
-# catalog (the B200 server CLASS + the CX-7 NIC type + the BF3 DPU type + a cage
-# transceiver type); a plan references `smc-b200-8gpu` and the F3 reducer emits the
-# full BOM.
+# hand from the owner artifact — NOT imported from HNP. Self-contained catalog (the
+# B200 server CLASS + CX-7 NIC type + BF3 DPU type + a cage transceiver type); a plan
+# references `smc-b200-8gpu` and the F3 reducer emits the full BOM.
 #
-# Modeling choices (note §3.1):
-#   - The 13 real-server-bom.csv line types: 11 are `bom_line_templates` directly on
-#     the server class; the 2 "AOC NETWORK" rows (CX-7 ×8, BF3 ×1) are NESTED
+# Modeling (note §3.1):
+#   - The 13 real-server-bom.csv line types: 11 are `bom_line_templates` on the
+#     server class; the 2 "AOC NETWORK" rows (CX-7 ×8, BF3 ×1) are NESTED
 #     `component_slots` whose referenced types each contribute their own AOC line.
-#   - 8× CX-7 = ONE quantity-bearing component_slot (quantity: 8) over the faithful
-#     one-QSFP112-cage CX-7 type — not a synthetic 8-port NIC, not 8 duplicated rows.
+#   - 8× CX-7 = ONE quantity-bearing slot (quantity: 8) over the faithful
+#     one-QSFP112-cage CX-7 type — not a synthetic 8-port NIC.
 #   - BF3 DPU = one `fixed_interface` 1000BASE-T BMC (requires_transceiver: false)
 #     + two QSFP112 `transceiver_cage`s @ 200G.
 #   - Per-cage transceivers are added by the reducer from cage_bindings; they are
 #     NOT lines in this flat CSV (the full-BOM renderer suppresses transceiver-kind
-#     lines, while the projection would surface them — one model, two views).
-#   - Non-physical lines (physical: false): EWCSC, SVC-NVSTDSWSUP-3Y, MC0037, OSNBD3.
+#     lines; the projection would surface them — one model, two views).
+#   - `attributes.seq` is the owner's declared CSV row order (nested AOC lines
+#     inherit their slot's `selection_constraints.seq`); display columns
+#     (total_capacity_gb / power_w / total_power_w) are authored exact strings.
 items:
   # --- bare hardware types (capability only) ---------------------------------
-  # Cage transceiver for the CX-7/BF3 QSFP112 cages (suppressed from the flat BOM).
   - id: { name: qsfp112_cage_optic, version: "1" }
     kind: transceiver
     layer: hardware_type
@@ -33,8 +33,6 @@ items:
     model: QSFP112-200GBASE-SR2
     part_number: QSFP112-200GBASE-SR2
 
-  # CX-7 NIC: one QSFP112 cage @ 400G. Contributes its own "AOC NETWORK" line,
-  # scaled ×8 by the owning server's component_slot quantity.
   - id: { name: cx7_aoc_400g, version: "1" }
     kind: nic
     layer: hardware_type
@@ -51,9 +49,8 @@ items:
         attributes:
           description: "900-9X766-003N-SQ0 1xNDR400G IB/EN OSFP Gen5x16 NoCrypto CX7---AOC-CX766003N-SQ0"
           power_w: "30.76"
+          total_power_w: "246.08"
 
-  # BlueField-3 DPU: one FIXED 1000BASE-T BMC port (no optic) + two QSFP112 cages
-  # @ 200G. Contributes its own "AOC NETWORK" line, scaled ×1.
   - id: { name: bf3_dpu, version: "1" }
     kind: dpu
     layer: hardware_type
@@ -72,6 +69,7 @@ items:
         attributes:
           description: "[DPU] BlueField-3 BF3220 DPU 200GbE dual port Crypto Enable---GPU-NVDPU-BA3220-C"
           power_w: "107"
+          total_power_w: "107"
 
   # --- configured server CLASS: the full B200 purchasable BOM -----------------
   - id: { name: smc-b200-8gpu, version: "1" }
@@ -82,10 +80,10 @@ items:
     part_number: AS-4126GS-NBR-LCC
     purchase_profile: { unit_of_measure: each }
     component_slots:
-      # 8× CX-7 as ONE quantity-bearing slot (not a synthetic 8-port NIC).
-      - { slot_id: nic-scale-out, target: { name: cx7_aoc_400g, version: "1" }, quantity: 8, required: true }
-      # 1× BlueField-3 DPU.
-      - { slot_id: dpu, target: { name: bf3_dpu, version: "1" }, quantity: 1, required: true }
+      # 8× CX-7 as ONE quantity-bearing slot; AOC line ordered at CSV row 8.
+      - { slot_id: nic-scale-out, target: { name: cx7_aoc_400g, version: "1" }, quantity: 8, required: true, selection_constraints: { seq: 8 } }
+      # 1× BlueField-3 DPU; AOC line ordered at CSV row 9.
+      - { slot_id: dpu, target: { name: bf3_dpu, version: "1" }, quantity: 1, required: true, selection_constraints: { seq: 9 } }
     cage_bindings:
       # Per-cage transceivers (required subcomponents; suppressed from the flat CSV).
       - { nic_slot_id: nic-scale-out, port_index: 0, selected_transceiver: { name: qsfp112_cage_optic, version: "1" } }
@@ -93,10 +91,11 @@ items:
       - { nic_slot_id: dpu, port_index: 1, selected_transceiver: { name: qsfp112_cage_optic, version: "1" } }
     bom_line_templates:
       - category: Barebone
-        inline_sku: AS-4126GS-NBR-LCC
+        inline_sku: "AS -4126GS-NBR-LCC"
         quantity_per_instance: 1
         physical: true
         attributes:
+          seq: 1
           description: "4U H14 LCC HGX B200 8x GPU, H14DSG-OD, CSE-GP403TS"
           total_power_w: "824"
       - category: EWCSC
@@ -104,6 +103,7 @@ items:
         quantity_per_instance: 1
         physical: false
         attributes:
+          seq: 2
           description: "0% 3 YRS LABOR, 3 YRS PARTS, 1 YR CRS UNDER LIMITED WRNTY"
           power_w: "N/A"
           total_power_w: "N/A"
@@ -112,44 +112,55 @@ items:
         quantity_per_instance: 1
         physical: true
         attributes:
+          seq: 3
           description: "GPU Baseboard Liquid Cooled, HGX B200 8-GPU 180GB"
           power_w: "9335"
+          total_power_w: "9335"
       - category: CPU
         inline_sku: PSE-TUR9575F-1554
         quantity_per_instance: 2
         physical: true
         attributes:
+          seq: 4
           description: "Turin 9575F DP/UP 64C/128T 3.3G 256MB 400W SP5 HF,RoHS---PSE-TUR9575F-1554"
           power_w: "400"
+          total_power_w: "800"
       - category: MEMORY
         inline_sku: MEM-DR512L-CL01-ER64
         quantity_per_instance: 24
         physical: true
         attributes:
+          seq: 5
           description: "128GB DDR5 RDIMM 6400 ECC REG---MEM-DR512L-CL01-ER64"
           total_capacity_gb: "3072"
           power_w: "14.2"
+          total_power_w: "340.8"
       - category: Drive
         inline_sku: HDS-MUN-MTFDKCC3T8TGP-15
         quantity_per_instance: 2
         physical: true
         attributes:
+          seq: 6
           description: "7500 PRO 3.8TB NVMe PCIe 4.0 3D TLC U.2 15mm,1DWPD TCG OPAL 2.0"
           total_capacity_gb: "7680"
           power_w: "15.5"
+          total_power_w: "31"
       - category: Drive
         inline_sku: HDS-SMN0-MZ1L2960HCJRA7
         quantity_per_instance: 1
         physical: true
         attributes:
+          seq: 7
           description: "Samsung PM9A3 960GB NVMe PCIe Gen4 V6 M.2 22x110M (1DWPD) SED"
           total_capacity_gb: "960"
           power_w: "8.2"
+          total_power_w: "8.2"
       - category: AOC Required Service
         inline_sku: SVC-NVSTDSWSUP-3Y
         quantity_per_instance: 1
         physical: false
         attributes:
+          seq: 10
           description: "1-NVIDIA ENT Business Standard Support Services for ADPTR-BF-SW,3 Years (software support only)"
           power_w: "N/A"
           total_power_w: "N/A"
@@ -158,6 +169,7 @@ items:
         quantity_per_instance: 1
         physical: true
         attributes:
+          seq: 11
           description: "MicroHi 2x4F/P3.0 to PCIe 2x4/P4.2,60cm,8.5A/p,RoHS"
           power_w: "N/A"
           total_power_w: "N/A"
@@ -166,6 +178,7 @@ items:
         quantity_per_instance: 1
         physical: false
         attributes:
+          seq: 12
           description: "Assembly"
           power_w: "N/A"
           total_power_w: "N/A"
@@ -174,6 +187,7 @@ items:
         quantity_per_instance: 1
         physical: false
         attributes:
+          seq: 13
           description: "OSNBD3"
           power_w: "N/A"
           total_power_w: "N/A"
