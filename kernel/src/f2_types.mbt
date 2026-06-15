@@ -46,8 +46,13 @@ pub(all) struct ZoneIn {
 
 /// A switch class with its derivation inputs. `override_quantity` is `None` on the
 /// derived path; `redundancy` ∈ {none,mclag,eslag}; `topology_mode` ∈ {clos,mesh}.
+/// `fabric_name` + `role` are the Clos spine-derivation keys (F6, Issue #63): the
+/// spine pass groups leaves (`role` ∈ {server-leaf,border-leaf}) under each spine
+/// (`role` == "spine") sharing the same `fabric_name`. Both are "" for mesh plans.
 pub(all) struct SwitchClassIn {
   switch_class_id : String
+  fabric_name : String
+  role : String
   override_quantity : Int?
   redundancy : String
   topology_mode : String

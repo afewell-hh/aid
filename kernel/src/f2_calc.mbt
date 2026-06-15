@@ -640,6 +640,15 @@ fn d_field_int(m : Map[String, Json], k : String) -> Int raise DecodeErr {
   }
 }
 
+// Optional string field defaulting to "" when absent (mesh plans carry no
+// fabric_name/role; the boundary stays backward-compatible — F6).
+fn d_str_or_empty(m : Map[String, Json], k : String) -> String raise DecodeErr {
+  match m.get(k) {
+    Some(j) => d_str(j)
+    None => ""
+  }
+}
+
 fn d_opt_int(m : Map[String, Json], k : String) -> Int? raise DecodeErr {
   match m.get(k) {
     Some(j) => if j is Number(n, ..) { Some(n.to_int()) } else { None }
@@ -683,6 +692,8 @@ fn d_switch_class_in(j : Json) -> SwitchClassIn raise DecodeErr {
   }
   {
     switch_class_id: d_field_str(m, "switch_class_id"),
+    fabric_name: d_str_or_empty(m, "fabric_name"),
+    role: d_str_or_empty(m, "role"),
     override_quantity: d_opt_int(m, "override_quantity"),
     redundancy: d_field_str(m, "redundancy"),
     topology_mode: d_field_str(m, "topology_mode"),
