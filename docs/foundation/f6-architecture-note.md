@@ -65,8 +65,11 @@ alternating/redundancy floor — which already reproduces `fe-leaf=2` and
 The oracle harness (`internal/oracle`) is already parametric over `Compositions()`
 (F5). Adding xoc-256 is one `Composition` row + one vendored snapshot + one
 catalog overlay; every Layer-A/B test then runs against it automatically — so the
-F6 deliverable is to make those existing tests **pass** for a derived (no-override)
-Clos plan, not to write new drivers.
+F6 deliverable is mostly to make those existing tests **pass** for a derived
+(no-override) Clos plan, not to write new drivers. The one harness change F6 does
+require is **extending the §3B wiring comparator** (it does not yet structurally
+cover `SwitchGroup`, per-switch `redundancy`/`groups`, or `fabric`-link pairings —
+§2.8); without that the structural bar would pass a wrong renderer (devb finding).
 
 ---
 
@@ -268,12 +271,40 @@ unbundled/mesh blocks add:
   `{spine}-fabric-{leaf}`, in (spine, leaf) order. No `ecmp` field.
 
 Requires `redundancy_type`/`redundancy_group` on the switch class (§2.6) and the
-uplink/fabric `SwitchPortZone`s (already ingested). The `§3B`
-`CompareWiringHhfab` comparator is structural and already iterates all
-Connections/Switches/SwitchGroups; the negative control
-`TestNegative_WiringComparatorNonVacuous` already proves it is non-vacuous (a
-dropped fabric ⇒ fail) — no comparator change expected, but confirm it diffs
-`fabric`/`SwitchGroup` kinds (devb check).
+uplink/fabric `SwitchPortZone`s (already ingested). **The comparator must be
+extended — see §2.8** (the renderer alone is not enough; the §3B bar does not
+currently catch a dropped/misnamed SwitchGroup, missing per-switch
+redundancy/groups, or a wrong fabric-link port pairing).
+
+### 2.8 ⚠️ Comparator extension (§3B) — REQUIRED (devb finding, expanded)
+
+devb verified that `internal/oracle/oracle.go::diffWiring` does **not** structurally
+cover three things F6 introduces; a GREEN renderer could emit wrong/absent
+wiring and still pass the current `CompareWiringHhfab` (relying only on `hhfab
+validate`). All three must be added to the structural bar:
+
+1. **`SwitchGroup` kind (devb's blocking finding).** `wiringKinds`
+   (`oracle.go:238`) = `{Connection, Server, Switch, VLANNamespace,
+   IPv4Namespace}` — no `SwitchGroup`. Add `"SwitchGroup"` to `wiringKinds`
+   (count check) **and** add a SwitchGroup **identity** check (name set,
+   analogous to the per-Switch loop at `:267-289`): every committed SwitchGroup
+   name present in the computed set and vice-versa. (`fe-mclag` is the only one in
+   xoc-256; backend has none.)
+2. **Per-switch `groups` + `redundancy` (`switchFacts:338-361`).** The
+   `switchFact` tuple captures profile/role/mac/portBreakouts/portSpeeds but
+   **not** `spec.groups` or `spec.redundancy.type`. Add both to `switchFact` and
+   diff them in `diffWiring` (`:265-289`), so a `fe-leaf` Switch missing `groups:
+   [fe-mclag]` or `redundancy: {type: mclag}` fails.
+3. **`fabric` link pairings (`connectionSet:304-336`).** Today the connection set
+   encodes only `unbundled` (`U|server|switch`) and `mesh` (`M|portA|portB`)
+   links; a `fabric` Connection contributes to the `Connection` *count* but its
+   `spec.fabric.links[].{leaf.port, spine.port}` pairs are never verified. Add a
+   `fabric` branch encoding each link as `F|leafPort|spinePort` into
+   `connectionSet`, so a wrong leaf↔spine split / spine-cursor offset fails.
+
+This is the comparator analogue of the F5 work; it stays composition-generic
+(mesh compositions have no fabric links / SwitchGroups, so xoc-64/128 are
+unaffected). Teeth for all three live in the negative control (§4.5).
 
 ### 2.5 BOM — count fabric-zone optics
 
@@ -360,15 +391,23 @@ All via the existing `Compositions()`-driven Layer-A/B tests once §3 is vendore
    (`TestLayerA_ExpectedCounts_SelfCheck` + `TestLayerA_Tripwires`).
 3. **BOM byte-exact:** `TestLayerA_BOMProjection` matches the vendored `bom.csv`
    (528 switch / 320 server transceivers; switch counts 2/1/4/2).
-4. **Wiring:** `TestLayerA_WiringHhfab` — both fabrics structurally equal (§3B,
-   **incl. the 2 frontend + 8 backend fabric Connections and the `fe-mclag`
-   SwitchGroup**) and each passes `hhfab validate`.
-5. **Derivation negative control with teeth (new):** perturb a derivation input
-   so the count flips and assert the oracle fails — e.g. shrink the spine
-   `fabric` zone (`be-fabric-downlinks` `"1-64"`→`"1-32"`) ⇒ `be-spine` becomes
-   `ceil(128/32)=4` ≠ 2 ⇒ count/BOM/wiring diverge ⇒ test fails; and widen a
-   leaf `uplink` zone ⇒ spine demand changes ⇒ fails. Commit these as the F6
-   teeth (mirror `negative_control_test.go`).
+4. **Wiring:** `TestLayerA_WiringHhfab` — both fabrics structurally equal under
+   the **§2.8-extended comparator** (the 2 frontend + 8 backend fabric Connections
+   with correct leaf↔spine link pairings, the `fe-mclag` SwitchGroup, and the
+   `fe-leaf` per-switch `groups`/`redundancy`) **and** each passes `hhfab
+   validate`. (Structural equivalence is the load-bearing check; `hhfab validate`
+   alone would not catch a misnamed SwitchGroup or a wrong fabric-link pairing.)
+5. **Negative controls with teeth (new), two families:**
+   - *Derivation:* perturb a derivation input so the count flips and assert the
+     oracle fails — shrink the spine `fabric` zone (`be-fabric-downlinks`
+     `"1-64"`→`"1-32"`) ⇒ `be-spine` = `ceil(128/32)=4` ≠ 2 ⇒ count/BOM/wiring
+     diverge ⇒ fail; widen a leaf `uplink` zone ⇒ spine demand changes ⇒ fail.
+   - *Comparator (proves §2.8 is load-bearing):* with the correct snapshot,
+     mutate the **computed** wiring and assert `CompareWiringHhfab` fails —
+     (a) drop/rename the `fe-mclag` SwitchGroup; (b) strip a `fe-leaf`
+     `groups`/`redundancy` block; (c) corrupt one fabric link's spine port. Each
+     must produce a diff (mirror `TestNegative_WiringComparatorNonVacuous`,
+     `negative_control_test.go:78-123`).
 6. **`moon prove` green** (unchanged cores; `spine_count` now on the path).
 7. **No regressions:** xoc-64 + xoc-128 Layer-A/B stay green (additive boundary +
    role-gated spine pass; mesh classes have no `spine` role).
@@ -400,16 +439,20 @@ fabric-link/BOM diffs, so the GREEN delta is visible (F2/F3/F5 convention).
 ## 6. RED → GREEN plan (after sign-off)
 
 1. **RED (deva):** vendor snapshot + overlay (§3); add the `Composition` row; add
-   the derivation negative-control test. Extend boundary types
-   (`calc.SwitchClassIn`, `f2_types.SwitchClassIn`, decode) and ingest
-   (`redundancy_type/group`) as *type/plumbing only* so the suite compiles and
-   fails on the missing spine count / fabric links / BOM optics. Capture the RED
-   report (spine=0, wiring/BOM diffs, neg-control red). **Push, PAUSE for devb.**
-2. **devb review** of the RED contract + boundary shape.
+   the derivation **and** comparator negative-control tests (§4.5). Extend
+   boundary types (`calc.SwitchClassIn`, `f2_types.SwitchClassIn`, decode) and
+   ingest (`redundancy_type/group`) as *type/plumbing only*, **and extend the
+   §3B comparator (§2.8)** so the structural bar actually covers SwitchGroup /
+   per-switch redundancy / fabric links — so the suite compiles and fails on the
+   missing spine count / fabric links / SwitchGroup / BOM optics. Capture the RED
+   report (spine=0, wiring/BOM/comparator diffs, neg-controls red). **Push, PAUSE
+   for devb.**
+2. **devb review** of the RED contract + boundary shape + comparator extension.
 3. **GREEN (deva):** kernel spine pass via `spine_count` (§2.2); wiring fabric
-   links + SwitchGroup (§2.4); BOM fabric optics (§2.5); `BuildCalcPlan` forwards
-   fabric/role + inline redundancy. Make all of §4 pass; `moon prove` green;
-   xoc-64/128 green. **Push, PAUSE for devb.**
+   links + SwitchGroup + per-switch groups/redundancy (§2.4); BOM fabric optics
+   (§2.5); `BuildCalcPlan` forwards fabric/role + inline redundancy. Make all of
+   §4 pass (incl. the §2.8-extended comparator); `moon prove` green; xoc-64/128
+   green. **Push, PAUSE for devb.**
 4. **devb review** of GREEN.
 5. **lead merges.** Never self-merge; PAUSE at each gate.
 
