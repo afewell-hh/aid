@@ -43,8 +43,11 @@ func Root() string {
 	return filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(file))), "tests", "oracle")
 }
 
-// LayerADir returns the xoc-64 mesh-conv-ro composition dir.
-func LayerADir() string { return filepath.Join(Root(), "xoc-64-mesh-conv-ro") }
+// LayerADir returns the xoc-64 mesh-conv-ro composition dir. It is the anchor for
+// the per-package engine unit tests (topology/wiring/bom), which validate engine
+// mechanics against xoc-64; the PARAMETRIC oracle suite iterates Compositions()
+// instead (Issue #62).
+func LayerADir() string { return XOC64().Dir() }
 
 // --- loaders (REAL — prove the harness is wired) ----------------------------
 
