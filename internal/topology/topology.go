@@ -97,6 +97,12 @@ type SwitchClassUse struct {
 	HedgehogRole     string `json:"hedgehog_role,omitempty"`
 	OverrideQuantity *int   `json:"override_quantity,omitempty"`
 	TopologyMode     string `json:"topology_mode,omitempty"` // spine-leaf | mesh
+	// RedundancyType/Group are inline MCLAG/ESLAG intent on the switch class (the
+	// real training form carries them here, not in a separate mclag_domains
+	// section — xoc-256 clos-ro, Issue #63). RedundancyType drives the calc floor;
+	// RedundancyGroup is the SwitchGroup the F4/F6 wiring renderer emits.
+	RedundancyType  string `json:"redundancy_type,omitempty"`  // mclag | eslag
+	RedundancyGroup string `json:"redundancy_group,omitempty"` // SwitchGroup name
 }
 
 // SwitchPortZone is a port-allocation zone on a switch class.
@@ -246,6 +252,8 @@ type rawSwitchClass struct {
 	HedgehogRole     string `json:"hedgehog_role"`
 	OverrideQuantity *int   `json:"override_quantity"`
 	TopologyMode     string `json:"topology_mode"`
+	RedundancyType   string `json:"redundancy_type"`
+	RedundancyGroup  string `json:"redundancy_group"`
 }
 
 // rawConnection mirrors the on-the-wire connection (target_zone is the single
@@ -426,6 +434,8 @@ func IngestBundled(yamlBytes []byte) (*Plan, *catalog.Catalog, error) {
 			HedgehogRole:     sw.HedgehogRole,
 			OverrideQuantity: sw.OverrideQuantity,
 			TopologyMode:     sw.TopologyMode,
+			RedundancyType:   sw.RedundancyType,
+			RedundancyGroup:  sw.RedundancyGroup,
 		})
 	}
 	plan.Spec.PortZones = doc.PortZones
@@ -541,6 +551,8 @@ func Rebundle(p *Plan, cat *catalog.Catalog) ([]byte, error) {
 		putIf(entry, "fabric_class", sw.FabricClass)
 		putIf(entry, "hedgehog_role", sw.HedgehogRole)
 		putIf(entry, "topology_mode", sw.TopologyMode)
+		putIf(entry, "redundancy_type", sw.RedundancyType)
+		putIf(entry, "redundancy_group", sw.RedundancyGroup)
 		if sw.OverrideQuantity != nil {
 			entry["override_quantity"] = *sw.OverrideQuantity
 		}

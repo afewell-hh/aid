@@ -55,8 +55,14 @@ type ZoneIn struct {
 
 // SwitchClassIn carries the derivation inputs. OverrideQuantity is nil on the
 // derived path; Redundancy ∈ {none,mclag,eslag}; TopologyMode ∈ {clos,mesh}.
+// FabricName + Role are the Clos spine-derivation keys (F6, Issue #63): the
+// kernel groups leaves (Role ∈ {server-leaf,border-leaf}) under each spine
+// (Role == "spine") sharing the same FabricName. Both are "" for mesh plans
+// that do not derive spine counts.
 type SwitchClassIn struct {
 	SwitchClassID    string   `json:"switch_class_id"`
+	FabricName       string   `json:"fabric_name"`
+	Role             string   `json:"role"`
 	OverrideQuantity *int     `json:"override_quantity,omitempty"`
 	Redundancy       string   `json:"redundancy"`
 	TopologyMode     string   `json:"topology_mode"`
@@ -247,9 +253,15 @@ func BuildCalcPlan(plan *topology.Plan, cat *catalog.Catalog) (CalcPlan, error) 
 		})
 	}
 
-	// switch_classes.
+	// switch_classes. Redundancy prefers the inline class field (the real
+	// training form carries redundancy_type directly on the switch class — xoc-256
+	// clos-ro, Issue #63); the separate mclag_domains section is the fallback for
+	// older fixtures.
 	for _, sw := range plan.Spec.SwitchClasses {
-		redundancy := redundancyByClass[sw.SwitchClassID]
+		redundancy := sw.RedundancyType
+		if redundancy == "" {
+			redundancy = redundancyByClass[sw.SwitchClassID]
+		}
 		if redundancy == "" {
 			redundancy = "none"
 		}
@@ -259,6 +271,8 @@ func BuildCalcPlan(plan *topology.Plan, cat *catalog.Catalog) (CalcPlan, error) 
 		}
 		cp.SwitchClasses = append(cp.SwitchClasses, SwitchClassIn{
 			SwitchClassID:    sw.SwitchClassID,
+			FabricName:       sw.FabricName,
+			Role:             sw.HedgehogRole,
 			OverrideQuantity: sw.OverrideQuantity,
 			Redundancy:       redundancy,
 			TopologyMode:     mode,

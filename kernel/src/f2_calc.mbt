@@ -434,6 +434,58 @@ fn qty_for(qtys : Array[ClassQty], class_id : String) -> Int {
   0
 }
 
+// is_leaf_role reports whether a switch role contributes uplink demand to a
+// spine (topology_calculations.py:948-953 — server-leaf / border-leaf).
+fn is_leaf_role(role : String) -> Bool {
+  role == "server-leaf" || role == "border-leaf"
+}
+
+// uplink_phys_ports is one leaf's per-switch uplink demand: the PHYSICAL port
+// count of its zone_type=="uplink" zones, NO breakout multiply
+// (get_uplink_port_count, topology_calculations.py:259-264). xoc-256 leaves carry
+// no uplink_ports_per_switch override, so the zone count is authoritative.
+fn uplink_phys_ports(sc : SwitchClassIn) -> Int {
+  let mut n = 0
+  for z in sc.zones {
+    if z.zone_type == "uplink" {
+      n = n + parse_port_spec(z.port_spec).length()
+    }
+  }
+  n
+}
+
+// fabric_capacity is a spine's per-switch downlink capacity: the LOGICAL port
+// count of its zone_type=="fabric" zones (physical × breakout), zone-based so no
+// uplink subtraction (calculate_spine_quantity, topology_calculations.py:989-1017).
+fn fabric_capacity(sc : SwitchClassIn) -> Int {
+  let mut cap = 0
+  for z in sc.zones {
+    if z.zone_type == "fabric" {
+      cap = cap + parse_port_spec(z.port_spec).length() * z.breakout_logical_ports
+    }
+  }
+  cap
+}
+
+// spine_qty derives a spine class's quantity from the leaf uplink demand in its
+// fabric (calculate_spine_quantity): demand = Σ_leaf leaf_qty × uplink_phys_ports,
+// over server/border leaves sharing the spine's fabric_name; quantity =
+// ceil(demand / fabric_capacity) via the PROVED `spine_count` core (Algorithm 2).
+// `leaf_qtys` carries the already-derived leaf quantities (pass 1).
+fn spine_qty(
+  spine : SwitchClassIn,
+  classes : Array[SwitchClassIn],
+  leaf_qtys : Array[ClassQty]
+) -> Int {
+  let mut demand = 0
+  for leaf in classes {
+    if is_leaf_role(leaf.role) && leaf.fabric_name == spine.fabric_name {
+      demand = demand + qty_for(leaf_qtys, leaf.switch_class_id) * uplink_phys_ports(leaf)
+    }
+  }
+  spine_count(demand, fabric_capacity(spine))
+}
+
 // Membership test over a string array (used to collect the distinct server
 // classes feeding a zone, in arrival order — Issue #61 fix 2).
 fn contains_str(xs : Array[String], s : String) -> Bool {
@@ -479,13 +531,31 @@ fn alloc_slot(
 }
 
 fn f2_run(plan : CalcPlan) -> CalcOutput2 {
-  // 1. switch quantity per class (override ?? derived).
-  let switch_quantity = []
+  // 1. switch quantity per class, in two passes (Clos spine derivation, F6 #63):
+  //   pass 1 — leaves (and any override / mesh class): per-zone ceil maxed across
+  //            server zones (compute_switch_qty), unchanged.
+  //   pass 2 — spines (role == "spine", no override): aggregate the pass-1 leaf
+  //            quantities in the same fabric into uplink demand and divide by the
+  //            spine fabric capacity via the proved `spine_count` core. The spine
+  //            depends on leaf counts, so it must run after pass 1.
+  let prelim = []
   for sc in plan.switch_classes {
-    switch_quantity.push({
+    prelim.push({
       class_id: sc.switch_class_id,
       quantity: compute_switch_qty(sc, plan.connections),
     })
+  }
+  let switch_quantity = []
+  for sc in plan.switch_classes {
+    let quantity = if sc.role == "spine" {
+      match sc.override_quantity {
+        Some(v) => v
+        None => spine_qty(sc, plan.switch_classes, prelim)
+      }
+    } else {
+      qty_for(prelim, sc.switch_class_id)
+    }
+    switch_quantity.push({ class_id: sc.switch_class_id, quantity })
   }
   // 2. server quantity — passthrough echo.
   let server_quantity = []
@@ -640,6 +710,15 @@ fn d_field_int(m : Map[String, Json], k : String) -> Int raise DecodeErr {
   }
 }
 
+// Optional string field defaulting to "" when absent (mesh plans carry no
+// fabric_name/role; the boundary stays backward-compatible — F6).
+fn d_str_or_empty(m : Map[String, Json], k : String) -> String raise DecodeErr {
+  match m.get(k) {
+    Some(j) => d_str(j)
+    None => ""
+  }
+}
+
 fn d_opt_int(m : Map[String, Json], k : String) -> Int? raise DecodeErr {
   match m.get(k) {
     Some(j) => if j is Number(n, ..) { Some(n.to_int()) } else { None }
@@ -683,6 +762,8 @@ fn d_switch_class_in(j : Json) -> SwitchClassIn raise DecodeErr {
   }
   {
     switch_class_id: d_field_str(m, "switch_class_id"),
+    fabric_name: d_str_or_empty(m, "fabric_name"),
+    role: d_str_or_empty(m, "role"),
     override_quantity: d_opt_int(m, "override_quantity"),
     redundancy: d_field_str(m, "redundancy"),
     topology_mode: d_field_str(m, "topology_mode"),

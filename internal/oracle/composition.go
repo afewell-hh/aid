@@ -55,6 +55,18 @@ func Compositions() []Composition {
 			TotalServers: 34, BOMRows: 23,
 			Managed: []string{"inb-mgmt", "scale-out-a", "scale-out-b", "soc-storage-a", "soc-storage-b"},
 		},
+		{
+			// xoc-256 (2×OPG-128) clos-ro — the first CLOS composition and the only
+			// place the switch-count DERIVATION path is exercised (no override_quantity;
+			// F6, Issue #63 / D24). 4 switch classes (fe-leaf/fe-spine/be-rail-leaf/
+			// be-spine), 2 managed fabrics, 1 compute server class. Derived counts:
+			// fe-leaf=2, fe-spine=1, be-rail-leaf=4, be-spine=2.
+			Name:          "xoc-256-2xopg128-clos-ro",
+			Overlay:       filepath.Join("tests", "oracle", "xoc-256-2xopg128-clos-ro", "optic-overlay.yaml"),
+			ServerClasses: 1, SwitchClasses: 4, Connections: 9,
+			TotalServers: 32, BOMRows: 11,
+			Managed: []string{"backend", "frontend"},
+		},
 	}
 }
 

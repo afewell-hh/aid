@@ -235,7 +235,7 @@ func decodeWiringCRDs(y []byte) ([]wiringCRD, error) {
 	return out, nil
 }
 
-var wiringKinds = []string{"Connection", "Server", "Switch", "VLANNamespace", "IPv4Namespace"}
+var wiringKinds = []string{"Connection", "Server", "Switch", "SwitchGroup", "VLANNamespace", "IPv4Namespace"}
 
 // diffWiring reports §3B differences between computed (got) and committed (want).
 func diffWiring(fabric string, got, want []wiringCRD) []string {
@@ -279,6 +279,12 @@ func diffWiring(fabric string, got, want []wiringCRD) []string {
 		if gf.mac != wf.mac {
 			d = append(d, pfx(fmt.Sprintf("Switch %s boot.mac=%q want %q", name, gf.mac, wf.mac)))
 		}
+		if gf.redundancy != wf.redundancy {
+			d = append(d, pfx(fmt.Sprintf("Switch %s redundancy.type=%q want %q", name, gf.redundancy, wf.redundancy)))
+		}
+		if gf.groups != wf.groups {
+			d = append(d, pfx(fmt.Sprintf("Switch %s groups=%q want %q", name, gf.groups, wf.groups)))
+		}
 		d = append(d, diffStrMap(pfx(fmt.Sprintf("Switch %s portBreakouts", name)), gf.breakouts, wf.breakouts)...)
 		d = append(d, diffStrMap(pfx(fmt.Sprintf("Switch %s portSpeeds", name)), gf.speeds, wf.speeds)...)
 	}
@@ -287,8 +293,33 @@ func diffWiring(fabric string, got, want []wiringCRD) []string {
 			d = append(d, pfx("unexpected Switch "+name))
 		}
 	}
+
+	// (4) SwitchGroup identity (F6 §2.8): the MCLAG/redundancy groups must match by
+	// name. Without this a renderer could drop/misname `fe-mclag` and still pass.
+	ggrp, wgrp := switchGroupSet(got), switchGroupSet(want)
+	for name := range wgrp {
+		if !ggrp[name] {
+			d = append(d, pfx("missing SwitchGroup "+name))
+		}
+	}
+	for name := range ggrp {
+		if !wgrp[name] {
+			d = append(d, pfx("unexpected SwitchGroup "+name))
+		}
+	}
 	sort.Strings(d)
 	return d
+}
+
+// switchGroupSet is the set of SwitchGroup metadata names (F6 §2.8).
+func switchGroupSet(crds []wiringCRD) map[string]bool {
+	set := map[string]bool{}
+	for _, c := range crds {
+		if c.Kind == "SwitchGroup" {
+			set[c.Metadata.Name] = true
+		}
+	}
+	return set
 }
 
 func kindCount(crds []wiringCRD, kind string) int {
@@ -331,12 +362,30 @@ func connectionSet(crds []wiringCRD) map[string]bool {
 				}
 			}
 		}
+		// fabric links (Clos leaf↔spine, F6 §2.8): "F|leafPort|spinePort". Encodes
+		// the directed pairing so a wrong leaf-uplink split or spine-cursor offset
+		// is caught — not just the Connection kind count.
+		if fab, ok := c.Spec["fabric"].(map[string]any); ok {
+			if links, ok := fab["links"].([]any); ok {
+				for _, l := range links {
+					lm, ok := l.(map[string]any)
+					if !ok {
+						continue
+					}
+					lp, _ := digStr(lm, "leaf", "port")
+					sp, _ := digStr(lm, "spine", "port")
+					set["F|"+lp+"|"+sp] = true
+				}
+			}
+		}
 	}
 	return set
 }
 
 type switchFact struct {
 	profile, role, mac string
+	redundancy         string   // spec.redundancy.type ("" if absent) — F6 §2.8
+	groups             string   // sorted spec.groups joined by "," — F6 §2.8
 	breakouts, speeds  map[string]string
 }
 
@@ -349,15 +398,33 @@ func switchFacts(crds []wiringCRD) map[string]switchFact {
 		profile, _ := digStr(c.Spec, "profile")
 		role, _ := digStr(c.Spec, "role")
 		mac, _ := digStr(c.Spec, "boot", "mac")
+		redundancy, _ := digStr(c.Spec, "redundancy", "type")
 		out[c.Metadata.Name] = switchFact{
-			profile:   profile,
-			role:      role,
-			mac:       mac,
-			breakouts: stringMap(c.Spec["portBreakouts"]),
-			speeds:    stringMap(c.Spec["portSpeeds"]),
+			profile:    profile,
+			role:       role,
+			mac:        mac,
+			redundancy: redundancy,
+			groups:     strSlice(c.Spec["groups"]),
+			breakouts:  stringMap(c.Spec["portBreakouts"]),
+			speeds:     stringMap(c.Spec["portSpeeds"]),
 		}
 	}
 	return out
+}
+
+// strSlice renders a YAML string list as a sorted, comma-joined key (order-
+// insensitive equality for the per-switch `groups` field — F6 §2.8).
+func strSlice(v any) string {
+	xs, ok := v.([]any)
+	if !ok {
+		return ""
+	}
+	out := make([]string, 0, len(xs))
+	for _, x := range xs {
+		out = append(out, fmt.Sprint(x))
+	}
+	sort.Strings(out)
+	return strings.Join(out, ",")
 }
 
 // digStr walks nested string-keyed maps and returns the terminal string.

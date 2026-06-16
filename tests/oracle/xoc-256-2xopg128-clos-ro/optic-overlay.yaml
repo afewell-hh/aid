@@ -1,0 +1,84 @@
+# AID-owned optic/identity catalog OVERLAY for the xoc-256 (2×OPG-128) clos-ro
+# BOM projection + wiring profile (F6, Issue #63).
+#
+# Per-composition overlay (lead decision, Issue #62; same provenance discipline as
+# the xoc-64/128 overlays). training.yaml `module_types` carry only
+# {id, manufacturer, model}; bom.csv cols 2/5/7–19 (model/manufacturer + the
+# optical-standard facts: cage/medium/connector/standard/reach/wavelength/lanes/
+# breakout) are PUBLIC FACTS AID OWNS. Authored BY HAND from public 200GBASE-SR2
+# facts — NOT read back from bom.csv (circular) and NOT imported from HNP. Merged
+# by pinned id onto the catalog extracted from training.yaml.
+#
+# Clos specifics vs the mesh overlays:
+#   1. One generic transceiver SKU `xcvr_generic_200g` (QSFP112-200GBASE-SR2)
+#      carries BOTH the server-side (320) and switch-side (528) optics — the
+#      switch side now includes the leaf-uplink + spine-fabric fabric-link cages
+#      (F6 §1.5/§2.5), not just server-facing cages.
+#   2. All four switch classes (fe-leaf/fe-spine/be-rail-leaf/be-spine) resolve to
+#      the device-type slug `celestica-ds5000` (bom model col + hhfab wiring
+#      profile); manufacturer title-cased Celestica.
+items:
+  # --- transceiver SKU (server + switch side; cols 7–19) ----------------------
+  - id: { name: xcvr_generic_200g, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Generic
+    model: QSFP112-200GBASE-SR2
+    description: "200G QSFP112 SR2 (MPO-12) — generic placeholder; replace with vendor SKU when qualified"
+    calc_profile:
+      cage_type: QSFP112
+      medium: MMF
+      connector: MPO-12
+      standard: 200GBASE-SR2
+      reach_class: SR
+      wavelength_nm: "850"
+      host_lane_count: "2"
+      host_serdes_gbps_per_lane: "100"
+      optical_lane_pattern: SR2
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 1x
+      is_cable_assembly: "false"
+
+  # --- NIC modules: cols 7–19 empty except gearbox_present "Unknown" ----------
+  - id: { name: nic_bf3_2x200, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: NVIDIA
+    model: BlueField-3 2x200G
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
+
+  - id: { name: nic_cx7_single_400, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: NVIDIA
+    model: ConnectX-7 Single-Port 400G
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
+
+  # --- base device descriptive identity (projection cols 2 + 5) --------------
+  - id: { name: compute, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OPG-256 Compute Server FE-BE
+
+  - id: { name: fe-leaf, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds5000
+  - id: { name: fe-spine, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds5000
+  - id: { name: be-rail-leaf, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds5000
+  - id: { name: be-spine, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds5000
