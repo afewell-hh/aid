@@ -272,6 +272,47 @@ func switchTransceiverLines(plan *topology.Plan, cat *catalog.Catalog, calcOut *
 		}
 	}
 
+	// Clos fabric-link cages (F6 §2.5): every leaf↔spine link carries an optic on
+	// BOTH ends. F2 does not emit fabric ports as endpoints (like mesh, they are
+	// plan-time derivable). Leaf side: every uplink-zone port on every leaf is
+	// populated → switch_qty × uplink-port-count. Spine side (link-derived, so a
+	// spare/under-subscribed spine downlink port is NOT counted): the number of
+	// links landing in the fabric == the leaf uplink total for that fabric.
+	roleByClass := map[string]string{}
+	fabricByClass := map[string]string{}
+	fabricHasSpine := map[string]bool{}
+	for _, sw := range plan.Spec.SwitchClasses {
+		roleByClass[sw.SwitchClassID] = sw.HedgehogRole
+		fabricByClass[sw.SwitchClassID] = sw.FabricName
+		if sw.HedgehogRole == "spine" {
+			fabricHasSpine[sw.FabricName] = true
+		}
+	}
+	isLeaf := func(role string) bool { return role == "server-leaf" || role == "border-leaf" }
+	leafUplinksByFabric := map[string]int{} // fabric → Σ leaf_qty × uplink ports (== link count)
+	for _, z := range plan.Spec.PortZones {
+		// Only a Clos fabric (one with a spine) carries leaf↔spine uplink optics; a
+		// leaf uplink zone in a spine-less (mesh) fabric is not a fabric link.
+		if z.ZoneType != "uplink" || !isLeaf(roleByClass[z.SwitchClassID]) || !fabricHasSpine[fabricByClass[z.SwitchClassID]] {
+			continue
+		}
+		n := countPorts(z.PortSpec) * switchQty[z.SwitchClassID]
+		countByTx[z.Transceiver] += n
+		leafUplinksByFabric[fabricByClass[z.SwitchClassID]] += n
+	}
+	// Spine downlink cages: one optic per link landing on the spine's fabric zone.
+	spineFabricCounted := map[string]bool{} // one attribution per (spine class) fabric zone SKU
+	for _, z := range plan.Spec.PortZones {
+		if z.ZoneType != "fabric" || roleByClass[z.SwitchClassID] != "spine" {
+			continue
+		}
+		if spineFabricCounted[z.SwitchClassID] {
+			continue
+		}
+		spineFabricCounted[z.SwitchClassID] = true
+		countByTx[z.Transceiver] += leafUplinksByFabric[fabricByClass[z.SwitchClassID]]
+	}
+
 	var out []ResolvedLine
 	for txID, n := range countByTx {
 		if txID == "" || n == 0 {

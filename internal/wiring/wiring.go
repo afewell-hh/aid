@@ -59,6 +59,7 @@ func Render(plan *topology.Plan, cat *catalog.Catalog, calcOut *calc.CalcOutput)
 	// Managed switch classes grouped by fabric_name; class metadata resolved once.
 	type swClass struct {
 		id, fabric, role, profile string
+		redType, redGroup         string
 		qty                       int
 		zones                     []topology.SwitchPortZone
 	}
@@ -71,6 +72,7 @@ func Render(plan *topology.Plan, cat *catalog.Catalog, calcOut *calc.CalcOutput)
 		item, _ := cat.Get(sw.ClassRef.ID)
 		classByID[sw.SwitchClassID] = swClass{
 			id: sw.SwitchClassID, fabric: sw.FabricName, role: sw.HedgehogRole,
+			redType: sw.RedundancyType, redGroup: sw.RedundancyGroup,
 			profile: item.Model, qty: switchQty[sw.SwitchClassID],
 		}
 		classesByFabric[sw.FabricName] = append(classesByFabric[sw.FabricName], sw.SwitchClassID)
@@ -103,6 +105,22 @@ func Render(plan *topology.Plan, cat *catalog.Catalog, calcOut *calc.CalcOutput)
 		var objs []any
 		objs = append(objs, vlanNamespaceCRD(), ipv4NamespaceCRD())
 
+		// SwitchGroups — one per distinct redundancy_group among the fabric's
+		// member classes (MCLAG; e.g. fe-mclag). Emitted before the switches that
+		// reference them, mirroring the committed wiring layout (note §2.4).
+		var groups []string
+		seenGroup := map[string]bool{}
+		for _, cid := range classesByFabric[fabric] {
+			if g := classByID[cid].redGroup; g != "" && !seenGroup[g] {
+				seenGroup[g] = true
+				groups = append(groups, g)
+			}
+		}
+		sort.Strings(groups)
+		for _, g := range groups {
+			objs = append(objs, switchGroupCRD(g))
+		}
+
 		// Switches — one per instance of each member class, sorted by device name.
 		type swInst struct {
 			name string
@@ -118,7 +136,7 @@ func Render(plan *topology.Plan, cat *catalog.Catalog, calcOut *calc.CalcOutput)
 		}
 		sort.Slice(switches, func(i, j int) bool { return switches[i].name < switches[j].name })
 		for _, s := range switches {
-			objs = append(objs, switchCRD(s.name, switchBootName(s.cls.id, s.idx), s.cls.profile, s.cls.role, s.cls.zones, breakouts))
+			objs = append(objs, switchCRD(s.name, switchBootName(s.cls.id, s.idx), s.cls.profile, s.cls.role, s.cls.redType, s.cls.redGroup, s.cls.zones, breakouts))
 		}
 
 		// Servers + unbundled Connections — one per F2 endpoint on this fabric.
@@ -157,6 +175,66 @@ func Render(plan *topology.Plan, cat *catalog.Catalog, calcOut *calc.CalcOutput)
 			objs = append(objs, meshCRDs(cid, c.qty, c.zones)...)
 		}
 
+		// Fabric Connections — Clos leaf↔spine links (F6 §1.5/§2.4). Each leaf's
+		// uplink ports are split into S contiguous groups (S = spine instances),
+		// one group per spine; each spine fills its fabric-zone downlinks with a
+		// per-spine cursor in leaf order. One Connection per (spine, leaf) pair.
+		type leafInst struct {
+			dev     string
+			uplinks []int
+		}
+		type spineInst struct {
+			dev       string
+			downlinks []int
+		}
+		var leaves []leafInst
+		var spines []spineInst
+		for _, cid := range classesByFabric[fabric] {
+			c := classByID[cid]
+			switch {
+			case isLeafRole(c.role):
+				up := zonePorts(c.zones, "uplink")
+				for i := 0; i < c.qty; i++ {
+					leaves = append(leaves, leafInst{dev: switchDevName(cid, i), uplinks: up})
+				}
+			case c.role == "spine":
+				down := zonePorts(c.zones, "fabric")
+				for i := 0; i < c.qty; i++ {
+					spines = append(spines, spineInst{dev: switchDevName(cid, i), downlinks: append([]int(nil), down...)})
+				}
+			}
+		}
+		sort.Slice(leaves, func(i, j int) bool { return leaves[i].dev < leaves[j].dev })
+		sort.Slice(spines, func(i, j int) bool { return spines[i].dev < spines[j].dev })
+		if s := len(spines); s > 0 {
+			cursor := make([]int, s) // per-spine downlink cursor, advanced in leaf order
+			for k := 0; k < s; k++ {
+				sp := spines[k]
+				for _, lf := range leaves {
+					pps := len(lf.uplinks) / s // ports this leaf devotes to each spine
+					if pps == 0 {
+						continue
+					}
+					var links []any
+					for n := 0; n < pps; n++ {
+						leafPort := "E1/" + strconv.Itoa(lf.uplinks[k*pps+n])
+						spinePort := "E1/" + strconv.Itoa(sp.downlinks[cursor[k]+n])
+						links = append(links, map[string]any{
+							"leaf":  map[string]any{"port": lf.dev + "/" + leafPort},
+							"spine": map[string]any{"port": sp.dev + "/" + spinePort},
+						})
+					}
+					cursor[k] += pps
+					name := trunc63(sanitize(sp.dev + "-fabric-" + lf.dev))
+					objs = append(objs, map[string]any{
+						"apiVersion": wiringAPI, "kind": "Connection",
+						"metadata": meta(name),
+						"spec":     map[string]any{"fabric": map[string]any{"links": links}},
+					})
+				}
+			}
+		}
+
 		y, err := marshalDocs(objs)
 		if err != nil {
 			return nil, fmt.Errorf("wiring: marshal fabric %q: %w", fabric, err)
@@ -184,13 +262,22 @@ func ipv4NamespaceCRD() map[string]any {
 	}
 }
 
-// switchCRD builds a Switch with role/profile/boot.mac and the port map. ecmp and
-// redundancy are deliberately omitted (note §2.3; no empty ecmp: {}).
-func switchCRD(name, bootName, profile, role string, zones []topology.SwitchPortZone, brk map[string]breakout) map[string]any {
+// switchCRD builds a Switch with role/profile/boot.mac and the port map. A leaf in
+// a redundancy group also carries spec.groups + spec.redundancy (MCLAG, F6 §2.4);
+// classes with no group omit both (no empty ecmp: {} either — note §2.3).
+func switchCRD(name, bootName, profile, role, redType, redGroup string, zones []topology.SwitchPortZone, brk map[string]breakout) map[string]any {
 	spec := map[string]any{
 		"role":    role,
 		"profile": profile,
 		"boot":    map[string]any{"mac": bootMAC(bootName)},
+	}
+	if redGroup != "" {
+		spec["groups"] = []any{redGroup}
+		if redType != "" {
+			// hhfab requires the group alongside the type (a redundancy type without
+			// a group is rejected at validate); the committed Switch carries both.
+			spec["redundancy"] = map[string]any{"type": redType, "group": redGroup}
+		}
 	}
 	breakouts, speeds := portMaps(zones, brk)
 	if len(breakouts) > 0 {
@@ -203,6 +290,30 @@ func switchCRD(name, bootName, profile, role string, zones []topology.SwitchPort
 		"apiVersion": wiringAPI, "kind": "Switch",
 		"metadata": meta(name), "spec": spec,
 	}
+}
+
+// switchGroupCRD builds a SwitchGroup (the MCLAG/redundancy group leaves
+// reference via spec.groups). spec is empty, matching the committed wiring.
+func switchGroupCRD(name string) map[string]any {
+	return map[string]any{
+		"apiVersion": wiringAPI, "kind": "SwitchGroup",
+		"metadata": meta(name), "spec": map[string]any{},
+	}
+}
+
+// isLeafRole reports whether a switch role connects up to spines (F6 §1.5).
+func isLeafRole(role string) bool { return role == "server-leaf" || role == "border-leaf" }
+
+// zonePorts enumerates, ascending, the physical ports of a class's zones of the
+// given zone_type (uplink for leaves, fabric for spines).
+func zonePorts(zones []topology.SwitchPortZone, zoneType string) []int {
+	var out []int
+	for _, z := range zones {
+		if z.ZoneType == zoneType {
+			out = append(out, enumeratePorts(z.PortSpec)...)
+		}
+	}
+	return out
 }
 
 func serverCRD(name string) map[string]any {
