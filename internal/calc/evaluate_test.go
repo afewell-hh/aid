@@ -11,6 +11,7 @@ package calc_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/afewell-hh/aid/internal/calc"
@@ -65,10 +66,13 @@ func TestEvaluate_SurfacesCalcErrorsAsData(t *testing.T) {
 	}
 }
 
-// TestEvaluate_HappyPath: on a valid plan Evaluate matches Compute — no errors, a
-// populated CalcOutput.
+// TestEvaluate_HappyPath: on a valid plan Evaluate must equal Compute EXACTLY —
+// they share the kernel path and differ only in that Evaluate does not fail on a
+// non-empty Errors. devb F7a RED finding 2: assert the equality directly, don't
+// just assert Evaluate is error-free.
 func TestEvaluate_HappyPath(t *testing.T) {
 	plan, cat := ingest(t, xoc64Training())
+
 	out, err := calc.Evaluate(plan, cat)
 	if err != nil {
 		t.Fatalf("Evaluate(xoc-64): unexpected err=%v", err)
@@ -76,7 +80,12 @@ func TestEvaluate_HappyPath(t *testing.T) {
 	if out == nil || len(out.Errors) != 0 {
 		t.Fatalf("Evaluate(xoc-64) must be error-free; got %+v", out)
 	}
-	if len(out.SwitchQuantity) == 0 || len(out.ServerQuantity) == 0 {
-		t.Fatalf("Evaluate(xoc-64) must populate switch/server quantities; got %+v", out)
+
+	want, err := calc.Compute(plan, cat)
+	if err != nil {
+		t.Fatalf("Compute(xoc-64) should succeed on a valid plan: %v", err)
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Evaluate(xoc-64) must equal Compute(xoc-64) on a valid plan\nEvaluate: %+v\nCompute:  %+v", out, want)
 	}
 }

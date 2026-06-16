@@ -7,12 +7,13 @@ package design_test
 // acceptance gate — plus the overlay-ordering and calc-errors-as-data contracts.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/afewell-hh/aid/internal/bom"
-	"github.com/afewell-hh/aid/internal/calc"
 	"github.com/afewell-hh/aid/internal/design"
 	"github.com/afewell-hh/aid/internal/oracle"
 )
@@ -122,14 +123,26 @@ func TestResolve_OverlayDoesNotAffectCalc(t *testing.T) {
 		t.Fatalf("Resolve(no overlay): %v", err)
 	}
 
-	if !sameQuantities(withOverlay.Calc.SwitchQuantity, noOverlay.Calc.SwitchQuantity) {
-		t.Errorf("switch quantities differ with vs without overlay — overlay must not affect calc\nwith:    %+v\nwithout: %+v",
-			withOverlay.Calc.SwitchQuantity, noOverlay.Calc.SwitchQuantity)
+	// FULL calc invariance (devb F7a RED finding 1): the overlay enriches only the
+	// BOM optic columns, so the ENTIRE CalcOutput — quantities, per-endpoint
+	// allocation IR, transceiver verdicts, AND errors — must be identical with and
+	// without it, not just the headline quantities. Anything less would let a
+	// GREEN that merged the overlay before calc slip through if it only perturbed
+	// endpoints/verdicts.
+	if !reflect.DeepEqual(withOverlay.Calc, noOverlay.Calc) {
+		t.Errorf("overlay changed the calc output — it must not affect calc at all\n--- with overlay ---\n%s\n--- without overlay ---\n%s",
+			mustJSON(t, withOverlay.Calc), mustJSON(t, noOverlay.Calc))
 	}
-	if !sameQuantities(withOverlay.Calc.ServerQuantity, noOverlay.Calc.ServerQuantity) {
-		t.Errorf("server quantities differ with vs without overlay — overlay must not affect calc\nwith:    %+v\nwithout: %+v",
-			withOverlay.Calc.ServerQuantity, noOverlay.Calc.ServerQuantity)
+}
+
+// mustJSON renders v as indented JSON for a readable diff in failure messages.
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
 	}
+	return string(b)
 }
 
 // TestResolve_CalcErrorsSurfacedAsData: a structurally-valid but over-allocating
@@ -153,21 +166,4 @@ func TestResolve_CalcErrorsSurfacedAsData(t *testing.T) {
 	if res.BOM != nil {
 		t.Errorf("BOM must be nil when calc has errors; got non-nil")
 	}
-}
-
-// sameQuantities compares two []calc.ClassQty as id→qty maps (order-independent).
-func sameQuantities(a, b []calc.ClassQty) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	m := make(map[string]int, len(a))
-	for _, q := range a {
-		m[q.ClassID] = q.Quantity
-	}
-	for _, q := range b {
-		if v, ok := m[q.ClassID]; !ok || v != q.Quantity {
-			return false
-		}
-	}
-	return true
 }
