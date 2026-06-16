@@ -1,10 +1,14 @@
 # F7 Surfaces — retarget CLI/REST/GUI onto the rebuilt engine; retire the old adapter path (Issue #64)
 
-**Status:** proposed — awaiting lead + devb sign-off before RED.
+**Status:** proposed — **rev2** (addresses devb review of `0236c3e`,
+[#64 comment](https://github.com/afewell-hh/aid/issues/64#issuecomment-4717087046):
+fixes the overlay-order contradiction (finding 1) and the unreachable
+calc/validation contract (finding 2, §1.1 + §3.0)). Awaiting re-review before RED.
 **Author:** deva. **Scope:** D25 *Surfaces only* — the **last** rebuild phase.
 Route the three user surfaces (CLI, REST, GUI) through the rebuilt engine
-(`topology.IngestBundled → catalog.Merge(overlay) → calc.Compute → bom.Render* /
-wiring.Render`) so they reproduce committed **oracle** results for **≥1 mesh
+(`topology.IngestBundled → calc.Compute → catalog.Merge(overlay) → bom.Render* /
+wiring.Render` — **calc runs on the base catalog; the overlay merges after calc,
+before BOM/wiring**, §1) so they reproduce committed **oracle** results for **≥1 mesh
 (xoc-64) + ≥1 Clos (xoc-256)** composition, then **retire** the old
 `internal/orchestrate` + Rust WASM adapter path. The MoonBit proved kernel
 (`calc.Compute → components.Kernel() → embed/kernel.wasm`), `wasmhost`, the F2/F3
@@ -73,31 +77,54 @@ type Inputs struct {
     OverlayYAML  []byte // optional AID optic/identity overlay (§2); nil ⇒ base catalog only
 }
 
-// Resolved is the fully-computed model every surface renders from.
+// Resolved is the fully-computed model every surface renders from. A non-nil
+// Resolved with a non-empty Calc.Errors is a VALID return: the plan ingested and
+// resolved, but the kernel reported calc-level constraint violations (e.g.
+// over-allocation). In that case BOM is nil and Wiring() refuses — quantities are
+// unreliable, so we never render a silently-wrong BOM/wiring (preserves the
+// calc.Compute fail-fast guarantee its engine-internal callers rely on).
 type Resolved struct {
     Plan     *topology.Plan
     Catalog  *catalog.Catalog
-    Calc     *calc.CalcOutput   // switch/server quantities, endpoints, transceiver verdicts
-    BOM      *bom.ResolvedModel  // fleet-scaled lines (projection + full views)
-    // wiring is rendered on demand (per-fabric) via Wiring(), not eagerly.
+    Calc     *calc.CalcOutput    // switch/server quantities, endpoints, verdicts, Errors
+    BOM      *bom.ResolvedModel  // nil iff len(Calc.Errors) > 0
 }
 
+func (r *Resolved) Valid() bool { return r.Calc != nil && len(r.Calc.Errors) == 0 }
+
 func Resolve(in Inputs) (*Resolved, error) {
+    // Structural failures (unparseable/unpinned/unresolved) are Go errors → the
+    // surface maps them to a structural 4xx. These are NOT "validation as data".
     plan, cat, err := topology.IngestBundled(in.TrainingYAML)        // F1
     if err != nil { return nil, err }
-    calcOut, err := calc.Compute(plan, cat)                          // F2 (base catalog)
+
+    // F2 on the BASE catalog, via the NON-FAILING accessor (§1.1). calc.Evaluate
+    // returns the decoded CalcOutput INCLUDING a populated Errors without failing
+    // the call; the Go error is reserved for infra failures (kernel load / marshal
+    // / decode / BuildCalcPlan). This is what makes "validation as data" reachable.
+    calcOut, err := calc.Evaluate(plan, cat)                         // F2 (base catalog)
     if err != nil { return nil, err }
-    if len(in.OverlayYAML) > 0 {                                     // §2 overlay merge
-        overlay, err := catalog.LoadBytes(in.OverlayYAML)            // (helper to add; see §2.3)
+
+    res := &Resolved{Plan: plan, Catalog: cat, Calc: calcOut}
+    if len(calcOut.Errors) > 0 {
+        return res, nil // valid ingest, calc violations surfaced as data; BOM stays nil
+    }
+
+    if len(in.OverlayYAML) > 0 {                                     // §2 overlay merge — AFTER calc
+        overlay, err := catalog.LoadBytes(in.OverlayYAML)           // helper to add (§2.3)
         if err != nil { return nil, err }
         cat.Merge(overlay)
     }
     model, err := bom.Resolve(plan, cat, calcOut)                    // F3
     if err != nil { return nil, err }
-    return &Resolved{plan, cat, calcOut, model}, nil
+    res.BOM = model
+    return res, nil
 }
 
 func (r *Resolved) Wiring(fabric string) ([]wiring.Doc, error) {    // F4, on demand
+    if !r.Valid() {
+        return nil, fmt.Errorf("cannot render wiring: calc has %d error(s)", len(r.Calc.Errors))
+    }
     docs, err := wiring.Render(r.Plan, r.Catalog, r.Calc)
     if err != nil { return nil, err }
     if fabric != "" { /* filter to docs[i].Fabric == fabric */ }
@@ -105,15 +132,43 @@ func (r *Resolved) Wiring(fabric string) ([]wiring.Doc, error) {    // F4, on de
 }
 ```
 
-**⚠️ Ordering is load-bearing and must match the oracle tests.** `calc.Compute`
-runs on the **base** extracted catalog (`oracle_test.go:32` ingest → `:88`/F3 test
-calls `calc.Compute` *before* `mergeOverlay` at `:48`). The overlay enriches
-optic/description fields (`bom.csv` cols 7–19) that **BOM/wiring** need but
-**calc** does not — `calc.BuildCalcPlan` resolves transceiver attrs from the
-*base* catalog's `calc_profile` (`calc.go:252,297`). The coordinator therefore
-merges the overlay **after** `calc.Compute` and **before** `bom.Resolve` /
-`wiring.Render`. RED will assert this ordering (a fixture that would change calc
-output if the overlay merged early is the teeth).
+### 1.1 Enabling change — a non-failing calc accessor (`calc.Evaluate`) (devb finding 2)
+`calc.Compute` **fails the call** whenever `CalcOutput.Errors` is non-empty
+(`calc.go:187-190`) — deliberately, so its engine-internal callers
+(`DeriveQuantities`, `bom.Resolve`, `wiring.Render`) never proceed on unreliable
+quantities (HNP allocator-raise analogue). That fail-fast is correct for them and
+**must stay**. But it makes the surface contract "return `CalcOutput` with
+`errors` as 200 data" **unreachable** through `Compute`. Resolution:
+
+- Add `calc.Evaluate(plan, cat) (*CalcOutput, error)` — the existing body of
+  `Compute` **minus** the `if len(co.Errors) > 0 { return ...err }` gate (lines
+  187-190). It returns the decoded `CalcOutput` (errors populated) and reserves
+  the Go error for genuine infra failures (`BuildCalcPlan`, kernel load, marshal,
+  decode).
+- Refactor `Compute` to call `Evaluate` then apply the gate, so the two share one
+  kernel-call path (no duplication, no behavior change for existing callers):
+  ```go
+  func Compute(plan, cat) (*CalcOutput, error) {
+      co, err := Evaluate(plan, cat)
+      if err != nil { return nil, err }
+      if len(co.Errors) > 0 { return nil, fmt.Errorf("calc: kernel reported ...") }
+      return co, nil
+  }
+  ```
+This is additive over the **same** F2 boundary/output — no boundary change, no new
+proof obligation (same kernel entry, same decode). The coordinator/surfaces use
+`Evaluate`; the engine-internal consumers keep `Compute`.
+
+**⚠️ Ordering is load-bearing and must match the oracle tests** (devb finding 1).
+`calc` runs on the **base** extracted catalog; the overlay merges **after** calc
+and **before** `bom.Resolve` / `wiring.Render`. Proven by the oracle harness:
+`calc.Compute` runs before `mergeOverlay` in both the BOM and wiring paths
+(`oracle_test.go:250`, `oracle_test.go:326`; ingest+mergeOverlay helpers at
+`:26-49`). The overlay enriches optic/description fields (`bom.csv` cols 7–19)
+that **BOM/wiring** need but **calc** does not — `calc.BuildCalcPlan` resolves
+transceiver attrs from the *base* catalog's `calc_profile` (`calc.go:252,297`).
+The headline scope (§ top) now states this order. RED asserts it (a fixture that
+would change calc output if the overlay merged early is the teeth).
 
 **No surface re-counts.** Surfaces consume `Resolved` only; they never re-derive
 quantities from the plan (the same anti-drift posture as `bom.Resolve` →
@@ -178,6 +233,43 @@ rebuilt engine returns **Go structs**: `calc.CalcOutput`
 `RenderFullBOM` (CSV; `bom.go`), `wiring.Doc{Fabric,YAML}` (`wiring.go:39-42`).
 The surfaces must move to these.
 
+### 3.0 The validation contract — two failure planes (devb finding 2)
+The old path exposed `orchestrate.ValidationResult{IsValid bool, Errors[{Code,
+Message}], Warnings[]}` from `export_validate`, and the surface tests assert it as
+data (`serve_test.go:288-320`: 200 + `is_valid:false` + a code in `errors`). The
+rebuilt engine has **no single `ValidationResult`** — failures live in two
+distinct planes, and F7 maps each explicitly:
+
+| Plane | Source | Meaning | Surface mapping |
+|---|---|---|---|
+| **Structural** | `topology.IngestBundled`/`ResolvePlan`/`Validate` Go errors; `calc.Evaluate` infra error (`topology.go:591`, `calc.go:165-184`) | Plan can't be modeled at all (unparseable, unpinned/unresolved ref, kernel load fail) | **Not** validation-as-data. REST → **422** `{"error": ...}`; CLI → stderr + non-zero exit |
+| **Calc constraint violations** | `CalcOutput.Errors` (`[]CalcIssue{Code,Message}`, `calc.go:142-153`), now reachable via `calc.Evaluate` (§1.1) | Plan modeled, but the kernel rejected the allocation (over-allocation, etc.) | **Validation-as-data.** REST → **200** with `is_valid:false` + `errors:[{code,message}]` |
+
+So the calc/validate response is **`{ "is_valid": <len(errors)==0>, "errors":
+[{code,message}], ... }`** — `is_valid` is derived in the surface from
+`len(Calc.Errors)`, preserving the GUI's badge + error-list with a minimal field
+rename (old `validation.is_valid`/`validation.errors` → top-level `is_valid`/
+`errors`). `Resolved.Valid()` (§1) is the single source of that boolean.
+
+**⚠️ Two honest scope boundaries (lead to confirm):**
+- **Warnings are dropped.** The old `ValidationResult.Warnings` came from
+  `export_validate`; the rebuilt engine produces none. The GUI never reads
+  warnings (`render.mbt:170-176` reads only `is_valid`+`errors`); only the CLI
+  printed them (`commands.go:59-63`). F7 **drops the warnings channel** (documented
+  behavior change). If wanted later, map non-pass `TransceiverVerdicts` →
+  warnings — follow-up, not F7.
+- **F7 surfaces only what the rebuilt engine already validates; it adds no kernel
+  validation logic.** The rebuilt calc errors cover what `f2_calculate` checks
+  (chiefly over-allocation). If a specific *old* constraint code (e.g.
+  `MCLAG_SWITCH_COUNT` from `export_validate`, asserted at `serve_test.go:320`) is
+  **not** emitted by the rebuilt kernel, that is a pre-existing engine gap, **out
+  of F7 scope**. RED therefore pins the rewritten invalid-plan test against a
+  fixture the rebuilt engine *genuinely* rejects (e.g. an over-allocated plan) and
+  asserts the **actual** `CalcIssue.Code` it emits — not the old code string. ⚠️
+  Lead: confirm we are not silently regressing a validation the product relied on;
+  if `MCLAG_SWITCH_COUNT` (or similar) must survive, that is a kernel-validation
+  add and a *separate* ticket, not F7.
+
 ### 3.1 CLI (`cmd/aid/commands.go`)
 Keep the command tree (`plan validate`, `topology calc`, `topology bom`,
 `export wiring`) — only the internals change:
@@ -187,19 +279,24 @@ Keep the command tree (`plan validate`, `topology calc`, `topology bom`,
 - `topology bom` → print `bom.RenderProjection(model)` for `--format csv`
   (the real 19-col HNP CSV); `--format json` → a structured view derived from
   `ResolvedModel.Lines` (§3.4). `--full` flag (new) → `RenderFullBOM`.
-- `export wiring` → `Resolved.Wiring(fabric)` → join `Doc.YAML` (unchanged shape).
-- `plan validate` → ingest + resolve; surface `topology.Validate` /
-  `calc.Compute` errors as the constraint violations (replaces
-  `orchestrate.Validate` + old `export_validate`).
+- `export wiring` → `Resolved.Wiring(fabric)` → join `Doc.YAML` (unchanged shape;
+  a calc-error plan exits non-zero with the violation, never emits wiring).
+- `plan validate` → `design.Resolve`; if it returns a **structural** Go error,
+  print it and exit non-zero; otherwise print `Valid()` + each `Calc.Errors`
+  entry as a constraint violation (§3.0). Replaces `orchestrate.Validate` + old
+  `export_validate`. Warnings are dropped (§3.0).
 
 ### 3.2 REST (`cmd/aid/serve.go`)
 Same routes; new response bodies (versioned implicitly by the rebuild — the old
 shapes had no external consumers but the GUI, which we update in lockstep):
-- `POST /api/plans/{id}/calc` → `{ "switch_quantity": {...}, "server_quantity":
-  {...}, "endpoints": [...], "transceiver_verdicts": [...], "errors": [...] }`
-  (marshal `CalcOutput` directly). Semantic errors stay **data** (200 with a
-  populated `errors`), per the existing `serve.go:194-196` contract; only an
-  ingest/structural failure is 422.
+- `POST /api/plans/{id}/calc` → `{ "is_valid": <bool>, "errors": [{code,message}],
+  "switch_quantity": {...}, "server_quantity": {...}, "endpoints": [...],
+  "transceiver_verdicts": [...] }` — built from `Resolved.Calc` + `Valid()`
+  (§3.0). Calc constraint violations stay **data** (200 with `is_valid:false` +
+  populated `errors`), preserving the `serve.go:194-196` posture; only a
+  **structural** ingest failure is 422. Reachable now via `calc.Evaluate` (§1.1) —
+  the old text said "marshal `CalcOutput` directly", which `calc.Compute` cannot
+  do because it fails on non-empty `Errors`; corrected.
 - `GET /api/plans/{id}/bom` → `{ "rows": [...], "suppressed_cable_assembly_count":
   N }` derived from `ResolvedModel` (§3.4). Add `?view=projection|full`
   (default `projection`) and `?format=csv` (returns `text/csv` via the renderer).
@@ -208,9 +305,10 @@ shapes had no external consumers but the GUI, which we update in lockstep):
 
 ### 3.3 GUI (`ui/src/render.mbt`, `ui/src/api.mbt`, `ui/test/`)
 - `calc_summary_html` (`render.mbt:161`) — retarget from `ir.nodes/edges/fabrics`
-  + `validation.is_valid` to the new `CalcOutput` shape: a per-class
-  **switch/server quantity** table + an errors list (validation surfaced as data,
-  same UX). 
+  + `validation.is_valid`/`validation.errors` to the new calc shape (§3.0):
+  read **top-level** `is_valid` + `errors[{code,message}]` (field move, not a
+  logic change — the badge + error-list UX is preserved) and add a per-class
+  **switch/server quantity** table from `switch_quantity`/`server_quantity`.
 - `bom_html` (`render.mbt:201`) — retarget from the hierarchical
   `boms[].line_items[]` to the flat `rows[]` shape (§3.4): a BOM table with the
   projection columns + fleet quantity. Keep the NetBox/Bootstrap styling.
@@ -280,16 +378,23 @@ wiring}`, `internal/components.Kernel()`, `internal/wasmhost`, `kernel/src`
 Per the issue's suggested order. Each pushes and **pauses at its gate** (never
 self-merge).
 
-- **F7a — Coordinator + CLI.** Add `internal/design` (§1) + `catalog.LoadBytes`
-  (§2.3); retarget the four CLI commands + add `--overlay`/`--full`/`aid design`.
-  **RED:** integration tests that run the CLI against the committed
-  `tests/oracle/xoc-64` + `xoc-256` artifacts and assert BOM CSV == committed
-  `bom.csv` and quantities == derived counts (real oracle reproduction, not
-  "runs"). **GREEN:** wire to the coordinator.
+- **F7a — Coordinator + CLI.** Add `internal/design` (§1), `calc.Evaluate` +
+  `Compute` refactor (§1.1), `catalog.LoadBytes` (§2.3); retarget the four CLI
+  commands + add `--overlay`/`--full`/`aid design`. **RED:** (i) integration tests
+  that run the CLI against the committed `tests/oracle/xoc-64` + `xoc-256`
+  artifacts and assert BOM CSV == committed `bom.csv` and quantities == derived
+  counts (real oracle reproduction, not "runs"); (ii) the **overlay-ordering**
+  teeth (§1.1) — a fixture whose calc output would change if the overlay merged
+  before calc; (iii) `calc.Evaluate` returns a populated `Errors` without a Go
+  error, and `Compute` still fails on the same input (the split is behavior-
+  preserving for engine-internal callers). **GREEN:** wire to the coordinator.
 - **F7b — REST.** Retarget `calcPlan`/`bomPlan`/`wiringPlan` to the coordinator;
-  add the overlay sub-resource (§2.3); new response shapes (§3.2). **RED:**
-  `httptest` integration asserting the calc/bom responses reproduce the oracle
-  for xoc-64 (mesh) + xoc-256 (Clos).
+  add the overlay sub-resource (§2.3); new response shapes (§3.0/§3.2). **RED:**
+  `httptest` integration asserting (i) calc/bom responses reproduce the oracle for
+  xoc-64 (mesh) + xoc-256 (Clos); (ii) the **validation-as-data** contract — a
+  genuinely-rejected fixture returns **200** with `is_valid:false` + the rebuilt
+  kernel's actual `CalcIssue.Code` (§3.0), while a **structural** failure returns
+  422; (iii) bom/wiring on a calc-error plan return 422.
 - **F7c — GUI.** Retarget `render.mbt` (§3.3) + `ui/test` fixtures; `make ui`
   regenerates `app.js`. **RED/GREEN:** `make ui-test` green against new shapes;
   `make ui` builds; `make ui-check` clean.
@@ -324,6 +429,16 @@ because it depends on F7b's response shapes.
 
 ## 7. Open questions for lead / devb (resolve before RED)
 
+**Resolved in rev2 (devb review of `0236c3e`, [#64 comment](https://github.com/afewell-hh/aid/issues/64#issuecomment-4717087046)):**
+- *Finding 1 (overlay/coordinator order):* headline (§ top) now states the correct
+  order — calc on base catalog, overlay merged after, consistent with §1/§1.1 and
+  `oracle_test.go:250,326`.
+- *Finding 2 (calc/validation contract reachability):* §1.1 adds the non-failing
+  `calc.Evaluate` accessor (keeping `Compute` fail-fast for engine callers); §3.0
+  defines the two-plane validation contract (structural → 4xx; calc errors →
+  `is_valid`/`errors` as 200 data) and the warnings/MCLAG scope boundaries.
+
+**Still open for lead:**
 1. **Coordinator package name** — `internal/design` proposed (mirrors the tool's
    purpose); alternatives `internal/pipeline` / `internal/engine`. Lead pick.
 2. **#38 confirmation** — I infer #38 is the adapter-CI-retirement surface; gh is
@@ -338,6 +453,12 @@ because it depends on F7b's response shapes.
    `abi.mbt` and only stop calling them? Proposed: delete, to make retirement
    real; confirm the prove gate is unaffected (it gates `kernel/proofs`, not the
    ABI shells).
+6. **Validation scope boundary (§3.0, NEW — from finding 2):** confirm F7 may
+   **drop the warnings channel** and surface only the validation the rebuilt
+   engine already performs. If a specific old `export_validate` constraint (e.g.
+   `MCLAG_SWITCH_COUNT`, `serve_test.go:320`) must keep firing, that is a
+   **kernel-validation add** = separate ticket, not F7 — confirm we are not
+   silently regressing a relied-upon check.
 
 ---
 
@@ -349,7 +470,14 @@ because it depends on F7b's response shapes.
   path: `oracle_test.go:26-49` (ingest+mergeOverlay) + the F3 chain
   (`calc.Compute → bom.Resolve → RenderProjection`) + F4 (`wiring.Render` +
   `hhfab validate`). Ordering (calc on base catalog, overlay merged after) read
-  from `oracle_test.go:32,48`.
+  from `oracle_test.go:32,48` and the BOM/wiring paths `oracle_test.go:250,326`.
+- **devb finding 2 (verified):** `calc.Compute` returns a Go error when
+  `CalcOutput.Errors` is non-empty (`calc.go:187-190`) — so "marshal `CalcOutput`
+  directly as 200 data" is unreachable through it; hence `calc.Evaluate` (§1.1).
+  `topology.Validate` also returns a plain Go error, not a structured result
+  (`topology.go:591-612`) → the rebuilt engine has no single `ValidationResult`;
+  §3.0 reconstructs the contract. Old structured contract the surface tests
+  assert: `serve_test.go:280,288-320` (incl. `MCLAG_SWITCH_COUNT`).
 - Signatures: `topology.IngestBundled(topology.go:288)`,
   `catalog.Merge(catalog.go:215)` / `Load(catalog.go:275)`,
   `calc.Compute(calc.go:164)` → `CalcOutput(calc.go:148-154)`,
