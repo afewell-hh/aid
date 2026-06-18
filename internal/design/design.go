@@ -12,13 +12,10 @@
 // extracted catalog; the overlay merges AFTER calc and BEFORE bom/wiring (the
 // overlay only enriches bom.csv optic cols 7–19, which calc never reads). Proven
 // by the oracle harness (oracle_test.go:250,326).
-//
-// F7a RED: the Inputs/Resolved types are the approved contract; Resolve and
-// Wiring are stubs returning errNotImplemented. GREEN wires them to the engine.
 package design
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/afewell-hh/aid/internal/bom"
 	"github.com/afewell-hh/aid/internal/calc"
@@ -26,9 +23,6 @@ import (
 	"github.com/afewell-hh/aid/internal/topology"
 	"github.com/afewell-hh/aid/internal/wiring"
 )
-
-// errNotImplemented marks the F7a RED stubs; GREEN removes it.
-var errNotImplemented = errors.New("design: not implemented (F7a RED)")
 
 // Inputs is one self-contained design request (note §1).
 type Inputs struct {
@@ -57,20 +51,68 @@ func (r *Resolved) Valid() bool {
 	return r != nil && r.Calc != nil && len(r.Calc.Errors) == 0
 }
 
-// Resolve runs the rebuilt engine end-to-end over the request (note §1). A
-// structural failure (unparseable / unpinned / unresolved / kernel infra) is a Go
-// error; calc constraint violations are returned as data on a non-nil Resolved
-// (see the type doc). F7a RED: stub.
+// Resolve runs the rebuilt engine end-to-end over the request (note §1):
+//
+//	IngestBundled → calc.Evaluate (BASE catalog) → catalog.Merge(overlay) → bom.Resolve
+//
+// ⚠️ Ordering: calc runs on the base extracted catalog; the overlay merges only
+// AFTER calc and before bom (it enriches bom.csv optic cols, which calc never
+// reads — note §1.1). A structural failure (unparseable / unpinned / unresolved /
+// kernel infra) is a Go error; calc constraint violations are returned as data on
+// a non-nil Resolved with BOM left nil (see the type doc).
 func Resolve(in Inputs) (*Resolved, error) {
-	_ = in
-	return nil, errNotImplemented
+	plan, cat, err := topology.IngestBundled(in.TrainingYAML)
+	if err != nil {
+		return nil, err
+	}
+	calcOut, err := calc.Evaluate(plan, cat)
+	if err != nil {
+		return nil, err
+	}
+	res := &Resolved{Plan: plan, Catalog: cat, Calc: calcOut}
+	if len(calcOut.Errors) > 0 {
+		// Valid ingest, but the kernel rejected the allocation: surface the
+		// violations as data, leave BOM nil (quantities are unreliable).
+		return res, nil
+	}
+	if len(in.OverlayYAML) > 0 {
+		overlay, err := catalog.LoadBytes(in.OverlayYAML)
+		if err != nil {
+			return nil, err
+		}
+		cat.Merge(overlay)
+	}
+	model, err := bom.Resolve(plan, cat, calcOut)
+	if err != nil {
+		return nil, err
+	}
+	res.BOM = model
+	return res, nil
 }
 
 // Wiring renders the hhfab wiring docs on demand (note §1, F4). It refuses with a
 // Go error when calc is invalid (BOM/wiring would be unreliable). An empty fabric
-// returns all managed-fabric docs; a non-empty fabric filters to that one. F7a
-// RED: stub.
+// returns all managed-fabric docs; a non-empty fabric filters to that one.
 func (r *Resolved) Wiring(fabric string) ([]wiring.Doc, error) {
-	_ = fabric
-	return nil, errNotImplemented
+	if !r.Valid() {
+		n := 0
+		if r != nil && r.Calc != nil {
+			n = len(r.Calc.Errors)
+		}
+		return nil, fmt.Errorf("design: cannot render wiring: calc has %d error(s)", n)
+	}
+	docs, err := wiring.Render(r.Plan, r.Catalog, r.Calc)
+	if err != nil {
+		return nil, err
+	}
+	if fabric == "" {
+		return docs, nil
+	}
+	var filtered []wiring.Doc
+	for _, d := range docs {
+		if d.Fabric == fabric {
+			filtered = append(filtered, d)
+		}
+	}
+	return filtered, nil
 }

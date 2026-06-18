@@ -470,6 +470,49 @@ func RenderProjection(m *ResolvedModel) ([][]string, error) {
 	return rows, nil
 }
 
+// RenderJSON renders the resolved model as JSON for the CLI/REST json view (note
+// §3.4). It REUSES the CSV renderers so the JSON and CSV views never drift: each
+// data row becomes an object keyed by the header columns; the trailing
+// "# suppressed_..." footer is surfaced as suppressed_cable_assembly_count. full
+// selects RenderFullBOM over RenderProjection.
+func RenderJSON(m *ResolvedModel, full bool) ([]byte, error) {
+	var (
+		rows [][]string
+		err  error
+	)
+	if full {
+		rows, err = RenderFullBOM(m)
+	} else {
+		rows, err = RenderProjection(m)
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"rows": []map[string]string{}}
+	if m != nil {
+		out["suppressed_cable_assembly_count"] = m.SuppressedCableAssemblyCount
+	}
+	if len(rows) == 0 {
+		return json.MarshalIndent(out, "", "  ")
+	}
+	header := rows[0]
+	objs := make([]map[string]string, 0, len(rows)-1)
+	for _, r := range rows[1:] {
+		if len(r) > 0 && strings.HasPrefix(r[0], "#") {
+			continue // footer note — already surfaced as suppressed_cable_assembly_count
+		}
+		obj := make(map[string]string, len(header))
+		for i, h := range header {
+			if i < len(r) {
+				obj[h] = r[i]
+			}
+		}
+		objs = append(objs, obj)
+	}
+	out["rows"] = objs
+	return json.MarshalIndent(out, "", "  ")
+}
+
 // --- helpers ------------------------------------------------------------------
 
 func qtyMap(qs []calc.ClassQty) map[string]int {

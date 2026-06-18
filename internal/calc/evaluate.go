@@ -1,30 +1,46 @@
 package calc
 
 import (
-	"errors"
+	"encoding/json"
+	"fmt"
 
 	"github.com/afewell-hh/aid/internal/catalog"
+	"github.com/afewell-hh/aid/internal/components"
 	"github.com/afewell-hh/aid/internal/topology"
 )
 
-// errNotImplemented marks the F7a RED stub; GREEN removes it.
-var errNotImplemented = errors.New("calc: Evaluate not implemented (F7a RED)")
-
-// Evaluate runs the SAME F2 kernel path as Compute but returns the decoded
-// CalcOutput WITHOUT failing when CalcOutput.Errors is non-empty. The Go error is
-// reserved for genuine infra failures (BuildCalcPlan / kernel load / marshal /
-// decode); calc-level constraint violations (over-allocation, etc.) come back as
-// data in the returned CalcOutput.Errors.
+// Evaluate resolves the plan+catalog into a calc-plan, runs the MoonBit kernel
+// over the D16 boundary, and returns the FULL decoded CalcOutput — INCLUDING a
+// populated Errors — WITHOUT failing the call. The Go error is reserved for
+// genuine infra failures (BuildCalcPlan / kernel load / marshal / decode);
+// calc-level constraint violations (over-allocation = ZONE_OVERFLOW, etc.) come
+// back as data in CalcOutput.Errors.
 //
 // This is the accessor the F7 surfaces coordinator (internal/design) uses so the
 // REST/CLI "validation as data" contract is reachable (note §1.1 / §3.0, devb
-// finding 2). Compute keeps failing on a non-empty Errors for its engine-internal
-// callers (DeriveQuantities, bom.Resolve, wiring.Render), which must not proceed
-// on unreliable quantities.
-//
-// F7a RED: stub. GREEN factors Compute into Evaluate + the error gate so the two
-// share one kernel-call path with no behavior change for existing callers.
+// finding 2). Compute wraps Evaluate and adds the fail-fast gate for its
+// engine-internal callers (DeriveQuantities, bom.Resolve, wiring.Render), which
+// must not proceed on unreliable quantities.
 func Evaluate(plan *topology.Plan, cat *catalog.Catalog) (*CalcOutput, error) {
-	_, _ = plan, cat
-	return nil, errNotImplemented
+	cp, err := BuildCalcPlan(plan, cat)
+	if err != nil {
+		return nil, err
+	}
+	in, err := json.Marshal(cp)
+	if err != nil {
+		return nil, fmt.Errorf("calc: marshal calc-plan: %w", err)
+	}
+	kernel, err := components.Kernel()
+	if err != nil {
+		return nil, fmt.Errorf("calc: load kernel: %w", err)
+	}
+	out, err := kernel.Call(components.KernelF2Calculate, in)
+	if err != nil {
+		return nil, fmt.Errorf("calc: kernel f2_calculate: %w", err)
+	}
+	var co CalcOutput
+	if err := json.Unmarshal(out, &co); err != nil {
+		return nil, fmt.Errorf("calc: decode calc-output: %w", err)
+	}
+	return &co, nil
 }
