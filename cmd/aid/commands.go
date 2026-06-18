@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -47,6 +48,56 @@ func printViolations(cmd *cobra.Command, res *design.Resolved) error {
 	return fmt.Errorf("plan is invalid: %d error(s)", len(res.Calc.Errors))
 }
 
+// printCalcSummary writes the CalcOutput surface for a valid plan: per-class
+// switch/server quantities plus an endpoint count and a transceiver-verdict
+// breakdown by outcome (note §3.1). Shared by `topology calc` and `aid design`.
+func printCalcSummary(out io.Writer, res *design.Resolved) {
+	fmt.Fprintln(out, "switch quantities:")
+	for _, q := range sortedQty(res.Calc.SwitchQuantity) {
+		fmt.Fprintf(out, "  %s: %d\n", q.ClassID, q.Quantity)
+	}
+	fmt.Fprintln(out, "server quantities:")
+	for _, q := range sortedQty(res.Calc.ServerQuantity) {
+		fmt.Fprintf(out, "  %s: %d\n", q.ClassID, q.Quantity)
+	}
+	fmt.Fprintf(out, "endpoints: %d\n", len(res.Calc.Endpoints))
+
+	byOutcome := map[string]int{}
+	for _, v := range res.Calc.TransceiverVerdicts {
+		byOutcome[v.Outcome]++
+	}
+	fmt.Fprintf(out, "transceiver verdicts: %d", len(res.Calc.TransceiverVerdicts))
+	if len(byOutcome) > 0 {
+		outcomes := make([]string, 0, len(byOutcome))
+		for o := range byOutcome {
+			outcomes = append(outcomes, o)
+		}
+		sort.Strings(outcomes)
+		parts := make([]string, 0, len(outcomes))
+		for _, o := range outcomes {
+			parts = append(parts, fmt.Sprintf("%s: %d", o, byOutcome[o]))
+		}
+		fmt.Fprintf(out, " (%s)", strings.Join(parts, ", "))
+	}
+	fmt.Fprintln(out)
+}
+
+// bomDataLines counts the BOM data rows (excluding the header and the
+// "# suppressed_..." footer) for the design summary.
+func bomDataLines(rows [][]string) int {
+	n := 0
+	for i, r := range rows {
+		if i == 0 {
+			continue // header
+		}
+		if len(r) > 0 && strings.HasPrefix(r[0], "#") {
+			continue // footer note
+		}
+		n++
+	}
+	return n
+}
+
 // csvString renders CSV rows as text. The committed bom.csv files contain no
 // quoted fields, so encoding/csv (which quotes only when required) reproduces them
 // byte-for-byte.
@@ -67,8 +118,50 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newPlanCmd(), newTopologyCmd(), newExportCmd(), newServeCmd())
+	root.AddCommand(newPlanCmd(), newTopologyCmd(), newExportCmd(), newServeCmd(), newDesignCmd())
 	return root
+}
+
+// newDesignCmd is the one-shot coordinator surface (note §5): resolve a plan
+// end-to-end through the rebuilt engine and print a consolidated summary —
+// validity, computed quantities + endpoint/verdict summary, BOM line count, and
+// the managed wiring fabrics.
+func newDesignCmd() *cobra.Command {
+	var overlay string
+	cmd := &cobra.Command{
+		Use:   "design <file>",
+		Short: "Resolve a plan end-to-end (quantities + BOM + wiring summary)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			res, err := resolve(args[0], overlay)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if !res.Valid() {
+				fmt.Fprintln(out, "✗ plan is invalid")
+				return printViolations(cmd, res)
+			}
+			fmt.Fprintln(out, "✓ plan is valid")
+			printCalcSummary(out, res)
+			rows, err := bom.RenderProjection(res.BOM)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "bom: %d line(s)\n", bomDataLines(rows))
+			docs, err := res.Wiring("")
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "wiring fabrics: %d\n", len(docs))
+			for _, d := range docs {
+				fmt.Fprintf(out, "  %s\n", d.Fabric)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&overlay, "overlay", "", "AID optic/identity overlay (YAML)")
+	return cmd
 }
 
 func newPlanCmd() *cobra.Command {
@@ -111,15 +204,7 @@ func newTopologyCmd() *cobra.Command {
 			if !res.Valid() {
 				return printViolations(cmd, res)
 			}
-			out := cmd.OutOrStdout()
-			fmt.Fprintln(out, "switch quantities:")
-			for _, q := range sortedQty(res.Calc.SwitchQuantity) {
-				fmt.Fprintf(out, "  %s: %d\n", q.ClassID, q.Quantity)
-			}
-			fmt.Fprintln(out, "server quantities:")
-			for _, q := range sortedQty(res.Calc.ServerQuantity) {
-				fmt.Fprintf(out, "  %s: %d\n", q.ClassID, q.Quantity)
-			}
+			printCalcSummary(cmd.OutOrStdout(), res)
 			return nil
 		},
 	}

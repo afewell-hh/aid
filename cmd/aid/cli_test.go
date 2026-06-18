@@ -67,6 +67,29 @@ func TestCLI_TopologyCalc(t *testing.T) {
 	if !strings.Contains(out, "soc_storage_scale_out_leaf") {
 		t.Errorf("calc output lacks the xoc-64 switch class:\n%s", out)
 	}
+	// note §3.1: calc also prints the endpoint + transceiver-verdict summary.
+	if !strings.Contains(out, "endpoints:") {
+		t.Errorf("calc output lacks the endpoint summary:\n%s", out)
+	}
+	if !strings.Contains(out, "transceiver verdicts:") {
+		t.Errorf("calc output lacks the transceiver-verdict summary:\n%s", out)
+	}
+}
+
+// TestCLI_Design exercises the one-shot `aid design` coordinator command (note
+// §5): validity + quantities + BOM line count + the managed wiring fabrics, for a
+// Clos plan.
+func TestCLI_Design(t *testing.T) {
+	training, overlay, _ := oracleArtifacts(t, "xoc-256-2xopg128-clos-ro")
+	out, err := execCmd("design", training, "--overlay", overlay)
+	if err != nil {
+		t.Fatalf("design: %v\n%s", err, out)
+	}
+	for _, want := range []string{"✓ plan is valid", "switch quantities", "be-rail-leaf", "bom:", "wiring fabrics:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("design output lacks %q:\n%s", want, out)
+		}
+	}
 }
 
 // TestCLI_TopologyBom_JSON: the json view is valid JSON carrying the rows array.
