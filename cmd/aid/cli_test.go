@@ -1,14 +1,15 @@
 package main
 
-// Per-subcommand RED tests. The four real subcommands fail (RunE stubs);
-// `serve` is a documented stub whose mux already returns 501 (locked here).
+// Per-subcommand tests for the F7a-retargeted CLI (over internal/design + the
+// rebuilt engine). These assert the NEW output shapes; the byte-exact oracle
+// reproduction (bom.csv) and the Clos derived counts + wiring live in
+// f7a_integration_test.go. Input is the DIET/training bundle + AID optic overlay.
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/afewell-hh/aid/internal/fixtures"
 )
 
 func execCmd(args ...string) (string, error) {
@@ -21,41 +22,84 @@ func execCmd(args ...string) (string, error) {
 	return buf.String(), err
 }
 
-func TestCLI_PlanValidate_InvalidPrintsHumanError(t *testing.T) {
-	out, _ := execCmd("plan", "validate", fixtures.PlanYAMLPath("invalid", "mclag-odd-count"))
-	// Non-zero exit is expected for an invalid plan; the human-readable message
-	// must name the violation.
-	if !strings.Contains(strings.ToLower(out), "mclag") {
-		t.Errorf("plan validate output lacks the MCLAG violation:\n%s", out)
+// overAllocFixture is the structurally-valid-but-over-allocating plan (xoc-64 with
+// one zone shrunk) — see tests/fixtures/f7a/overalloc-training.yaml.
+func overAllocFixture() string {
+	return filepath.Join("..", "..", "tests", "fixtures", "f7a", "overalloc-training.yaml")
+}
+
+// TestCLI_PlanValidate_Valid: a valid plan reports valid and exits zero.
+func TestCLI_PlanValidate_Valid(t *testing.T) {
+	training, overlay, _ := oracleArtifacts(t, "xoc-64-mesh-conv-ro")
+	out, err := execCmd("plan", "validate", training, "--overlay", overlay)
+	if err != nil {
+		t.Fatalf("valid plan should exit zero: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "valid") {
+		t.Errorf("expected a validity message:\n%s", out)
 	}
 }
 
+// TestCLI_PlanValidate_InvalidPrintsViolation: an over-allocating plan exits
+// non-zero and prints the constraint violation as a human-readable line (the
+// calc-errors-as-data surface, note §3.0).
+func TestCLI_PlanValidate_InvalidPrintsViolation(t *testing.T) {
+	out, err := execCmd("plan", "validate", overAllocFixture())
+	if err == nil {
+		t.Fatalf("invalid plan must exit non-zero; out=%s", out)
+	}
+	if !strings.Contains(out, "✗") {
+		t.Errorf("expected a printed violation (✗ line):\n%s", out)
+	}
+}
+
+// TestCLI_TopologyCalc: prints the computed switch/server quantities (the new
+// CalcOutput shape — the old IR node/edge summary is gone).
 func TestCLI_TopologyCalc(t *testing.T) {
-	out, err := execCmd("topology", "calc", fixtures.PlanYAMLPath("valid", "clos-small"))
+	training, overlay, _ := oracleArtifacts(t, "xoc-64-mesh-conv-ro")
+	out, err := execCmd("topology", "calc", training, "--overlay", overlay)
 	if err != nil {
-		t.Fatalf("topology calc: %v", err)
+		t.Fatalf("topology calc: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "node") {
-		t.Errorf("calc output lacks an IR summary:\n%s", out)
+	if !strings.Contains(out, "switch quantities") {
+		t.Errorf("calc output lacks the switch-quantity summary:\n%s", out)
+	}
+	if !strings.Contains(out, "soc_storage_scale_out_leaf") {
+		t.Errorf("calc output lacks the xoc-64 switch class:\n%s", out)
+	}
+	// note §3.1: calc also prints the endpoint + transceiver-verdict summary.
+	if !strings.Contains(out, "endpoints:") {
+		t.Errorf("calc output lacks the endpoint summary:\n%s", out)
+	}
+	if !strings.Contains(out, "transceiver verdicts:") {
+		t.Errorf("calc output lacks the transceiver-verdict summary:\n%s", out)
 	}
 }
 
+// TestCLI_Design exercises the one-shot `aid design` coordinator command (note
+// §5): validity + quantities + BOM line count + the managed wiring fabrics, for a
+// Clos plan.
+func TestCLI_Design(t *testing.T) {
+	training, overlay, _ := oracleArtifacts(t, "xoc-256-2xopg128-clos-ro")
+	out, err := execCmd("design", training, "--overlay", overlay)
+	if err != nil {
+		t.Fatalf("design: %v\n%s", err, out)
+	}
+	for _, want := range []string{"✓ plan is valid", "switch quantities", "be-rail-leaf", "bom:", "wiring fabrics:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("design output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestCLI_TopologyBom_JSON: the json view is valid JSON carrying the rows array.
 func TestCLI_TopologyBom_JSON(t *testing.T) {
-	out, err := execCmd("topology", "bom", fixtures.PlanYAMLPath("valid", "clos-small"), "--format", "json")
+	training, overlay, _ := oracleArtifacts(t, "xoc-64-mesh-conv-ro")
+	out, err := execCmd("topology", "bom", training, "--overlay", overlay, "--format", "json")
 	if err != nil {
-		t.Fatalf("topology bom: %v", err)
+		t.Fatalf("topology bom --format json: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "{") {
-		t.Errorf("bom json output empty:\n%s", out)
-	}
-}
-
-func TestCLI_ExportWiring(t *testing.T) {
-	out, err := execCmd("export", "wiring", fixtures.PlanYAMLPath("valid", "clos-small"), "--fabric", "frontend")
-	if err != nil {
-		t.Fatalf("export wiring: %v", err)
-	}
-	if !strings.Contains(out, "wiring.githedgehog.com") {
-		t.Errorf("wiring output lacks hhfab CRDs:\n%s", out)
+	if !strings.Contains(out, "\"rows\"") {
+		t.Errorf("bom json output lacks the rows array:\n%s", out)
 	}
 }

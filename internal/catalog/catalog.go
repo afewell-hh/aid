@@ -277,19 +277,27 @@ func Load(path string) (*Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
+	return LoadBytes(b)
+}
+
+// LoadBytes parses a catalog artifact (the AID-owned catalog/overlay YAML or JSON)
+// from an in-memory buffer — the path-free sibling of Load, used by the F7
+// surfaces coordinator (internal/design) to merge an overlay supplied via a CLI
+// flag / REST request without a temp file (note §2.3).
+func LoadBytes(b []byte) (*Catalog, error) {
 	// YAML→generic→JSON→typed so the json field tags apply (yaml.v3 alone would
 	// lowercase struct field names and miss snake_case tags).
 	var raw any
 	if err := yaml.Unmarshal(b, &raw); err != nil {
-		return nil, fmt.Errorf("catalog: parse %s: %w", path, err)
+		return nil, fmt.Errorf("catalog: parse: %w", err)
 	}
 	jsonBytes, err := json.Marshal(jsonify(raw))
 	if err != nil {
-		return nil, fmt.Errorf("catalog: normalize %s: %w", path, err)
+		return nil, fmt.Errorf("catalog: normalize: %w", err)
 	}
 	var cf catalogFile
 	if err := json.Unmarshal(jsonBytes, &cf); err != nil {
-		return nil, fmt.Errorf("catalog: decode %s: %w", path, err)
+		return nil, fmt.Errorf("catalog: decode: %w", err)
 	}
 	return New(cf.Items...)
 }
