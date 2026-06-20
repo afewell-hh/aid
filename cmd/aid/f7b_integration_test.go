@@ -270,27 +270,33 @@ func TestAPI_F7b_CalcErrorsSurfacedAsData(t *testing.T) {
 	}
 }
 
-// over-alloc plan: bom is GATED on no calc errors → structured 4xx, not a body.
+// over-alloc plan: bom is GATED on no calc errors → exactly 422 (note §3.0), with
+// a structured JSON error body — not a 200 BOM.
 func TestAPI_F7b_BOMGatedOnCalcErrors(t *testing.T) {
 	mux, dir := newTestAPI(t)
-	seedDIET(t, dir, "bad", filepath.Join("..", "..", "tests", "fixtures", "f7a", "overalloc-training.yaml"))
+	seedDIET(t, dir, "bad", overAllocFixture())
 
 	rec := do(t, mux, http.MethodGet, "/api/plans/bad/bom", nil)
-	if rec.Code < 400 || rec.Code >= 500 {
-		t.Fatalf("bom on a calc-error plan must be a 4xx, got %d; body=%s", rec.Code, rec.Body.String())
-	}
-	assertJSONError(t, rec, rec.Code)
+	assertJSONError(t, rec, http.StatusUnprocessableEntity)
 }
 
-// structural ingest failure (unparseable plan) → 4xx, NOT validation-as-data.
-func TestAPI_F7b_StructuralFailure_4xx(t *testing.T) {
+// over-alloc plan: wiring is GATED on no calc errors → exactly 422 (note §3.0)
+// (devb GREEN finding 2 — the missing wiring-on-calc-error path).
+func TestAPI_F7b_WiringGatedOnCalcErrors(t *testing.T) {
+	mux, dir := newTestAPI(t)
+	seedDIET(t, dir, "bad", overAllocFixture())
+
+	rec := do(t, mux, http.MethodGet, "/api/plans/bad/wiring/soc-storage-scale-out", nil)
+	assertJSONError(t, rec, http.StatusUnprocessableEntity)
+}
+
+// structural ingest failure (unparseable plan) → exactly 422 with a structured
+// JSON error (NOT validation-as-data) (devb GREEN finding 1 — pin the status).
+func TestAPI_F7b_StructuralFailure_422(t *testing.T) {
 	mux, dir := newTestAPI(t)
 	if err := os.WriteFile(filepath.Join(dir, "broken.yaml"), []byte("not: : valid: yaml\n  - ["), 0o644); err != nil {
 		t.Fatalf("seed broken: %v", err)
 	}
 	rec := do(t, mux, http.MethodPost, "/api/plans/broken/calc", nil)
-	if rec.Code < 400 || rec.Code >= 500 {
-		t.Fatalf("structural failure must be a 4xx, got %d; body=%s", rec.Code, rec.Body.String())
-	}
-	assertJSONError(t, rec, rec.Code)
+	assertJSONError(t, rec, http.StatusUnprocessableEntity)
 }
