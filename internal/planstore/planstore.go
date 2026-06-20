@@ -138,6 +138,55 @@ func (s *Store) GetYAML(id string) ([]byte, error) {
 	return b, nil
 }
 
+// overlayPath returns the on-disk path for id's optic/identity overlay
+// (<id>.overlay.yaml), or ErrInvalidID if id is unsafe. The overlay file shares
+// the .yaml suffix but its trimmed name (`<id>.overlay`) carries a dot, which
+// validID rejects — so List/Get never surface it as a phantom plan.
+func (s *Store) overlayPath(id string) (string, error) {
+	if !validID(id) {
+		return "", ErrInvalidID
+	}
+	return filepath.Join(s.dir, id+".overlay.yaml"), nil
+}
+
+// GetOverlay returns id's overlay YAML verbatim, ErrNotFound if no overlay has
+// been set, or ErrInvalidID. The F7 compute handlers treat ErrNotFound as "no
+// overlay supplied" and proceed with the base catalog.
+func (s *Store) GetOverlay(id string) ([]byte, error) {
+	path, err := s.overlayPath(id)
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return b, nil
+}
+
+// SetOverlay stores id's overlay YAML verbatim (<id>.overlay.yaml). The plan must
+// already exist (ErrNotFound otherwise); an unsafe id returns ErrInvalidID.
+func (s *Store) SetOverlay(id string, overlayBytes []byte) error {
+	planPath, err := s.path(id)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(planPath); err != nil {
+		if os.IsNotExist(err) {
+			return ErrNotFound
+		}
+		return err
+	}
+	opath, err := s.overlayPath(id)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(opath, overlayBytes, 0o644)
+}
+
 // Create parses id/name/status from the plan YAML (deriving the id from the name
 // when absent), writes <id>.yaml, and returns the summary. A malformed plan
 // returns ErrInvalidPlan; an unsafe id returns ErrInvalidID.
@@ -198,6 +247,11 @@ func (s *Store) Delete(id string) error {
 			return ErrNotFound
 		}
 		return err
+	}
+	// Best-effort: drop the companion overlay so it can't silently re-attach to a
+	// future plan reusing this id.
+	if opath, err := s.overlayPath(id); err == nil {
+		_ = os.Remove(opath)
 	}
 	return nil
 }

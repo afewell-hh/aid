@@ -1,13 +1,11 @@
 package main
 
-// Stage-A RED (issue #11): httptest handler tests over all 8 REST routes.
-// These encode the contract the GREEN implementation must satisfy:
-//   - plan CRUD happy + error paths (incl. path-traversal rejection on the id)
-//   - calc/bom/wiring over a fixture plan, reusing internal/orchestrate
-//   - structured JSON errors ({"error": ...})
-//   - kernel validation surfaced as DATA (200 with is_valid:false), not a 500
-// In the RED phase every handler is a stub returning 501, so all of these fail
-// for the right reason: the behavior is not implemented yet.
+// httptest handler tests for the REST surface. Plan CRUD + structured-JSON-error
+// coverage lives here (model-agnostic — unchanged by F7b). The compute-endpoint
+// behavior (calc/bom/wiring over the rebuilt engine, DIET input, overlay
+// sub-resource, two-plane validation) lives in f7b_integration_test.go against the
+// committed XOC oracles; the pre-F7b compute tests that asserted the retired
+// orchestrate shapes were removed in F7b (see the note below the CRUD section).
 
 import (
 	"bytes"
@@ -21,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/afewell-hh/aid/internal/fixtures"
-	"github.com/afewell-hh/aid/internal/orchestrate"
 	"github.com/afewell-hh/aid/internal/planstore"
 )
 
@@ -264,101 +261,22 @@ func TestAPI_DeletePlan_NotFound(t *testing.T) {
 	assertJSONError(t, rec, http.StatusNotFound)
 }
 
-// --- POST /api/plans/{id}/calc ----------------------------------------------
-
-func TestAPI_CalcPlan_Valid(t *testing.T) {
-	mux, dir := newTestAPI(t)
-	seedPlan(t, dir, "clos-small", "valid", "clos-small")
-	rec := do(t, mux, http.MethodPost, "/api/plans/clos-small/calc", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
-	}
-	var out struct {
-		IR struct {
-			Nodes []json.RawMessage `json:"nodes"`
-		} `json:"ir"`
-		Validation orchestrate.ValidationResult `json:"validation"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
-		t.Fatalf("decode calc: %v; body=%s", err, rec.Body.String())
-	}
-	if len(out.IR.Nodes) == 0 {
-		t.Errorf("calc produced no IR nodes")
-	}
-	if !out.Validation.IsValid {
-		t.Errorf("clos-small should be valid; errors=%+v", out.Validation.Errors)
-	}
-}
-
-// TestAPI_CalcPlan_InvalidSurfacedAsData is the key contract: a semantically
-// invalid (but decodable) plan returns 200 with validation.is_valid=false and
-// the violation in the errors array — NOT a 500.
-func TestAPI_CalcPlan_InvalidSurfacedAsData(t *testing.T) {
-	mux, dir := newTestAPI(t)
-	seedPlan(t, dir, "mclag-odd", "invalid", "mclag-odd-count")
-	rec := do(t, mux, http.MethodPost, "/api/plans/mclag-odd/calc", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("invalid plan calc must be 200 (validation as data), got %d; body=%s",
-			rec.Code, rec.Body.String())
-	}
-	var out struct {
-		Validation orchestrate.ValidationResult `json:"validation"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
-		t.Fatalf("decode calc: %v; body=%s", err, rec.Body.String())
-	}
-	if out.Validation.IsValid {
-		t.Errorf("mclag-odd-count must be invalid")
-	}
-	found := false
-	for _, e := range out.Validation.Errors {
-		if e.Code == "MCLAG_SWITCH_COUNT" {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("expected MCLAG_SWITCH_COUNT in validation errors; got %+v", out.Validation.Errors)
-	}
-}
-
-// --- GET /api/plans/{id}/bom ------------------------------------------------
-
-// TestAPI_BOM_PerUnitAndFleet covers the exit-gate requirement: a multi-level
-// device class (switch -> transceiver) yields per-unit AND fleet quantities.
-func TestAPI_BOM_PerUnitAndFleet(t *testing.T) {
-	mux, dir := newTestAPI(t)
-	seedPlan(t, dir, "switch-bom", "valid", "switch-bom")
-	rec := do(t, mux, http.MethodGet, "/api/plans/switch-bom/bom", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "quantity_per_unit") {
-		t.Errorf("BOM lacks per-unit quantities:\n%s", body)
-	}
-	if !strings.Contains(body, "fleet_quantity") {
-		t.Errorf("BOM lacks fleet totals:\n%s", body)
-	}
-}
+// --- compute endpoints: calc / bom / wiring ---------------------------------
+//
+// The compute-endpoint behavior — new CalcOutput JSON (is_valid + switch/server
+// quantities + endpoints + verdicts), bom rows[] via bom.RenderJSON, wiring Doc
+// YAML, DIET/training input, the overlay sub-resource, and two-plane validation —
+// is covered by f7b_integration_test.go against the committed XOC oracles. The
+// pre-F7b compute tests here asserted the retired orchestrate shapes (IR
+// envelope, hierarchical per-unit/fleet BOM, old export_validate codes like
+// MCLAG_SWITCH_COUNT — see note §3.0 scope boundary) on old-schema fixtures the
+// rebuilt engine does not ingest, so they were removed in F7b. The NotFound
+// guards below stay (model-agnostic).
 
 func TestAPI_BOM_NotFound(t *testing.T) {
 	mux, _ := newTestAPI(t)
 	rec := do(t, mux, http.MethodGet, "/api/plans/missing/bom", nil)
 	assertJSONError(t, rec, http.StatusNotFound)
-}
-
-// --- GET /api/plans/{id}/wiring/{fabric} ------------------------------------
-
-func TestAPI_Wiring(t *testing.T) {
-	mux, dir := newTestAPI(t)
-	seedPlan(t, dir, "clos-small", "valid", "clos-small")
-	rec := do(t, mux, http.MethodGet, "/api/plans/clos-small/wiring/frontend", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "wiring.githedgehog.com") {
-		t.Errorf("wiring output lacks hhfab CRDs:\n%s", rec.Body.String())
-	}
 }
 
 func TestAPI_Wiring_NotFound(t *testing.T) {
