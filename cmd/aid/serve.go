@@ -10,8 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/afewell-hh/aid/internal/orchestrate"
-	"github.com/afewell-hh/aid/internal/plan"
+	"github.com/afewell-hh/aid/internal/bom"
+	"github.com/afewell-hh/aid/internal/calc"
+	"github.com/afewell-hh/aid/internal/design"
 	"github.com/afewell-hh/aid/internal/planstore"
 	"github.com/afewell-hh/aid/ui"
 	"github.com/spf13/cobra"
@@ -106,6 +107,15 @@ func (a *api) routePlanID(w http.ResponseWriter, r *http.Request) {
 		default:
 			writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		}
+	case len(segs) == 2 && segs[1] == "overlay": // GET/PUT /api/plans/{id}/overlay
+		switch r.Method {
+		case http.MethodGet:
+			a.getOverlay(w, r, id)
+		case http.MethodPut:
+			a.putOverlay(w, r, id)
+		default:
+			writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
 	case len(segs) == 2 && segs[1] == "calc": // POST /api/plans/{id}/calc
 		if r.Method != http.MethodPost {
 			writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -191,54 +201,94 @@ func (a *api) deletePlan(w http.ResponseWriter, _ *http.Request, id string) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// calcPlan: POST /api/plans/{id}/calc → 200 {ir, validation}. Reuses
-// orchestrate.Calculate; semantic validation is surfaced as DATA (is_valid may
-// be false) with a 200 — never a 500.
+// resolve loads the plan's DIET/training YAML (+ optional companion overlay) and
+// runs the F7 coordinator (internal/design). A missing plan → 404; a structural
+// ingest failure → 422 (note §3.0). Calc constraint violations are NOT errors
+// here — they ride back on the Resolved as data (Resolved.Valid()==false).
+func (a *api) resolve(w http.ResponseWriter, id string) (*design.Resolved, bool) {
+	training, err := a.store.GetYAML(id)
+	if err != nil {
+		a.fail(w, err)
+		return nil, false
+	}
+	overlay, err := a.store.GetOverlay(id)
+	if err != nil && !errors.Is(err, planstore.ErrNotFound) {
+		a.fail(w, err)
+		return nil, false
+	}
+	res, err := design.Resolve(design.Inputs{TrainingYAML: training, OverlayYAML: overlay})
+	if err != nil {
+		writeJSONError(w, http.StatusUnprocessableEntity, "cannot resolve plan: "+err.Error())
+		return nil, false
+	}
+	return res, true
+}
+
+// calcView flattens CalcOutput (switch/server quantities, endpoints, verdicts,
+// errors) alongside the derived is_valid boolean (note §3.2).
+type calcView struct {
+	IsValid bool `json:"is_valid"`
+	*calc.CalcOutput
+}
+
+// calcPlan: POST /api/plans/{id}/calc → 200 CalcOutput + is_valid. Calc
+// constraint violations are surfaced as DATA (200, is_valid:false, populated
+// errors); only a structural failure is a 4xx (note §3.0).
 func (a *api) calcPlan(w http.ResponseWriter, _ *http.Request, id string) {
-	planJSON, ok := a.planJSON(w, id)
+	res, ok := a.resolve(w, id)
 	if !ok {
 		return
 	}
-	res, err := orchestrate.Calculate(planJSON)
+	writeJSON(w, http.StatusOK, calcView{IsValid: res.Valid(), CalcOutput: res.Calc})
+}
+
+// bomPlan: GET /api/plans/{id}/bom → 200 {rows, suppressed_cable_assembly_count}.
+// Gated on a valid calc (the BOM is unreliable otherwise → 422). ?view=full
+// renders the full purchasable BOM; ?format=csv returns text/csv.
+func (a *api) bomPlan(w http.ResponseWriter, r *http.Request, id string) {
+	res, ok := a.resolve(w, id)
+	if !ok {
+		return
+	}
+	if !res.Valid() {
+		writeJSONError(w, http.StatusUnprocessableEntity, "cannot compute BOM: plan has calc errors")
+		return
+	}
+	full := r.URL.Query().Get("view") == "full"
+	if r.URL.Query().Get("format") == "csv" {
+		rows, err := renderBOMRows(res.BOM, full)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		s, err := csvString(rows)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		w.Header().Set("Content-Type", "text/csv")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, s)
+		return
+	}
+	b, err := bom.RenderJSON(res.BOM, full)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if res.Ok == nil {
-		// Kernel rejected the plan (undecodable/structurally invalid) — distinct
-		// from a semantic validation failure (which returns Ok with is_valid:false).
-		writeJSONError(w, http.StatusUnprocessableEntity, "kernel rejected plan: "+string(res.Err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ir":         res.Ok.IR,
-		"validation": res.Ok.Validation,
-	})
-}
-
-// bomPlan: GET /api/plans/{id}/bom → 200 BOM JSON (per-unit + fleet totals).
-func (a *api) bomPlan(w http.ResponseWriter, _ *http.Request, id string) {
-	planJSON, ok := a.planJSON(w, id)
-	if !ok {
-		return
-	}
-	out, err := orchestrate.ExportBOM(planJSON, "json")
-	if err != nil {
-		writeJSONError(w, http.StatusUnprocessableEntity, "cannot compute BOM: "+err.Error())
-		return
-	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, out.Content)
+	_, _ = w.Write(b)
 }
 
-// wiringPlan: GET /api/plans/{id}/wiring/{fabric} → 200 wiring YAML.
+// wiringPlan: GET /api/plans/{id}/wiring/{fabric} → 200 wiring YAML for the
+// fabric. Gated on a valid calc (Resolved.Wiring refuses otherwise → 422).
 func (a *api) wiringPlan(w http.ResponseWriter, _ *http.Request, id, fabric string) {
-	planJSON, ok := a.planJSON(w, id)
+	res, ok := a.resolve(w, id)
 	if !ok {
 		return
 	}
-	docs, err := orchestrate.ExportWiring(planJSON, fabric)
+	docs, err := res.Wiring(fabric)
 	if err != nil {
 		writeJSONError(w, http.StatusUnprocessableEntity, "cannot export wiring: "+err.Error())
 		return
@@ -249,27 +299,39 @@ func (a *api) wiringPlan(w http.ResponseWriter, _ *http.Request, id, fabric stri
 		if i > 0 {
 			_, _ = io.WriteString(w, "---\n")
 		}
-		_, _ = io.WriteString(w, d.YAML)
-		if !strings.HasSuffix(d.YAML, "\n") {
+		_, _ = w.Write(d.YAML)
+		if len(d.YAML) > 0 && d.YAML[len(d.YAML)-1] != '\n' {
 			_, _ = io.WriteString(w, "\n")
 		}
 	}
 }
 
-// planJSON loads the plan YAML for id and converts it to the kernel plan JSON.
-// It writes the appropriate error response and returns ok=false on failure.
-func (a *api) planJSON(w http.ResponseWriter, id string) ([]byte, bool) {
-	yamlBytes, err := a.store.GetYAML(id)
+// getOverlay: GET /api/plans/{id}/overlay → 200 overlay YAML (verbatim) or 404 if
+// none has been set (note §2.3).
+func (a *api) getOverlay(w http.ResponseWriter, _ *http.Request, id string) {
+	b, err := a.store.GetOverlay(id)
 	if err != nil {
 		a.fail(w, err)
-		return nil, false
+		return
 	}
-	planJSON, err := plan.YAMLToJSON(yamlBytes)
+	w.Header().Set("Content-Type", "application/x-yaml")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(b)
+}
+
+// putOverlay: PUT /api/plans/{id}/overlay (body = overlay YAML) → 204. The plan
+// must already exist (404 otherwise).
+func (a *api) putOverlay(w http.ResponseWriter, r *http.Request, id string) {
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeJSONError(w, http.StatusUnprocessableEntity, "invalid plan YAML: "+err.Error())
-		return nil, false
+		writeJSONError(w, http.StatusBadRequest, "read body: "+err.Error())
+		return
 	}
-	return planJSON, true
+	if err := a.store.SetOverlay(id, body); err != nil {
+		a.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // defaultPlansDir is ~/.aid/plans (consistent with internal/state's ~/.aid).
