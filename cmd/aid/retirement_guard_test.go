@@ -52,6 +52,19 @@ var retiredComponentSymbols = []string{
 	"KernelCalculate", "KernelValidate", "HhfabExport", "BomExport",
 }
 
+// retiredBuildConfig pins the CI/Makefile retirement surfaces the F7 note lists
+// for F7d: the Rust-adapter cargo-test steps + cache, the hhfab-wasm/bom-wasm Make
+// targets, the embed-check entries for those two, and the old orchestrate
+// golden-path CI gate (re-pointed at the oracle wiring test). Each token must be
+// ABSENT from the file after F7d.
+var retiredBuildConfig = map[string][]string{
+	"Makefile": {"hhfab-wasm", "bom-wasm", "hhfab-adapter", "bom-adapter", "hhfab.wasm", "bom.wasm"},
+	filepath.Join(".github", "workflows", "ci.yml"): {
+		"hhfab-adapter", "bom-adapter", "cargo test",
+		"TestGolden_WiringValidatesWithHhfab", "internal/orchestrate",
+	},
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
@@ -116,6 +129,21 @@ func TestRetirement_OldPathRemoved(t *testing.T) {
 	for _, sym := range retiredComponentSymbols {
 		if strings.Contains(string(b), sym) {
 			t.Errorf("components.go still references retired symbol %q (F7d must remove it)", sym)
+		}
+	}
+
+	// CI/Makefile must no longer carry the adapter build/test surfaces or the old
+	// orchestrate golden-path gate.
+	for rel, tokens := range retiredBuildConfig {
+		cb, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Errorf("read %s: %v", rel, err)
+			continue
+		}
+		for _, tok := range tokens {
+			if strings.Contains(string(cb), tok) {
+				t.Errorf("%s still contains retired build-config token %q (F7d must remove it)", rel, tok)
+			}
 		}
 	}
 }
