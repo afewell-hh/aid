@@ -11,6 +11,7 @@ package main
 // (intentional behavior change), and internal/orchestrate stays until F7d.
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -186,26 +187,46 @@ func TestAPI_F7b_BOM_ReproducesOracle(t *testing.T) {
 
 // --- GET /api/plans/{id}/wiring/{fabric} --------------------------------------
 
-func TestAPI_F7b_Wiring_ReproducesFabric(t *testing.T) {
-	training, overlay, _ := oracleArtifacts(t, "xoc-256-2xopg128-clos-ro")
+// TestAPI_F7b_Wiring_ReproducesOracle fetches EVERY managed fabric via REST,
+// assembles the fabric→YAML map, and asserts structural equivalence to the
+// committed oracle wiring/ dir (the REST analogue of the engine wiring oracle) —
+// not just that the CRD API-group string appears (devb RED finding 1).
+func TestAPI_F7b_Wiring_ReproducesOracle(t *testing.T) {
+	comp := "xoc-256-2xopg128-clos-ro"
+	training, overlay, _ := oracleArtifacts(t, comp)
 	mux, dir := newTestAPI(t)
 	seedDIET(t, dir, "p", training)
 	seedOverlayFile(t, dir, "p", overlay)
 
-	rec := do(t, mux, http.MethodGet, "/api/plans/p/wiring/frontend", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("wiring status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	var c oracle.Composition
+	for _, cand := range oracle.Compositions() {
+		if cand.Name == comp {
+			c = cand
+		}
 	}
-	if !strings.Contains(rec.Body.String(), "wiring.githedgehog.com") {
-		t.Errorf("wiring output lacks hhfab CRDs:\n%s", rec.Body.String())
+	computed := map[string][]byte{}
+	for _, fabric := range c.Managed {
+		rec := do(t, mux, http.MethodGet, "/api/plans/p/wiring/"+fabric, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("wiring/%s status: got %d want 200; body=%s", fabric, rec.Code, rec.Body.String())
+		}
+		computed[fabric] = append([]byte(nil), rec.Body.Bytes()...)
+	}
+	diff, err := oracle.CompareWiringHhfab(computed, filepath.Join(c.Dir(), "wiring"))
+	if err != nil {
+		t.Fatalf("CompareWiringHhfab: %v", err)
+	}
+	if !diff.Equal {
+		t.Errorf("%s REST wiring != committed oracle: %v", comp, diff.Details)
 	}
 }
 
 // --- GET/PUT /api/plans/{id}/overlay (new sub-resource) -----------------------
 
+// TestAPI_F7b_Overlay_RoundTrip asserts EXACT byte fidelity: GET returns verbatim
+// what PUT stored (devb RED finding 2), not merely that it contains "items".
 func TestAPI_F7b_Overlay_RoundTrip(t *testing.T) {
-	_, overlay, _ := oracleArtifacts(t, "xoc-64-mesh-conv-ro")
-	training, _, _ := oracleArtifacts(t, "xoc-64-mesh-conv-ro")
+	training, overlay, _ := oracleArtifacts(t, "xoc-64-mesh-conv-ro")
 	mux, dir := newTestAPI(t)
 	seedDIET(t, dir, "p", training)
 
@@ -221,8 +242,8 @@ func TestAPI_F7b_Overlay_RoundTrip(t *testing.T) {
 	if get.Code != http.StatusOK {
 		t.Fatalf("GET overlay: got %d want 200; body=%s", get.Code, get.Body.String())
 	}
-	if !strings.Contains(get.Body.String(), "items") {
-		t.Errorf("GET overlay did not round-trip the overlay YAML:\n%s", get.Body.String())
+	if !bytes.Equal(get.Body.Bytes(), body) {
+		t.Errorf("overlay did not round-trip exactly: PUT %d bytes, GET %d bytes", len(body), get.Body.Len())
 	}
 }
 
