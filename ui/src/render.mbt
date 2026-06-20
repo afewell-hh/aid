@@ -42,14 +42,6 @@ fn arr_at(j : Json, key : String) -> Array[Json] {
   }
 }
 
-// count_at returns the length of the array at j[key1][key2] (0 if absent).
-fn count_at(j : Json, key1 : String, key2 : String) -> Int {
-  match get(j, key1) {
-    Some(sub) => arr_at(sub, key2).length()
-    None => 0
-  }
-}
-
 // esc HTML-escapes text destined for element content / attributes.
 fn esc(s : String) -> String {
   let mut out = ""
@@ -63,16 +55,6 @@ fn esc(s : String) -> String {
         '\'' => "&#39;"
         _ => c.to_string()
       })
-  }
-  out
-}
-
-fn repeat(s : String, n : Int) -> String {
-  let mut out = ""
-  let mut i = 0
-  while i < n {
-    out = out + s
-    i = i + 1
   }
   out
 }
@@ -156,30 +138,49 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "<div id=\"detail-result\" class=\"mt-3\"></div>"
 }
 
-// calc_summary_html: the validation result (a green/red badge + any error codes)
-// and an IR summary (nodes/edges/fabrics) — validation surfaced as data.
+// quantity_table renders a class_id→quantity table for a CalcOutput quantity
+// array (switch_quantity / server_quantity); "" when the array is empty.
+fn quantity_table(root : Json, key : String, title : String) -> String {
+  let items = arr_at(root, key)
+  if items.length() == 0 {
+    return ""
+  }
+  let mut rows = ""
+  for q in items {
+    rows = rows +
+      "<tr><td>\{esc(str_at(q, "class_id"))}</td><td class=\"text-end\">\{int_at(q, "quantity").to_string()}</td></tr>"
+  }
+  "<h4 class=\"h6\">\{title}</h4>" +
+  "<table class=\"table table-sm mb-3\"><thead><tr><th>Class</th><th class=\"text-end\">Qty</th></tr></thead>" +
+  "<tbody>\{rows}</tbody></table>"
+}
+
+// calc_summary_html: the F7b calc result, rendered as the two-plane validation
+// (note §3.0). A STRUCTURAL failure arrives as a 4xx {"error": ...} body and
+// renders as a distinct danger alert (no Valid/Invalid badge). Otherwise the calc
+// result is DATA: an is_valid badge, the computed switch/server quantities, an
+// endpoint/verdict summary, and any calc constraint violations listed as errors.
 pub fn calc_summary_html(calc_json : String) -> String {
   let root = try {
     @json.parse(calc_json)
   } catch {
     _ => return warn_box("Could not parse calc result.")
   }
-  let nodes = count_at(root, "ir", "nodes").to_string()
-  let edges = count_at(root, "ir", "edges").to_string()
-  let fabrics = count_at(root, "ir", "fabrics").to_string()
-  let is_valid = match get(root, "validation") {
-    Some(v) => bool_at(v, "is_valid")
-    None => false
+  // Structural plane: a 4xx {"error": ...} body, distinct from calc-as-data.
+  match get(root, "error") {
+    Some(String(msg)) =>
+      return "<div class=\"alert alert-danger\"><strong>Cannot resolve plan:</strong> \{esc(msg)}</div>"
+    _ => ()
   }
-  let errors = match get(root, "validation") {
-    Some(v) => arr_at(v, "errors")
-    None => []
-  }
+  let is_valid = bool_at(root, "is_valid")
   let badge = if is_valid {
     "<span class=\"badge text-bg-success\">Valid</span>"
   } else {
     "<span class=\"badge text-bg-danger\">Invalid</span>"
   }
+  let endpoints = arr_at(root, "endpoints").length().to_string()
+  let verdicts = arr_at(root, "transceiver_verdicts").length().to_string()
+  let errors = arr_at(root, "errors")
   let mut err_rows = ""
   for e in errors {
     err_rows = err_rows +
@@ -192,44 +193,39 @@ pub fn calc_summary_html(calc_json : String) -> String {
   }
   "<div class=\"card\">" +
   "<div class=\"card-header d-flex justify-content-between align-items-center\"><span>Validation</span>\{badge}</div>" +
-  "<div class=\"card-body\"><p class=\"mb-0\">Topology: \{nodes} nodes, \{edges} edges, \{fabrics} fabric(s).</p></div>" +
-  "\{err_block}</div>"
+  "<div class=\"card-body\">" +
+  quantity_table(root, "switch_quantity", "Switch quantities") +
+  quantity_table(root, "server_quantity", "Server quantities") +
+  "<p class=\"mb-0 text-muted small\">\{endpoints} endpoint(s) · \{verdicts} transceiver verdict(s)</p>" +
+  "</div>\{err_block}</div>"
 }
 
-// bom_html: a hierarchical BOM per device class, showing BOTH per-unit and fleet
-// quantities for every line item (the exit-gate multi-level requirement).
+// bom_html: the F7b BOM — a flat table of rows[] (the projection's string cells:
+// section / model / hedgehog class / manufacturer / quantity) plus the
+// suppressed-cable-assembly footer. Replaces the old hierarchical per-device-class
+// per-unit/fleet view.
 pub fn bom_html(bom_json : String) -> String {
   let root = try {
     @json.parse(bom_json)
   } catch {
     _ => return warn_box("Could not parse BOM.")
   }
-  let boms = arr_at(root, "boms")
-  let mut sections = ""
-  for b in boms {
-    let dc_name = match get(b, "device_class") {
-      Some(dc) => str_at(dc, "name")
-      None => ""
-    }
-    let qty = int_at(b, "plan_quantity").to_string()
-    let items = arr_at(b, "line_items")
-    let mut rows = ""
-    for it in items {
-      let level = int_at(it, "level")
-      let name = str_at(it, "name")
-      let per = int_at(it, "quantity_per_unit").to_string()
-      let fleet = int_at(it, "fleet_quantity").to_string()
-      let pad = repeat("&nbsp;&nbsp;&nbsp;&nbsp;", level)
-      rows = rows +
-        "<tr><td>\{pad}\{esc(name)}</td>" +
-        "<td class=\"text-end\">\{per}</td>" +
-        "<td class=\"text-end\">\{fleet}</td></tr>"
-    }
-    sections = sections +
-      "<div class=\"card mb-3\"><div class=\"card-header\">\{esc(dc_name)} <span class=\"badge text-bg-secondary\">x\{qty}</span></div>" +
-      "<div class=\"card-body p-0\"><table class=\"table table-sm mb-0\">" +
-      "<thead><tr><th>Component</th><th class=\"text-end\">Per-Unit</th><th class=\"text-end\">Fleet</th></tr></thead>" +
-      "<tbody>\{rows}</tbody></table></div></div>"
+  let items = arr_at(root, "rows")
+  let mut rows = ""
+  for r in items {
+    rows = rows +
+      "<tr>" +
+      "<td>\{esc(str_at(r, "section"))}</td>" +
+      "<td>\{esc(str_at(r, "module_type_model"))}</td>" +
+      "<td>\{esc(str_at(r, "hedgehog_class"))}</td>" +
+      "<td>\{esc(str_at(r, "manufacturer"))}</td>" +
+      "<td class=\"text-end\">\{esc(str_at(r, "quantity"))}</td>" +
+      "</tr>"
   }
-  "<h3 class=\"h5\">Bill of Materials</h3>\{sections}"
+  let suppressed = int_at(root, "suppressed_cable_assembly_count").to_string()
+  "<h3 class=\"h5\">Bill of Materials</h3>" +
+  "<table class=\"table table-sm\">" +
+  "<thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th></tr></thead>" +
+  "<tbody>\{rows}</tbody></table>" +
+  "<p class=\"text-muted small mb-0\">Suppressed cable assemblies: \{suppressed}</p>"
 }
