@@ -27,24 +27,39 @@ const DETAIL = JSON.stringify({
   yaml: "id: clos-small\nfabric_domains:\n  - fabric_id: frontend\n",
 });
 
+// F7b calc shape: CalcOutput flattened + is_valid (no more ir{nodes,edges,fabrics}).
 const CALC = JSON.stringify({
-  ir: { nodes: [{}, {}, {}], edges: [], fabrics: [{}] },
-  validation: { is_valid: true, errors: [], warnings: [] },
+  is_valid: true,
+  errors: [],
+  switch_quantity: [
+    { class_id: "fe-leaf", quantity: 2 },
+    { class_id: "be-spine", quantity: 2 },
+  ],
+  server_quantity: [{ class_id: "compute", quantity: 32 }],
+  endpoints: [{}, {}, {}],
+  transceiver_verdicts: [{ connection_id: "c1", outcome: "match", reason_code: "" }],
 });
 
-// switch-bom BOM: a multi-level device class with per-unit AND fleet quantities.
+// F7b two-plane validation: calc constraint violations are DATA (is_valid:false).
+const CALC_INVALID = JSON.stringify({
+  is_valid: false,
+  errors: [{ code: "ZONE_OVERFLOW", message: "zone scale_out_server_2x400 over-allocated" }],
+  switch_quantity: [],
+  server_quantity: [],
+  endpoints: [],
+  transceiver_verdicts: [],
+});
+
+// F7b structural failure (a 4xx body): {"error": ...} — distinct from calc data.
+const CALC_STRUCTURAL = JSON.stringify({ error: "cannot resolve plan: ingest failed" });
+
+// F7b BOM shape: flat rows[] (string cells) + suppressed_cable_assembly_count.
 const BOM = JSON.stringify({
-  include_fleet_totals: true,
-  boms: [
-    {
-      entry_id: "leaf-switches",
-      plan_quantity: 2,
-      device_class: { name: "Reference 64-port 800G Leaf Switch" },
-      line_items: [
-        { level: 0, name: "Reference 64-port 800G Leaf Switch", quantity_per_unit: 1, fleet_quantity: 2 },
-        { level: 1, name: "OSFP 800G Transceiver", quantity_per_unit: 64, fleet_quantity: 128 },
-      ],
-    },
+  suppressed_cable_assembly_count: 0,
+  rows: [
+    { section: "server", module_type_model: "OPG-256 Compute Server FE-BE", hedgehog_class: "compute", manufacturer: "Generic", quantity: "32" },
+    { section: "switch", module_type_model: "celestica-ds5000", hedgehog_class: "be-rail-leaf", manufacturer: "Celestica", quantity: "4" },
+    { section: "switch_transceiver", module_type_model: "QSFP112-200GBASE-SR2", hedgehog_class: "", manufacturer: "Generic", quantity: "528" },
   ],
 });
 
@@ -67,16 +82,18 @@ test("render_plan_detail: cards for fabric + validation", () => {
   assert.match(html, /Small Clos Reference/, "expected the plan name");
 });
 
-test("render_bom: per-unit AND fleet quantities", () => {
+test("render_bom: flat rows[] with section/model/class/qty", () => {
   reset();
   app.render_bom("app", BOM);
   const html = dom["app"]?.innerHTML ?? "";
-  assert.match(html, /per[\s-]?unit/i, "expected a per-unit column/label");
-  assert.match(html, /fleet/i, "expected a fleet column/label");
-  assert.match(html, /OSFP 800G Transceiver/, "expected the sub-component");
-  // Per-unit 64 and fleet 128 for the transceiver must both appear.
-  assert.match(html, /64/, "expected the per-unit quantity 64");
-  assert.match(html, /128/, "expected the fleet quantity 128");
+  assert.match(html, /Bill of Materials/i, "expected the BOM heading");
+  assert.match(html, /celestica-ds5000/, "expected the switch model row");
+  assert.match(html, /be-rail-leaf/, "expected the hedgehog class");
+  assert.match(html, />\s*4\s*</, "expected the switch quantity 4");
+  assert.match(html, /OPG-256 Compute Server FE-BE/, "expected the server row");
+  assert.match(html, />\s*32\s*</, "expected the server quantity 32");
+  assert.match(html, /QSFP112-200GBASE-SR2/, "expected the transceiver row");
+  assert.match(html, />\s*528\s*</, "expected the transceiver quantity 528");
 });
 
 test("load_plans: GET /api/plans and render the list", async () => {
@@ -91,7 +108,7 @@ test("load_plans: GET /api/plans and render the list", async () => {
   assert.match(dom["app"]?.innerHTML ?? "", /Small Clos Reference/, "expected the list rendered");
 });
 
-test("trigger_calc: POST /api/plans/{id}/calc and show validation", async () => {
+test("trigger_calc: POST .../calc → Valid badge + computed quantities", async () => {
   reset();
   setResponder(() => CALC);
   app.trigger_calc("result", "clos-small");
@@ -100,7 +117,32 @@ test("trigger_calc: POST /api/plans/{id}/calc and show validation", async () => 
     fetches.some((f) => f.url === "/api/plans/clos-small/calc" && f.method === "POST"),
     `expected POST .../clos-small/calc; got ${JSON.stringify(fetches)}`,
   );
-  assert.match(dom["result"]?.innerHTML ?? "", /valid/i, "expected a validation summary");
+  const html = dom["result"]?.innerHTML ?? "";
+  assert.match(html, /valid/i, "expected a validity badge");
+  assert.match(html, /fe-leaf/, "expected a switch class id");
+  assert.match(html, /compute/, "expected a server class id");
+  assert.match(html, />\s*32\s*</, "expected the server quantity 32");
+});
+
+test("trigger_calc invalid: calc errors surfaced as data (is_valid:false + code)", async () => {
+  reset();
+  setResponder(() => CALC_INVALID);
+  app.trigger_calc("result", "bad");
+  await flush();
+  const html = dom["result"]?.innerHTML ?? "";
+  assert.match(html, /invalid/i, "expected the Invalid badge");
+  assert.match(html, /ZONE_OVERFLOW/, "expected the calc error code");
+  assert.match(html, /over-allocated/, "expected the calc error message");
+});
+
+test("trigger_calc structural error: distinct from calc-as-data", async () => {
+  reset();
+  setResponder(() => CALC_STRUCTURAL);
+  app.trigger_calc("result", "broken");
+  await flush();
+  const html = dom["result"]?.innerHTML ?? "";
+  assert.match(html, /cannot resolve plan/i, "expected the structural error message");
+  assert.doesNotMatch(html, /badge[^>]*text-bg-success/, "structural error must not render a Valid badge");
 });
 
 test("download_wiring: GET /api/plans/{id}/wiring/{fabric}", async () => {
