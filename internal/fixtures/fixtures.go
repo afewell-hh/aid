@@ -1,5 +1,5 @@
-// Package fixtures locates the repo's test fixtures and vendored adapter
-// testdata from any test working directory (via runtime.Caller).
+// Package fixtures locates the repo's test fixtures from any test working
+// directory (via runtime.Caller).
 package fixtures
 
 import (
@@ -34,14 +34,5 @@ func Expected(name string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(Root(), "tests", "fixtures", "valid", name, "expected.json"))
 }
 
-// VendoredIR reads hhfab-adapter/tests/testdata/<name>.ir.json (the kernel
-// encoder must reproduce these bytes — IR_CONTRACT.md).
-func VendoredIR(name string) ([]byte, error) {
-	return os.ReadFile(filepath.Join(Root(), "hhfab-adapter", "tests", "testdata", name+".ir.json"))
-}
-
-// VendoredBoms reads bom-adapter/tests/testdata/<name>.boms.json (the
-// device-class-bom[] the bom adapter consumes — BOM_CONTRACT.md).
-func VendoredBoms(name string) ([]byte, error) {
-	return os.ReadFile(filepath.Join(Root(), "bom-adapter", "tests", "testdata", name+".boms.json"))
-}
+// (F7d retired VendoredIR/VendoredBoms — they read the now-deleted
+// hhfab-adapter/ and bom-adapter/ testdata; no live caller remained — #64/#35.)

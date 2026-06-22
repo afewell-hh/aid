@@ -132,6 +132,19 @@ func TestRetirement_OldPathRemoved(t *testing.T) {
 		}
 	}
 
+	// The fixtures package must no longer expose the retired adapter-testdata
+	// helpers (they read the deleted hhfab-adapter/ + bom-adapter/ dirs, so they
+	// are dead exported APIs guaranteed to fail).
+	fb, err := os.ReadFile(filepath.Join(root, "internal", "fixtures", "fixtures.go"))
+	if err != nil {
+		t.Fatalf("read fixtures.go: %v", err)
+	}
+	for _, sym := range []string{"func VendoredIR", "func VendoredBoms"} {
+		if strings.Contains(string(fb), sym) {
+			t.Errorf("fixtures.go still defines retired helper %q (F7d must remove it)", sym)
+		}
+	}
+
 	// CI/Makefile must no longer carry the adapter build/test surfaces or the old
 	// orchestrate golden-path gate.
 	for rel, tokens := range retiredBuildConfig {
