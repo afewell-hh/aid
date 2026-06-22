@@ -1,3 +1,0 @@
-entry_id,plan_quantity,level,path,slug,name,category,manufacturer,part_number,quantity_per_parent,quantity_per_unit,fleet_quantity
-leaf-switches,2,0,,leaf-switch-800g,Reference 64-port 800G Leaf Switch,network,Reference,REF-SW-800,1,1,2
-leaf-switches,2,1,xcvr,osfp-800g-xcvr,OSFP 800G Transceiver,transceiver,Reference,REF-XCVR-800,64,64,128

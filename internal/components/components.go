@@ -11,16 +11,14 @@ import (
 )
 
 // Entry-point export names (the JSON-over-memory `(ptr,len)->packed` functions).
+// F7d retired the old adapter/orchestrate entries (export_calculate /
+// export_validate / export_wiring / export_bom); the rebuilt engine uses the F2
+// calc + F3 BOM kernel entries below (#64/#35).
 const (
-	KernelCalculate   = "export_calculate"
-	KernelValidate    = "export_validate"
 	KernelF2Calculate = "export_f2_calculate"
 	// KernelF3Bom routes the F3 BOM-scale plan through the proven I4 cores
-	// (@proofs.child_qpu/fleet_quantity) and returns the fleet-scaled lines
-	// (note §1.1, §4). F3 RED: wired; the kernel body is a stub.
+	// (@proofs.child_qpu/fleet_quantity) and returns the fleet-scaled lines.
 	KernelF3Bom = "export_f3_bom"
-	HhfabExport = "export_wiring"
-	BomExport   = "export_bom"
 )
 
 type cached struct {
@@ -34,17 +32,7 @@ func (c *cached) get(name string, wasm []byte) (*wasmhost.Component, error) {
 	return c.comp, c.err
 }
 
-var (
-	kernelC cached
-	hhfabC  cached
-	bomC    cached
-)
+var kernelC cached
 
-// Kernel returns the topology calculator component.
+// Kernel returns the proved MoonBit topology calculator component.
 func Kernel() (*wasmhost.Component, error) { return kernelC.get("kernel", embed.Kernel) }
-
-// Hhfab returns the hhfab wiring export adapter component.
-func Hhfab() (*wasmhost.Component, error) { return hhfabC.get("hhfab", embed.Hhfab) }
-
-// Bom returns the BOM export adapter component.
-func Bom() (*wasmhost.Component, error) { return bomC.get("bom", embed.Bom) }
