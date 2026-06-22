@@ -1,9 +1,0 @@
-{
-  "name": "aid/bom-adapter/bom-gen",
-  "version": "0.1.0",
-  "license": "Apache-2.0",
-  "description": "Interim test tooling: regenerate vendored device-class-bom[] JSON for the BOM adapter by running the merged Phase-3 kernel (aid/kernel) calculate() on each valid fixture and serializing the boms slice. Strictly additive — no edits under kernel/. See ../../BOM_CONTRACT.md.",
-  "deps": {
-    "aid/kernel": { "path": "../../../kernel" }
-  }
-}

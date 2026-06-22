@@ -1,7 +1,7 @@
 # AID CI (Issue #21) — first CI for the repo. Two jobs:
-#   build-test  : kernel moon test + both adapters' cargo test (with real hhfab
-#                 validate) + make wasm/embed-check + go test (golden path) +
-#                 go build. No Why3/Z3 needed here.
+#   build-test  : kernel moon test + make wasm/embed-check + go test (the oracle
+#                 suite shells real hhfab validate) + go build. No Why3/Z3 here.
+#                 (F7d retired the Rust hhfab/bom adapters — #64/#35.)
 #   prove-gate  : isolated moon prove gate over the spike + kernel proof
 #                 packages (Why3 + Z3). Kept separate so the proof signal — and
 #                 the negative-control red run — is crisp and independent, and so
@@ -23,7 +23,6 @@ permissions:
 env:
   # Pinned toolchain versions (DEVELOPMENT.md).
   GO_VERSION: "1.21.5"
-  RUST_VERSION: "1.90.0"
   MOON_VERSION: "0.1.20260529"   # also the cache key; see "moon pin" note below
   HHFAB_VERSION: "v0.43.1"
 
@@ -38,19 +37,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Set up Rust ${{ env.RUST_VERSION }} (+ wasm32 target)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: wasm32-unknown-unknown
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            hhfab-adapter
-            bom-adapter
 
       # moon pin note: MoonBit's CDN serves only `latest`/`nightly` (date-stamped
       # versions 403), so we install latest and assert it matches MOON_VERSION,
@@ -107,33 +93,28 @@ jobs:
       - name: Kernel — moon test
         run: cd kernel && moon test
 
-      # NB: Cargo.lock is gitignored in both adapters (deliberate), so no --locked.
-      - name: hhfab adapter — cargo test (real hhfab validate)
-        run: cd hhfab-adapter && cargo test
-
-      - name: BOM adapter — cargo test
-        run: cd bom-adapter && cargo test
-
       - name: Build embedded components (make wasm) + stale-embed guard
         run: |
           make wasm
           make embed-check
 
-      - name: Go — go test ./... (golden path shells real hhfab validate)
+      - name: Go — go test ./... (the oracle suite shells real hhfab validate)
         run: go test ./...
 
-      # Explicit proof that the golden hhfab test RAN (did not skip) — converts a
-      # silent skip into a hard failure even if the preflight ever regresses.
-      - name: Assert golden hhfab test did not skip
+      # Explicit proof that the oracle hhfab-validate gate RAN (did not skip) —
+      # converts a silent skip into a hard failure even if the preflight ever
+      # regresses. (F7d re-pointed this from the retired orchestrate golden test
+      # to the rebuilt-engine oracle wiring test.)
+      - name: Assert oracle hhfab-validate gate did not skip
         run: |
-          log="$(go test -v -run TestGolden_WiringValidatesWithHhfab ./internal/orchestrate/ 2>&1)"
+          log="$(go test -v -run TestLayerA_WiringHhfab ./internal/oracle/ 2>&1)"
           echo "$log"
           if echo "$log" | grep -q -- '--- SKIP'; then
-            echo "::error::TestGolden_WiringValidatesWithHhfab SKIPPED — hhfab did not actually run"
+            echo "::error::TestLayerA_WiringHhfab SKIPPED — hhfab did not actually run"
             exit 1
           fi
-          echo "$log" | grep -q -- '--- PASS: TestGolden_WiringValidatesWithHhfab' \
-            || { echo "::error::golden hhfab test did not report PASS"; exit 1; }
+          echo "$log" | grep -q -- '--- PASS: TestLayerA_WiringHhfab' \
+            || { echo "::error::oracle hhfab-validate gate did not report PASS"; exit 1; }
 
       - name: Build single binary
         run: go build -o aid ./cmd/aid

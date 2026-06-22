@@ -1,37 +1,28 @@
-# AID build — produces the three WASM components and the single static `aid`
-# binary (D4). The Makefile is the source of truth for embed/*.wasm.
+# AID build — produces the proved kernel WASM component and the single static
+# `aid` binary (D4). The Makefile is the source of truth for embed/kernel.wasm.
+# (F7d retired the Rust hhfab/bom adapters — #64/#35.)
 #
-#   make wasm    build kernel.wasm (MoonBit) + hhfab.wasm + bom.wasm (Rust),
-#                copy into embed/
+#   make wasm    build kernel.wasm (MoonBit), copy into embed/
 #   make build   wasm + go build -o aid ./cmd/aid
 #   make test    go test ./...
-#   make embed-check  fail if any embed/*.wasm is still a placeholder (#33)
+#   make embed-check  fail if embed/kernel.wasm is still a placeholder (#33)
 
 SHELL := /bin/bash
 MOON  ?= $(HOME)/.moon/bin/moon
 EMBED := embed
-WASM_TARGET := wasm32-unknown-unknown
 
 UI_SRC := ui/src
 UI_STATIC := ui/static
 UI_BUNDLE := $(UI_STATIC)/app.js
 
-.PHONY: wasm kernel-wasm hhfab-wasm bom-wasm build test embed-check clean ui ui-check ui-test
+.PHONY: wasm kernel-wasm build test embed-check clean ui ui-check ui-test
 
-wasm: kernel-wasm hhfab-wasm bom-wasm
+wasm: kernel-wasm
 	@echo "embedded components:" && ls -l $(EMBED)/*.wasm
 
 kernel-wasm:
 	cd kernel/wasm && $(MOON) build --target wasm --release
 	cp "$$(find kernel/_build/wasm/release/build/wasm -name '*.wasm' | head -1)" $(EMBED)/kernel.wasm
-
-hhfab-wasm:
-	cd hhfab-adapter && cargo build --release --target $(WASM_TARGET)
-	cp "$$(find hhfab-adapter/target/$(WASM_TARGET)/release -maxdepth 1 -name '*.wasm' | head -1)" $(EMBED)/hhfab.wasm
-
-bom-wasm:
-	cd bom-adapter && cargo build --release --target $(WASM_TARGET)
-	cp "$$(find bom-adapter/target/$(WASM_TARGET)/release -maxdepth 1 -name '*.wasm' | head -1)" $(EMBED)/bom.wasm
 
 build: wasm
 	go build -o aid ./cmd/aid
@@ -39,15 +30,15 @@ build: wasm
 test:
 	go test ./...
 
-# Stale-embed guard (#33): the placeholders are 8-byte wasm headers; a real
+# Stale-embed guard (#33): the placeholder is an 8-byte wasm header; a real
 # component is far larger. Run in CI before tests to catch an un-rebuilt embed.
 embed-check:
-	@fail=0; for f in $(EMBED)/kernel.wasm $(EMBED)/hhfab.wasm $(EMBED)/bom.wasm; do \
+	@fail=0; for f in $(EMBED)/kernel.wasm; do \
 		sz=$$(wc -c < "$$f"); \
 		if [ "$$sz" -lt 1024 ]; then echo "STALE: $$f is $$sz bytes (placeholder) — run 'make wasm'"; fail=1; fi; \
 	done; \
 	if [ "$$fail" -ne 0 ]; then exit 1; fi; \
-	echo "embed OK (all components built)"
+	echo "embed OK (kernel built)"
 
 # --- Web frontend (Phase 6b Stage B): MoonBit -> JS, embedded under ui/static ---
 
