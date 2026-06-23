@@ -1,0 +1,13 @@
+{
+  "name": "aid-ui-e2e",
+  "private": true,
+  "description": "Real-browser Playwright E2E harness for the AID GUI. Driven by the `make ui-e2e` target, which builds the GUI + binary, boots `aid serve`, seeds the vendored oracle plans via the real REST API, and runs these specs against the live server in headless chromium.",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test -c playwright.config.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.48.2"
+  }
+}

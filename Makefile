@@ -15,7 +15,13 @@ UI_SRC := ui/src
 UI_STATIC := ui/static
 UI_BUNDLE := $(UI_STATIC)/app.js
 
-.PHONY: wasm kernel-wasm build test embed-check clean ui ui-check ui-test
+.PHONY: wasm kernel-wasm build test embed-check clean ui ui-check ui-test ui-e2e
+
+# Offline Playwright resolution (see ui/test/README.md). Override on the CLI for
+# CI. The aid repo vendors NO node_modules; the module is resolved from a
+# sibling install and chromium from the shared browser cache.
+PLAYWRIGHT_NODE_MODULES ?= $(HOME)/afewell-hh/hh-learn/node_modules
+PLAYWRIGHT_BROWSERS_PATH ?= $(HOME)/.cache/ms-playwright
 
 wasm: kernel-wasm
 	@echo "embedded components:" && ls -l $(EMBED)/*.wasm
@@ -54,6 +60,21 @@ ui:
 # stubbed document/fetch.
 ui-test:
 	node --test ui/test/*.test.mjs
+
+# Real-browser E2E (Issue #65): build the GUI + binary, boot `aid serve` on
+# free ephemeral ports with temp plans dirs (a seeded store + an empty store),
+# seed the vendored oracle plans via the REAL REST API, run the Playwright spec
+# in headless chromium against the live servers, and always tear down (the
+# orchestrator script owns the trap). Hermetic + re-runnable. Offline chromium
+# is resolved via PLAYWRIGHT_BROWSERS_PATH and the module via a sibling
+# node_modules (PLAYWRIGHT_NODE_MODULES) — see ui/test/README.md. CI must
+# provide both.
+ui-e2e: ui
+	go build -o ./bin/aid ./cmd/aid
+	AID_BIN="$(CURDIR)/bin/aid" \
+	PLAYWRIGHT_NODE_MODULES="$(PLAYWRIGHT_NODE_MODULES)" \
+	PLAYWRIGHT_BROWSERS_PATH="$(PLAYWRIGHT_BROWSERS_PATH)" \
+	bash ui/test/run-e2e.sh
 
 # Freshness guard (#33-style, the app.js analogue of embed-check): rebuild the
 # bundle to a temp file and fail if it differs from the committed ui/static/app.js

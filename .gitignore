@@ -10,3 +10,11 @@
 
 # Go build output
 /aid
+/bin/
+
+# Node deps for the GUI E2E harness — never vendored. The `make ui-e2e` target
+# creates an ephemeral ui/test/node_modules symlink (offline resolve); CI may
+# instead `npm ci` here. Either way it stays out of version control.
+/ui/test/node_modules
+/ui/test/test-results
+/ui/test/playwright-report
