@@ -318,8 +318,10 @@ function _M0TPB9ArrayViewGUsRPB4JsonEE(param0, param1, param2) {
 const _M0FP25aidui3src12console__log = (m) => console.log(m);
 const _M0FP25aidui3src9set__html = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
 const _M0FP25aidui3src9on__click = (id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("click", () => cb()); };
-const _M0FP25aidui3src10fetch__get = (url, cb) => { fetch(url).then(r => r.text()).then(cb); };
-const _M0FP25aidui3src11fetch__post = (url, body, cb) => { fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }).then(r => r.text()).then(cb); };
+const _M0FP25aidui3src13set__disabled = (id, disabled) => { const e = document.getElementById(id); if (e) e.disabled = disabled; };
+const _M0FP25aidui3src9set__text = (id, text) => { const e = document.getElementById(id); if (e) e.textContent = text; };
+const _M0FP25aidui3src10fetch__get = (url, cb) => { fetch(url).then(r => r.text().then(t => cb(r.ok, r.status, t))).catch(() => cb(false, 0, "")); };
+const _M0FP25aidui3src11fetch__post = (url, body, cb) => { fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }).then(r => r.text().then(t => cb(r.ok, r.status, t))).catch(() => cb(false, 0, "")); };
 const _M0FP25aidui3src10save__file = (filename, content) => { const b = new Blob([content], {type:"text/yaml"}); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = filename; a.click(); URL.revokeObjectURL(u); };
 const _M0FPB4null = _M0DTPB4Json4Null__;
 const _M0FPC16double14not__a__number = $i64_reinterpret_f64(9221120237041090561n);
@@ -612,7 +614,7 @@ function _M0MPC16string6String29offset__of__nth__char_2einner(self, i, start_off
 function _M0IPB13StringBuilderPB6Logger11write__view(self, str) {
   self.val = `${self.val}${_M0MPC16string10StringView9to__owned(str)}`;
 }
-function _M0MPC15array5Array4pushGRPB4JsonE(self, value) {
+function _M0MPC15array5Array4pushGsE(self, value) {
   _M0MPB7JSArray4push(self, value);
 }
 function _M0MPC16string10StringView9is__empty(self) {
@@ -638,6 +640,9 @@ function _M0MPC16string10StringView9get__char(self, idx) {
   } else {
     return -1;
   }
+}
+function _M0IPC13int3IntPB4Show10to__string(self) {
+  return _M0MPC13int3Int18to__string_2einner(self, 10);
 }
 function _M0MPC16option6Option3mapGRPC16string10StringViewsE(self, f) {
   if (self === undefined) {
@@ -3890,7 +3895,7 @@ function _M0MPC14json12ParseContext12parse__array(ctx) {
       } else {
         return _bind$2;
       }
-      _M0MPC15array5Array4pushGRPB4JsonE(vec, _tmp$4);
+      _M0MPC15array5Array4pushGsE(vec, _tmp$4);
       const _bind$3 = _M0MPC14json12ParseContext24lex__after__array__value(ctx);
       let tok2;
       if (_bind$3.$tag === 1) {
@@ -4164,6 +4169,43 @@ function _M0FP25aidui3src3esc(s) {
 function _M0FP25aidui3src9warn__box(msg) {
   return `<div class=\"alert alert-warning\">${_M0FP25aidui3src3esc(msg)}</div>`;
 }
+function _M0FP25aidui3src14error__message(body) {
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return "";
+  }
+  return _M0FP25aidui3src7str__at(root, "error");
+}
+function _M0FP25aidui3src11error__html(status, body) {
+  const detail = _M0FP25aidui3src14error__message(body);
+  const headline = status === 0 ? "Network error" : `Request failed (HTTP ${_M0IPC13int3IntPB4Show10to__string(status)})`;
+  let msg;
+  const _p = "";
+  if (!(detail === _p)) {
+    msg = detail;
+  } else {
+    msg = status === 0 ? "Could not reach the server. Check that it is running and try again." : "The server returned an error.";
+  }
+  return `<div class=\"alert alert-danger\" role=\"alert\"><strong>${_M0FP25aidui3src3esc(headline)}:</strong> ${_M0FP25aidui3src3esc(msg)}</div>`;
+}
+function _M0FP25aidui3src16body__has__error(body) {
+  const _p = _M0FP25aidui3src14error__message(body);
+  const _p$2 = "";
+  return !(_p === _p$2);
+}
 function _M0FP25aidui3src13status__badge(status) {
   let cls;
   switch (status) {
@@ -4269,6 +4311,44 @@ function _M0FP25aidui3src15quantity__table(root, key, title) {
   }
   return `<h4 class=\"h6\">${title}</h4><table class=\"table table-sm mb-3\"><thead><tr><th>Class</th><th class=\"text-end\">Qty</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
+function _M0FP25aidui3src22wiring__download__html(fabrics) {
+  const names = [];
+  const _bind = fabrics.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind) {
+      const f = fabrics[_];
+      if (f.$tag === 4) {
+        const _String = f;
+        const _s = _String._0;
+        _M0MPC15array5Array4pushGsE(names, _s);
+      }
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  if (names.length === 0) {
+    return "";
+  }
+  let btns = "";
+  const _bind$2 = names.length;
+  let _tmp$2 = 0;
+  while (true) {
+    const _ = _tmp$2;
+    if (_ < _bind$2) {
+      const name = names[_];
+      btns = `${btns}<button id=\"wiring-${_M0FP25aidui3src3esc(name)}\" class=\"btn btn-outline-success btn-sm me-2 mb-2\" data-fabric=\"${_M0FP25aidui3src3esc(name)}\">Download wiring: ${_M0FP25aidui3src3esc(name)}</button>`;
+      _tmp$2 = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return `<hr><h4 class=\"h6\">Validated wiring (hhfab)</h4><div class=\"d-flex flex-wrap\">${btns}</div>`;
+}
 function _M0FP25aidui3src19calc__summary__html(calc_json) {
   let root;
   let _try_err;
@@ -4318,7 +4398,47 @@ function _M0FP25aidui3src19calc__summary__html(calc_json) {
     }
   }
   const err_block = errors.length > 0 ? `<ul class=\"list-group list-group-flush\">${err_rows}</ul>` : "";
-  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Validation</span>${badge}</div><div class=\"card-body\">${_M0FP25aidui3src15quantity__table(root, "switch_quantity", "Switch quantities")}${_M0FP25aidui3src15quantity__table(root, "server_quantity", "Server quantities")}<p class=\"mb-0 text-muted small\">${endpoints} endpoint(s) · ${verdicts} transceiver verdict(s)</p></div>${err_block}</div>`;
+  const wiring_block = is_valid ? _M0FP25aidui3src22wiring__download__html(_M0FP25aidui3src7arr__at(root, "managed_fabrics")) : "";
+  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Validation</span>${badge}</div><div class=\"card-body\">${_M0FP25aidui3src15quantity__table(root, "switch_quantity", "Switch quantities")}${_M0FP25aidui3src15quantity__table(root, "server_quantity", "Server quantities")}<p class=\"mb-0 text-muted small\">${endpoints} endpoint(s) · ${verdicts} transceiver verdict(s)</p>${wiring_block}</div>${err_block}</div>`;
+}
+function _M0FP25aidui3src16managed__fabrics(calc_json) {
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(calc_json, 0, calc_json.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return [];
+  }
+  const names = [];
+  const _bind = _M0FP25aidui3src7arr__at(root, "managed_fabrics");
+  const _bind$2 = _bind.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind$2) {
+      const f = _bind[_];
+      if (f.$tag === 4) {
+        const _String = f;
+        const _s = _String._0;
+        _M0MPC15array5Array4pushGsE(names, _s);
+      }
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return names;
 }
 function _M0FP25aidui3src9bom__html(bom_json) {
   let root;
@@ -4368,21 +4488,72 @@ function _M0FP25aidui3src11render__bom(target, bom_json) {
 function _M0FP25aidui3src8api__get(path, cb) {
   _M0FP25aidui3src10fetch__get(`${_M0FP25aidui3src9api__base}${path}`, cb);
 }
+function _M0FP25aidui3src13set__inflight(id, busy, label) {
+  _M0FP25aidui3src13set__disabled(id, busy);
+  _M0FP25aidui3src9set__text(id, label);
+}
 function _M0FP25aidui3src9load__bom(target, plan_id) {
-  _M0FP25aidui3src8api__get(`/plans/${plan_id}/bom`, (body) => {
+  _M0FP25aidui3src13set__inflight("bom-btn", true, "Loading…");
+  _M0FP25aidui3src8api__get(`/plans/${plan_id}/bom`, (ok, status, body) => {
+    _M0FP25aidui3src13set__inflight("bom-btn", false, "View BOM");
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html(target, _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
     _M0FP25aidui3src9set__html(target, _M0FP25aidui3src9bom__html(body));
   });
 }
 function _M0FP25aidui3src9api__post(path, body, cb) {
   _M0FP25aidui3src11fetch__post(`${_M0FP25aidui3src9api__base}${path}`, body, cb);
 }
+function _M0FP25aidui3src16download__wiring(plan_id, fabric) {
+  const btn = `wiring-${fabric}`;
+  _M0FP25aidui3src13set__inflight(btn, true, "Downloading…");
+  _M0FP25aidui3src8api__get(`/plans/${plan_id}/wiring/${fabric}`, (ok, status, body) => {
+    _M0FP25aidui3src13set__inflight(btn, false, `Download wiring: ${fabric}`);
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("detail-result", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src10save__file(`${plan_id}-${fabric}.yaml`, body);
+  });
+}
+function _M0FP25aidui3src21wire__wiring__buttons(plan_id, calc_body) {
+  const _bind = _M0FP25aidui3src16managed__fabrics(calc_body);
+  const _bind$2 = _bind.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind$2) {
+      const fabric = _bind[_];
+      _M0FP25aidui3src9on__click(`wiring-${fabric}`, () => {
+        _M0FP25aidui3src16download__wiring(plan_id, fabric);
+      });
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      return;
+    }
+  }
+}
 function _M0FP25aidui3src13trigger__calc(target, plan_id) {
-  _M0FP25aidui3src9api__post(`/plans/${plan_id}/calc`, "{}", (body) => {
+  _M0FP25aidui3src13set__inflight("calc-btn", true, "Calculating…");
+  _M0FP25aidui3src9api__post(`/plans/${plan_id}/calc`, "{}", (ok, status, body) => {
+    _M0FP25aidui3src13set__inflight("calc-btn", false, "Calculate");
+    if (!ok) {
+      _M0FP25aidui3src9set__html(target, _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
     _M0FP25aidui3src9set__html(target, _M0FP25aidui3src19calc__summary__html(body));
+    _M0FP25aidui3src21wire__wiring__buttons(plan_id, body);
   });
 }
 function _M0FP25aidui3src12load__detail(id) {
-  _M0FP25aidui3src8api__get(`/plans/${id}`, (body) => {
+  _M0FP25aidui3src8api__get(`/plans/${id}`, (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("app", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
     _M0FP25aidui3src9set__html("app", _M0FP25aidui3src18plan__detail__html(body));
     _M0FP25aidui3src9on__click("calc-btn", () => {
       _M0FP25aidui3src13trigger__calc("detail-result", id);
@@ -4429,18 +4600,17 @@ function _M0FP25aidui3src16wire__plan__rows(plans_json) {
   }
 }
 function _M0FP25aidui3src11load__plans(target) {
-  _M0FP25aidui3src8api__get("/plans", (body) => {
+  _M0FP25aidui3src8api__get("/plans", (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html(target, _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
     _M0FP25aidui3src9set__html(target, _M0FP25aidui3src16plan__list__html(body));
     _M0FP25aidui3src16wire__plan__rows(body);
-  });
-}
-function _M0FP25aidui3src16download__wiring(plan_id, fabric) {
-  _M0FP25aidui3src8api__get(`/plans/${plan_id}/wiring/${fabric}`, (body) => {
-    _M0FP25aidui3src10save__file(`${plan_id}-${fabric}.yaml`, body);
   });
 }
 function _M0FP25aidui3src11main__entry() {
   _M0FP25aidui3src12console__log("AID UI starting");
   _M0FP25aidui3src11load__plans("app");
 }
-export { _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src11main__entry as main_entry }
+export { _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }

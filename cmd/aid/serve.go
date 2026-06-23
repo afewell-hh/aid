@@ -225,21 +225,30 @@ func (a *api) resolve(w http.ResponseWriter, id string) (*design.Resolved, bool)
 }
 
 // calcView flattens CalcOutput (switch/server quantities, endpoints, verdicts,
-// errors) alongside the derived is_valid boolean (note §3.2).
+// errors) alongside the derived is_valid boolean (note §3.2) and the plan's
+// managed-fabric names (P0.3): the {fabric} values GET .../wiring/{fabric}
+// accepts, so the GUI can render per-fabric download buttons from real data
+// instead of guessing. Derived from the plan even when calc is invalid.
 type calcView struct {
-	IsValid bool `json:"is_valid"`
+	IsValid        bool     `json:"is_valid"`
+	ManagedFabrics []string `json:"managed_fabrics"`
 	*calc.CalcOutput
 }
 
-// calcPlan: POST /api/plans/{id}/calc → 200 CalcOutput + is_valid. Calc
-// constraint violations are surfaced as DATA (200, is_valid:false, populated
-// errors); only a structural failure is a 4xx (note §3.0).
+// calcPlan: POST /api/plans/{id}/calc → 200 CalcOutput + is_valid +
+// managed_fabrics. Calc constraint violations are surfaced as DATA (200,
+// is_valid:false, populated errors); only a structural failure is a 4xx (note
+// §3.0).
 func (a *api) calcPlan(w http.ResponseWriter, _ *http.Request, id string) {
 	res, ok := a.resolve(w, id)
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, calcView{IsValid: res.Valid(), CalcOutput: res.Calc})
+	writeJSON(w, http.StatusOK, calcView{
+		IsValid:        res.Valid(),
+		ManagedFabrics: res.ManagedFabrics(),
+		CalcOutput:     res.Calc,
+	})
 }
 
 // bomPlan: GET /api/plans/{id}/bom → 200 {rows, suppressed_cable_assembly_count}.
@@ -287,6 +296,28 @@ func (a *api) wiringPlan(w http.ResponseWriter, _ *http.Request, id, fabric stri
 	res, ok := a.resolve(w, id)
 	if !ok {
 		return
+	}
+	// Reject an unknown/non-managed fabric explicitly: a 404 carrying the list of
+	// valid fabric names, instead of the old 200 + empty body (which the GUI could
+	// not distinguish from a real wiring stream). The list lets the caller correct
+	// the request (P0.3). Only enforced for a non-empty fabric — "" still means
+	// "all managed fabrics" (the CLI/aggregate path).
+	if fabric != "" {
+		valid := res.ManagedFabrics()
+		found := false
+		for _, f := range valid {
+			if f == fabric {
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeJSON(w, http.StatusNotFound, map[string]any{
+				"error":         "unknown fabric: " + fabric,
+				"valid_fabrics": valid,
+			})
+			return
+		}
 	}
 	docs, err := res.Wiring(fabric)
 	if err != nil {

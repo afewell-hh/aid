@@ -12,7 +12,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dom, fetches, setResponder, reset, flush } from "./harness.mjs";
+import { dom, fetches, saved, setResponder, reset, flush } from "./harness.mjs";
 import * as app from "../static/app.js";
 
 // Canned API responses mirroring the Stage-A contract.
@@ -165,4 +165,142 @@ test("main_entry: bootstraps by loading the plan list", async () => {
     fetches.some((f) => f.url === "/api/plans" && f.method === "GET"),
     `expected main_entry to GET /api/plans; got ${JSON.stringify(fetches)}`,
   );
+});
+
+// --- P0.3: per-fabric wiring download buttons + download guard ----------------
+
+// Calc with managed_fabrics renders a Download-wiring button per fabric, each
+// with a stable id `wiring-<fabric>`, and clicking one issues the real
+// GET .../wiring/<fabric> and saves the YAML.
+const CALC_WITH_FABRICS = JSON.stringify({
+  is_valid: true,
+  errors: [],
+  managed_fabrics: ["backend", "frontend"],
+  switch_quantity: [{ class_id: "fe-leaf", quantity: 2 }],
+  server_quantity: [{ class_id: "compute", quantity: 32 }],
+  endpoints: [{}],
+  transceiver_verdicts: [{}],
+});
+
+test("trigger_calc: renders a Download-wiring button per managed fabric", async () => {
+  reset();
+  setResponder(() => CALC_WITH_FABRICS);
+  app.trigger_calc("result", "clos-small");
+  await flush();
+  const html = dom["result"]?.innerHTML ?? "";
+  assert.match(html, /Download wiring: backend/, "expected a backend download button");
+  assert.match(html, /Download wiring: frontend/, "expected a frontend download button");
+  assert.match(html, /id="wiring-backend"/, "expected the stable backend button id");
+  assert.match(html, /id="wiring-frontend"/, "expected the stable frontend button id");
+});
+
+test("wiring button click: GET .../wiring/<fabric> and saves the YAML", async () => {
+  reset();
+  setResponder((url) =>
+    url.endsWith("/calc")
+      ? CALC_WITH_FABRICS
+      : "apiVersion: wiring.githedgehog.com/v1beta1\nkind: Switch\n",
+  );
+  app.trigger_calc("result", "clos-small");
+  await flush();
+  // The rendered button is wired to download_wiring; click it.
+  dom["wiring-frontend"].click();
+  await flush();
+  assert.ok(
+    fetches.some((f) => f.url === "/api/plans/clos-small/wiring/frontend" && f.method === "GET"),
+    `expected GET .../wiring/frontend; got ${JSON.stringify(fetches)}`,
+  );
+  assert.equal(saved.length, 1, "expected exactly one file download");
+  assert.match(saved[0].content, /wiring\.githedgehog\.com/, "expected real wiring CRDs saved");
+});
+
+test("invalid calc renders no wiring buttons (nothing to download)", async () => {
+  reset();
+  setResponder(() => CALC_INVALID);
+  app.trigger_calc("result", "bad");
+  await flush();
+  const html = dom["result"]?.innerHTML ?? "";
+  assert.doesNotMatch(html, /Download wiring/, "invalid calc must not offer wiring downloads");
+});
+
+// download_wiring GUARD: a non-OK response (e.g. 404 bad fabric) is NEVER saved
+// to a .yaml — it surfaces the error alert in #detail-result instead.
+test("download_wiring guard: 404 bad fabric shows error, saves nothing", async () => {
+  reset();
+  setResponder(() => ({
+    ok: false,
+    status: 404,
+    body: JSON.stringify({ error: "unknown fabric: nope", valid_fabrics: ["backend"] }),
+  }));
+  app.download_wiring("clos-small", "nope");
+  await flush();
+  assert.equal(saved.length, 0, "a non-OK wiring response must NOT be saved to a file");
+  const html = dom["detail-result"]?.innerHTML ?? "";
+  assert.match(html, /alert-danger/, "expected an error alert");
+  assert.match(html, /unknown fabric/, "expected the server error message surfaced");
+});
+
+// --- P0.4: HTTP / network error handling --------------------------------------
+
+test("load_plans: HTTP 500 renders the error alert, NOT an empty table", async () => {
+  reset();
+  setResponder(() => ({ ok: false, status: 500, body: JSON.stringify({ error: "internal error" }) }));
+  app.load_plans("app");
+  await flush();
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /alert-danger/, "expected an error alert");
+  assert.match(html, /500/, "expected the HTTP status surfaced");
+  assert.doesNotMatch(html, /0 plan\(s\)/, "an outage must not look like an empty account");
+});
+
+test("load_plans: network failure (rejected fetch) renders a network error", async () => {
+  reset();
+  setResponder(() => {
+    throw new Error("connection refused");
+  });
+  app.load_plans("app");
+  await flush();
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /alert-danger/, "expected an error alert on network failure");
+  assert.match(html, /Network error/i, "expected a network-failure message");
+});
+
+test("load_bom: 422 (calc-gated) renders error, NOT a misleading empty BOM", async () => {
+  // Navigate list -> detail (which wires the BOM button), then click BOM and get
+  // a 422. load_bom is internal, so it is exercised through the real button.
+  reset();
+  const route = (url) => {
+    if (url === "/api/plans") return PLANS;
+    if (url.endsWith("/bom"))
+      return { ok: false, status: 422, body: JSON.stringify({ error: "cannot compute BOM: plan has calc errors" }) };
+    return DETAIL; // GET /api/plans/{id}
+  };
+  setResponder(route);
+  app.load_plans("app");
+  await flush();
+  dom["view-clos-small"].click();
+  await flush();
+  dom["bom-btn"].click();
+  await flush();
+  const html = dom["detail-result"]?.innerHTML ?? "";
+  assert.match(html, /alert-danger/, "expected an error alert, not an empty BOM");
+  assert.match(html, /422/, "expected the HTTP status surfaced");
+  assert.doesNotMatch(html, /Suppressed cable assemblies: 0/, "must not render a misleading empty BOM");
+});
+
+test("load_detail: 404 renders the error alert, NOT a ghost detail card", async () => {
+  reset();
+  setResponder((url) =>
+    url === "/api/plans"
+      ? PLANS
+      : { ok: false, status: 404, body: JSON.stringify({ error: "plan not found" }) },
+  );
+  app.load_plans("app");
+  await flush();
+  dom["view-clos-small"].click();
+  await flush();
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /alert-danger/, "expected an error alert");
+  assert.match(html, /404/, "expected the HTTP status surfaced");
+  assert.doesNotMatch(html, /id="calc-btn"/, "a 404 must not render a ghost detail card with live buttons");
 });

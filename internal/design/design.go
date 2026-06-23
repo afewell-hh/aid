@@ -16,6 +16,7 @@ package design
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/afewell-hh/aid/internal/bom"
 	"github.com/afewell-hh/aid/internal/calc"
@@ -115,4 +116,30 @@ func (r *Resolved) Wiring(fabric string) ([]wiring.Doc, error) {
 		}
 	}
 	return filtered, nil
+}
+
+// ManagedFabrics returns the distinct managed-fabric names of the plan — the
+// fabric_name of every switch class whose fabric_class == "managed" — sorted for
+// stable output. These are exactly the {fabric} values GET .../wiring/{fabric}
+// accepts; the surfaces use them to populate per-fabric download buttons (no
+// guessing) and to list the valid choices in a bad-fabric error. It is derived
+// from the plan model directly (no calc/render dependency), so it is available
+// even before a calc has run.
+func (r *Resolved) ManagedFabrics() []string {
+	if r == nil || r.Plan == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, sw := range r.Plan.Spec.SwitchClasses {
+		if sw.FabricClass != "managed" || sw.FabricName == "" {
+			continue
+		}
+		if !seen[sw.FabricName] {
+			seen[sw.FabricName] = true
+			names = append(names, sw.FabricName)
+		}
+	}
+	sort.Strings(names)
+	return names
 }

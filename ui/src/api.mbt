@@ -2,13 +2,20 @@
 // ffi fetch primitives (request plumbing is spike-proven and REAL); the UI logic
 // that consumes the responses lives in render.mbt / app.mbt.
 
-// GET <api_base><path>, delivering the response body to cb.
-pub fn api_get(path : String, cb : (String) -> Unit) -> Unit {
+// GET <api_base><path>, delivering (ok, status, body) to cb. The caller inspects
+// ok/status before rendering so an HTTP error or a network failure is handled
+// explicitly (P0.4), never mistaken for a success body.
+pub fn api_get(path : String, cb : (Bool, Int, String) -> Unit) -> Unit {
   fetch_get(api_base + path, cb)
 }
 
-// POST <api_base><path> with a JSON body, delivering the response body to cb.
-pub fn api_post(path : String, body : String, cb : (String) -> Unit) -> Unit {
+// POST <api_base><path> with a JSON body, delivering (ok, status, body) to cb
+// (same failure contract as api_get).
+pub fn api_post(
+  path : String,
+  body : String,
+  cb : (Bool, Int, String) -> Unit
+) -> Unit {
   fetch_post(api_base + path, body, cb)
 }
 

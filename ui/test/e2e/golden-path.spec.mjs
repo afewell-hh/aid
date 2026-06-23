@@ -169,3 +169,194 @@ test.describe("AID GUI golden path (read-only)", () => {
     await expect(result.getByText(/Suppressed cable assemblies:/)).toBeVisible();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #65 — P0.3: per-fabric wiring download + fabric discovery.
+//
+// After a VALID Calculate, the calc response carries the plan's managed fabric
+// names (server-derived from switch_classes.fabric_name where fabric_class ==
+// managed). The GUI renders one "Download wiring: <fabric>" button per fabric
+// (stable id `wiring-<fabric>`); clicking it streams GET .../wiring/<fabric> and
+// triggers a real browser file download (Blob + anchor in ffi.mbt save_file).
+// These tests assert the buttons are populated from real data AND that the
+// downloaded file is wiring CRDs, not an error body.
+// ---------------------------------------------------------------------------
+test.describe("AID GUI P0.3 — wiring download + fabric discovery", () => {
+  // mesh xoc-64 managed fabrics (derived server-side): inb-mgmt, soc-storage-scale-out.
+  test("mesh (xoc-64): per-fabric Download buttons appear and download real wiring YAML", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await waitForApp(page);
+    await page.locator(`#view-${MESH_64_ID}`).click();
+    await page.getByRole("button", { name: "Calculate" }).click();
+
+    const result = page.locator("#detail-result");
+    await expect(result.getByText("Valid", { exact: true })).toBeVisible();
+    // Buttons populated from real managed-fabric names (NOT guessed).
+    const soc = result.locator("#wiring-soc-storage-scale-out");
+    await expect(soc).toBeVisible();
+    await expect(soc).toContainText("Download wiring: soc-storage-scale-out");
+    await expect(result.locator("#wiring-inb-mgmt")).toBeVisible();
+
+    // Clicking triggers a real browser download; capture it and assert the file
+    // name + that the content is wiring CRDs, not an {"error":...} body.
+    const [download] = await Promise.all([page.waitForEvent("download"), soc.click()]);
+    expect(download.suggestedFilename()).toBe(`${MESH_64_ID}-soc-storage-scale-out.yaml`);
+    const stream = await download.createReadStream();
+    const yaml = await streamToString(stream);
+    expect(yaml).toContain("wiring.githedgehog.com");
+    expect(yaml).not.toContain('"error"');
+  });
+
+  // Clos xoc-256 managed fabrics (derived server-side): backend, frontend.
+  test("Clos (xoc-256): per-fabric Download buttons appear and download real wiring YAML", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await waitForApp(page);
+    await page.locator(`#view-${CLOS_256_ID}`).click();
+    await page.getByRole("button", { name: "Calculate" }).click();
+
+    const result = page.locator("#detail-result");
+    await expect(result.getByText("Valid", { exact: true })).toBeVisible();
+    const frontend = result.locator("#wiring-frontend");
+    await expect(frontend).toBeVisible();
+    await expect(result.locator("#wiring-backend")).toBeVisible();
+
+    const [download] = await Promise.all([page.waitForEvent("download"), frontend.click()]);
+    expect(download.suggestedFilename()).toBe(`${CLOS_256_ID}-frontend.yaml`);
+    const stream = await download.createReadStream();
+    const yaml = await streamToString(stream);
+    expect(yaml).toContain("wiring.githedgehog.com");
+    expect(yaml).not.toContain('"error"');
+  });
+
+  // An over-allocated (invalid) calc must NOT offer wiring downloads — quantities
+  // are unreliable, so there is nothing valid to export.
+  test("invalid calc offers no wiring download buttons", async ({ page }) => {
+    await page.goto("/");
+    await waitForApp(page);
+    await page.locator(`#view-${OVERFLOW_ID}`).click();
+    await page.getByRole("button", { name: "Calculate" }).click();
+
+    const result = page.locator("#detail-result");
+    await expect(result.getByText("Invalid", { exact: true })).toBeVisible();
+    await expect(result.getByText(/Download wiring/)).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #65 — P0.4: HTTP / network error handling.
+//
+// The fetch FFI now delivers {ok, status, body} (+ a .catch for rejections), and
+// load_plans/load_detail/load_bom render a shared error alert for a non-2xx
+// status, an {"error":...} body, or a network failure — instead of a misleading
+// empty/ghost view. Calc-as-data (is_valid:false) is NOT an error and still shows
+// the Invalid badge (asserted above + re-confirmed here). download_wiring never
+// saves a non-OK body to a .yaml.
+// ---------------------------------------------------------------------------
+test.describe("AID GUI P0.4 — HTTP / network error handling", () => {
+  // Network failure: a stopped/unreachable server. Simulated by aborting the API
+  // request at the network layer, exercising the FFI .catch path for real. The
+  // GUI must show a clear error, NOT an empty "0 plan(s)" table.
+  test("network failure renders an error alert, not an empty account", async ({ page }) => {
+    await page.route("**/api/plans", (route) => route.abort());
+    await page.goto("/");
+    await waitForApp(page); // #app gets the error alert, so it is non-empty
+
+    const app = page.locator("#app");
+    await expect(app.locator(".alert-danger")).toBeVisible();
+    await expect(app.getByText(/Network error/i)).toBeVisible();
+    await expect(app.getByText("0 plan(s)", { exact: true })).toHaveCount(0);
+    await expect(app.getByRole("heading", { name: "Topology Plans" })).toHaveCount(0);
+  });
+
+  // A 404 on the plan-detail GET must render the error alert, NOT a ghost detail
+  // card with live-but-broken Calculate/View-BOM buttons.
+  test("404 on plan detail renders an error alert, not a ghost card", async ({ page }) => {
+    await page.goto("/");
+    await waitForApp(page);
+    // Intercept only the detail GET (leave the list intact) and force a 404.
+    await page.route(`**/api/plans/${MESH_64_ID}`, (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "plan not found" }),
+      }),
+    );
+    await page.locator(`#view-${MESH_64_ID}`).click();
+
+    const app = page.locator("#app");
+    await expect(app.locator(".alert-danger")).toBeVisible();
+    await expect(app.getByText(/404/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Calculate" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "View BOM" })).toHaveCount(0);
+  });
+
+  // Bad fabric: the REAL server returns 404 + the valid-fabric list (P0.3 server
+  // fix), and the download_wiring guard surfaces the error instead of silently
+  // saving an {"error":...} body to a .yaml. Driven against the LIVE server via
+  // the exported download_wiring (no UI affordance produces a bad fabric, by
+  // design — buttons come from real data). Asserts: error shown (not silent), and
+  // NO download fired.
+  test("bad fabric: real 404 + valid list, error shown, no file saved", async ({ page }) => {
+    await page.goto("/");
+    await waitForApp(page);
+    await page.locator(`#view-${MESH_64_ID}`).click();
+    // Need #detail-result in the DOM (the guard renders the error there).
+    await expect(page.locator("#detail-result")).toBeAttached();
+
+    // Fail the test if any download fires (a non-OK body must NEVER be saved).
+    let downloaded = false;
+    page.on("download", () => {
+      downloaded = true;
+    });
+
+    // First confirm the server really answers 404 + valid_fabrics for a bad fabric.
+    const resp = await page.request.get(`/api/plans/${MESH_64_ID}/wiring/nonsuch`);
+    expect(resp.status()).toBe(404);
+    const errBody = await resp.json();
+    expect(errBody.error).toBeTruthy();
+    expect(errBody.valid_fabrics).toEqual(["inb-mgmt", "soc-storage-scale-out"]);
+
+    // Now drive the real GUI download_wiring against the bad fabric.
+    await page.evaluate(async (id) => {
+      const m = await import("/static/app.js");
+      m.download_wiring(id, "nonsuch");
+    }, MESH_64_ID);
+
+    const result = page.locator("#detail-result");
+    await expect(result.locator(".alert-danger")).toBeVisible();
+    await expect(result.getByText(/unknown fabric/i)).toBeVisible();
+    // Give any (erroneous) download a beat to fire, then assert none did.
+    await page.waitForTimeout(300);
+    expect(downloaded).toBe(false);
+  });
+
+  // Re-confirm the two-plane boundary end-to-end: a 200 is_valid:false calc is
+  // DATA (the Invalid badge + ZONE_OVERFLOW list), NOT the generic error alert.
+  // (Complements the P0.3 "no wiring buttons" assertion on the same plan.)
+  test("calc-error (422-like) stays calc-as-data: Invalid badge, not the error alert", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await waitForApp(page);
+    await page.locator(`#view-${OVERFLOW_ID}`).click();
+    await page.getByRole("button", { name: "Calculate" }).click();
+
+    const result = page.locator("#detail-result");
+    await expect(result.getByText("Invalid", { exact: true })).toBeVisible();
+    await expect(result.getByText("ZONE_OVERFLOW").first()).toBeVisible();
+    // The generic HTTP error alert must NOT appear (this is data, not an error).
+    await expect(result.getByText(/Network error/i)).toHaveCount(0);
+    await expect(result.getByText(/Request failed \(HTTP/)).toHaveCount(0);
+  });
+});
+
+// streamToString drains a Node Readable (download.createReadStream) to a string.
+async function streamToString(stream) {
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks).toString("utf8");
+}
