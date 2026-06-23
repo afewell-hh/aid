@@ -12,7 +12,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dom, fetches, saved, setResponder, reset, flush } from "./harness.mjs";
+import { dom, el, fetches, saved, setResponder, setConfirm, reset, flush } from "./harness.mjs";
 import * as app from "../static/app.js";
 
 // Canned API responses mirroring the Stage-A contract.
@@ -303,4 +303,254 @@ test("load_detail: 404 renders the error alert, NOT a ghost detail card", async 
   assert.match(html, /alert-danger/, "expected an error alert");
   assert.match(html, /404/, "expected the HTTP status surfaced");
   assert.doesNotMatch(html, /id="calc-btn"/, "a 404 must not render a ghost detail card with live buttons");
+});
+
+// --- P0.2: create / edit / delete / duplicate authoring -----------------------
+//
+// These drive the REAL compiled exports + the wired on_click/on_change handlers
+// against the harness DOM, asserting (a) the request SHAPE for the new verbs
+// (POST create, PUT edit, DELETE, PUT overlay), and (b) the rendered authoring
+// surfaces (New-plan form, delete-confirm). The full create->calc round-trip
+// against the live kernel is covered by the Playwright E2E; here we assert the
+// client wiring deterministically.
+
+const TEMPLATES = JSON.stringify({
+  templates: [
+    { id: "xoc-64-mesh", name: "XOC-64 Mesh", topology: "mesh" },
+    { id: "xoc-256-clos", name: "XOC-256 Clos", topology: "clos" },
+  ],
+});
+const TEMPLATE_64 = JSON.stringify({
+  id: "xoc-64-mesh",
+  name: "XOC-64 Mesh",
+  topology: "mesh",
+  training: "meta:\n  case_id: training_xoc64_1xopg64_mesh_conv_ro\n  name: XOC-64\n",
+  overlay: "module_types:\n  - id: x\n    cage_type: OSFP\n",
+});
+
+// new_plan_form_html: renders a name field, a template <select> populated from the
+// catalog, and a YAML textarea (the raw-YAML escape hatch).
+test("new_plan_form_html: name + template select + YAML textarea", () => {
+  reset();
+  const html = app.new_plan_form_html(TEMPLATES);
+  assert.match(html, /New plan/, "expected the form heading");
+  assert.match(html, /id="new-name"/, "expected the name field");
+  assert.match(html, /id="new-template"/, "expected the template picker");
+  assert.match(html, /XOC-64 Mesh \(mesh\)/, "expected a template option from the catalog");
+  assert.match(html, /Blank/, "expected the Blank (paste your own) option");
+  assert.match(html, /id="new-yaml"/, "expected the YAML textarea");
+  assert.match(html, /id="new-submit-btn"/, "expected the Create button");
+});
+
+// new_plan_form_html tolerates an empty/garbage catalog (paste flow still works).
+test("new_plan_form_html: empty catalog still renders the Blank option + textarea", () => {
+  reset();
+  const html = app.new_plan_form_html("{}");
+  assert.match(html, /id="new-yaml"/, "expected the YAML textarea even with no templates");
+  assert.match(html, /Blank/, "expected the Blank option");
+});
+
+// "New plan" -> form -> choose template -> textarea prefilled -> submit POSTs the
+// YAML and (template chosen) PUTs the overlay, then routes to the new detail.
+test("create from template: prefill + POST plan + PUT overlay + route to detail", async () => {
+  reset();
+  const route = (url, opts) => {
+    if (url === "/api/plans" && (!opts.method || opts.method === "GET")) return "{\"plans\":[]}";
+    if (url === "/api/templates") return TEMPLATES;
+    if (url === "/api/templates/xoc-64-mesh") return TEMPLATE_64;
+    if (url === "/api/plans" && opts.method === "POST")
+      return JSON.stringify({ id: "training_xoc64_1xopg64_mesh_conv_ro", name: "XOC-64", status: "" });
+    if (url.endsWith("/overlay") && opts.method === "PUT") return { status: 204, body: "" };
+    // GET the created plan detail after routing.
+    return JSON.stringify({ id: "training_xoc64_1xopg64_mesh_conv_ro", name: "XOC-64", status: "", yaml: "meta:\n  case_id: training_xoc64_1xopg64_mesh_conv_ro\n" });
+  };
+  setResponder(route);
+  app.main_entry();
+  await flush();
+  dom["new-plan-btn"].click(); // open the form (GET /api/templates)
+  await flush();
+  // Choose a template -> on_change prefills the textarea from GET /api/templates/{id}.
+  dom["new-template"].change("xoc-64-mesh");
+  await flush();
+  assert.match(dom["new-yaml"].value, /case_id: training_xoc64/, "textarea prefilled from the template");
+  // Submit -> POST /api/plans, then PUT overlay, then route to detail.
+  dom["new-submit-btn"].click();
+  await flush();
+  assert.ok(
+    fetches.some((f) => f.url === "/api/plans" && f.method === "POST"),
+    `expected POST /api/plans; got ${JSON.stringify(fetches.map((f) => f.method + " " + f.url))}`,
+  );
+  assert.ok(
+    fetches.some(
+      (f) => f.url === "/api/plans/training_xoc64_1xopg64_mesh_conv_ro/overlay" && f.method === "PUT",
+    ),
+    "expected the template overlay to be PUT so the BOM is complete",
+  );
+  // Landed on the detail (heading rendered into #app).
+  assert.match(dom["app"]?.innerHTML ?? "", /XOC-64/, "expected to route to the created plan detail");
+});
+
+// Create error path: a malformed POST body returns a 400 error -> the error alert
+// renders in the form and NO navigation/ghost plan happens.
+test("create error: malformed YAML shows the error alert, no ghost navigation", async () => {
+  reset();
+  const route = (url, opts) => {
+    if (url === "/api/plans" && (!opts.method || opts.method === "GET")) return "{\"plans\":[]}";
+    if (url === "/api/templates") return TEMPLATES;
+    if (url === "/api/plans" && opts.method === "POST")
+      return { ok: false, status: 400, body: JSON.stringify({ error: "planstore: invalid plan: bad yaml" }) };
+    return "{}";
+  };
+  setResponder(route);
+  app.main_entry();
+  await flush();
+  dom["new-plan-btn"].click();
+  await flush();
+  el("new-yaml").value = "this: : not: valid";
+  dom["new-submit-btn"].click();
+  await flush();
+  const err = dom["new-error"]?.innerHTML ?? "";
+  assert.match(err, /alert-danger/, "expected the error alert in the form");
+  assert.match(err, /invalid plan|400/i, "expected the server error surfaced");
+});
+
+// Edit: detail textarea is editable; Save PUTs the edited YAML to /api/plans/{id}.
+test("edit: Save PUTs the edited YAML to /api/plans/{id}", async () => {
+  reset();
+  const detail = JSON.stringify({ id: "clos-small", name: "Small Clos", status: "draft", yaml: "meta:\n  case_id: clos-small\n  name: Small Clos\n" });
+  const route = (url, opts) => {
+    if (url === "/api/plans" && (!opts.method || opts.method === "GET")) return PLANS;
+    if (url === "/api/plans/clos-small" && opts.method === "PUT")
+      return JSON.stringify({ id: "clos-small", name: "Renamed", status: "draft" });
+    return detail; // GET /api/plans/clos-small (before + after save)
+  };
+  setResponder(route);
+  app.load_plans("app");
+  await flush();
+  dom["view-clos-small"].click();
+  await flush();
+  // The detail rendered an editable textarea seeded with the YAML.
+  assert.match(dom["app"]?.innerHTML ?? "", /id="edit-yaml"/, "expected an editable YAML textarea");
+  el("edit-yaml").value = "meta:\n  case_id: clos-small\n  name: Renamed\n";
+  dom["save-btn"].click();
+  await flush();
+  const put = fetches.find((f) => f.url === "/api/plans/clos-small" && f.method === "PUT");
+  assert.ok(put, `expected PUT /api/plans/clos-small; got ${JSON.stringify(fetches.map((f) => f.method + " " + f.url))}`);
+  assert.match(put.body, /Renamed/, "expected the edited YAML in the PUT body");
+});
+
+// Edit error: a 400 on Save shows the error and keeps the editor (no nav away).
+test("edit error: 400 on Save renders the error alert in #edit-error", async () => {
+  reset();
+  const detail = JSON.stringify({ id: "clos-small", name: "Small Clos", status: "draft", yaml: "meta:\n  case_id: clos-small\n" });
+  setResponder((url, opts) => {
+    if (url === "/api/plans" && (!opts.method || opts.method === "GET")) return PLANS;
+    if (url === "/api/plans/clos-small" && opts.method === "PUT")
+      return { ok: false, status: 400, body: JSON.stringify({ error: "invalid plan" }) };
+    return detail;
+  });
+  app.load_plans("app");
+  await flush();
+  dom["view-clos-small"].click();
+  await flush();
+  dom["save-btn"].click();
+  await flush();
+  assert.match(dom["edit-error"]?.innerHTML ?? "", /alert-danger/, "expected an error alert on a failed save");
+});
+
+// Delete (confirmed): DELETE /api/plans/{id} then refresh the list.
+test("delete confirmed: DELETE /api/plans/{id} then reloads the list", async () => {
+  reset();
+  setConfirm(true);
+  let deleted = false;
+  setResponder((url, opts) => {
+    if (url === "/api/plans/clos-small" && opts.method === "DELETE") {
+      deleted = true;
+      return { status: 204, body: "" };
+    }
+    // After delete the list is empty.
+    if (url === "/api/plans") return deleted ? "{\"plans\":[]}" : PLANS;
+    return PLANS;
+  });
+  app.load_plans("app");
+  await flush();
+  dom["del-clos-small"].click();
+  await flush();
+  assert.ok(
+    fetches.some((f) => f.url === "/api/plans/clos-small" && f.method === "DELETE"),
+    "expected DELETE /api/plans/clos-small",
+  );
+  assert.match(dom["app"]?.innerHTML ?? "", /0 plan\(s\)/, "expected the list to refresh empty after delete");
+});
+
+// Delete (cancelled): the confirm step returns false -> NO DELETE is issued.
+test("delete cancelled: confirm=false issues no DELETE", async () => {
+  reset();
+  setConfirm(false);
+  setResponder(() => PLANS);
+  app.load_plans("app");
+  await flush();
+  dom["del-clos-small"].click();
+  await flush();
+  assert.ok(
+    !fetches.some((f) => f.method === "DELETE"),
+    "a cancelled confirm must NOT issue a DELETE",
+  );
+});
+
+// Duplicate: GET source YAML -> POST a clone (identity suffixed) -> refresh.
+test("duplicate: clones the source plan as a new POST and refreshes", async () => {
+  reset();
+  const detail = JSON.stringify({ id: "clos-small", name: "Small Clos", status: "draft", yaml: "meta:\n  case_id: clos-small\n  name: Small Clos\n" });
+  let posted = null;
+  setResponder((url, opts) => {
+    if (url === "/api/plans" && opts && opts.method === "POST") {
+      posted = opts.body;
+      return JSON.stringify({ id: "clos-small-copy", name: "Small Clos (copy)", status: "draft" });
+    }
+    if (url === "/api/plans/clos-small/overlay") return { ok: false, status: 404, body: JSON.stringify({ error: "no overlay" }) };
+    if (url === "/api/plans/clos-small") return detail;
+    return PLANS;
+  });
+  app.load_plans("app");
+  await flush();
+  dom["dup-clos-small"].click();
+  await flush();
+  assert.ok(posted, "expected a POST /api/plans for the clone");
+  assert.match(posted, /clos-small-copy/, "expected the cloned case_id to be suffixed");
+  assert.match(posted, /\(copy\)/, "expected the cloned name to be suffixed");
+});
+
+// clone_yaml_identity: suffixes meta.case_id (id-safe) and meta.name (human).
+test("clone_yaml_identity: suffixes meta.case_id and meta.name", () => {
+  const src = "meta:\n  case_id: training_xoc64_1xopg64_mesh_conv_ro\n  name: XOC 64\n  version: 1\n";
+  const out = app.clone_yaml_identity(src, "-copy");
+  assert.match(out, /case_id: training_xoc64_1xopg64_mesh_conv_ro-copy/, "case_id suffixed (id-safe)");
+  assert.match(out, /name: XOC 64 \(copy\)/, "name suffixed (human)");
+  assert.match(out, /version: 1/, "unrelated lines untouched");
+});
+
+// api_put / api_delete request shape (the new client wrappers).
+test("api wrappers: PUT and DELETE issue the right method/url", async () => {
+  reset();
+  const detail = JSON.stringify({ id: "p1", name: "P1", status: "draft", yaml: "meta:\n  case_id: p1\n" });
+  setResponder((url, opts) => {
+    if (url === "/api/plans" && (!opts.method || opts.method === "GET")) return JSON.stringify({ plans: [{ id: "p1", name: "P1", status: "draft" }] });
+    if (url === "/api/plans/p1" && opts.method === "PUT") return JSON.stringify({ id: "p1", name: "P1b", status: "draft" });
+    if (url === "/api/plans/p1" && opts.method === "DELETE") return { status: 204, body: "" };
+    return detail;
+  });
+  app.load_plans("app");
+  await flush();
+  // PUT via Save.
+  dom["view-p1"].click();
+  await flush();
+  dom["save-btn"].click();
+  await flush();
+  assert.ok(fetches.some((f) => f.url === "/api/plans/p1" && f.method === "PUT"), "expected a PUT");
+  // DELETE via the detail Delete button.
+  setConfirm(true);
+  dom["detail-del-btn"].click();
+  await flush();
+  assert.ok(fetches.some((f) => f.url === "/api/plans/p1" && f.method === "DELETE"), "expected a DELETE");
 });

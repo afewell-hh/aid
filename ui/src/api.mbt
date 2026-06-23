@@ -19,9 +19,37 @@ pub fn api_post(
   fetch_post(api_base + path, body, cb)
 }
 
+// PUT <api_base><path> with a body, delivering (ok, status, body) to cb (same
+// failure contract as api_get/api_post). Used for plan edit and overlay attach.
+pub fn api_put(
+  path : String,
+  body : String,
+  cb : (Bool, Int, String) -> Unit
+) -> Unit {
+  fetch_put(api_base + path, body, cb)
+}
+
+// DELETE <api_base><path>, delivering (ok, status, body) to cb (same failure
+// contract). A 204 has an empty body; the caller keys off ok/status.
+pub fn api_delete(path : String, cb : (Bool, Int, String) -> Unit) -> Unit {
+  fetch_delete(api_base + path, cb)
+}
+
 // Endpoint path builders (single source of truth for the route shapes).
 pub fn plans_path() -> String {
   "/plans"
+}
+
+pub fn overlay_path(id : String) -> String {
+  "/plans/" + id + "/overlay"
+}
+
+pub fn templates_path() -> String {
+  "/templates"
+}
+
+pub fn template_path(id : String) -> String {
+  "/templates/" + id
 }
 
 pub fn plan_path(id : String) -> String {

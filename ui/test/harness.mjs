@@ -7,7 +7,10 @@ export const dom = {}; // id -> stub element
 export const fetches = []; // recorded {url, method, body}
 export const saved = []; // recorded {filename, content} from save_file (downloads)
 
-function el(id) {
+// el returns (lazily creating) the stub element for id. Exported so tests can
+// pre-create/address a control the renderer references by id (set_html only sets
+// an innerHTML string — it does not materialize child stubs).
+export function el(id) {
   return (dom[id] ??= {
     id,
     innerHTML: "",
@@ -21,8 +24,23 @@ function el(id) {
     click() {
       (this._listeners.click || []).forEach((f) => f());
     },
+    // Set the value and fire any registered change listeners (models a user
+    // editing an <input>/<select>/<textarea>): the New-plan template picker wires
+    // on_change to prefill the YAML textarea.
+    change(v) {
+      if (v !== undefined) this.value = v;
+      (this._listeners.change || []).forEach((f) => f());
+    },
   });
 }
+
+// confirm: window.confirm stub for the delete-confirm step. Defaults to true
+// (accept); tests can flip confirmResult to model a user clicking Cancel.
+export let confirmResult = true;
+export function setConfirm(v) {
+  confirmResult = v;
+}
+globalThis.confirm = () => confirmResult;
 
 // responder returns the response for a (url, opts). It may return either a plain
 // string (treated as a 200 OK body) or an object {ok?, status?, body} to model an
@@ -41,6 +59,7 @@ export function reset() {
   fetches.length = 0;
   saved.length = 0;
   responder = () => "";
+  confirmResult = true;
 }
 
 // flush drains pending promise callbacks (the fetch().then(...) chain).

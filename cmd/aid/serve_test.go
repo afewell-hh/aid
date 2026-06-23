@@ -326,3 +326,105 @@ func TestAPI_Wiring_NotFound(t *testing.T) {
 	rec := do(t, mux, http.MethodGet, "/api/plans/missing/wiring/frontend", nil)
 	assertJSONError(t, rec, http.StatusNotFound)
 }
+
+// --- GET /api/templates + GET /api/templates/{id} (P0.2 "New from template") ---
+
+// TestAPI_ListTemplates: the starter catalog is non-empty and every entry has
+// id/name/topology (the fields the GUI's New-plan picker renders).
+func TestAPI_ListTemplates(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodGet, "/api/templates", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Templates []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Topology string `json:"topology"`
+		} `json:"templates"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode templates: %v; body=%s", err, rec.Body.String())
+	}
+	if len(out.Templates) == 0 {
+		t.Fatal("template catalog is empty")
+	}
+	for _, tpl := range out.Templates {
+		if tpl.ID == "" || tpl.Name == "" || tpl.Topology == "" {
+			t.Errorf("template summary missing id/name/topology: %+v", tpl)
+		}
+	}
+}
+
+// TestAPI_GetTemplate_ReturnsValidYAML: a named starter returns training YAML
+// (valid + carrying a meta block) and a non-empty optic overlay, so a
+// template-created plan actually resolves AND yields a full BOM.
+func TestAPI_GetTemplate_ReturnsValidYAML(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodGet, "/api/templates/xoc-64-mesh", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		ID       string `json:"id"`
+		Training string `json:"training"`
+		Overlay  string `json:"overlay"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode template: %v", err)
+	}
+	if out.ID != "xoc-64-mesh" {
+		t.Errorf("template id: got %q want xoc-64-mesh", out.ID)
+	}
+	if !strings.Contains(out.Training, "meta:") || !strings.Contains(out.Training, "case_id") {
+		t.Errorf("template training does not look like a DIET plan: %.120s", out.Training)
+	}
+	if out.Overlay == "" {
+		t.Errorf("template xoc-64-mesh has no overlay; created plan would have blank optic columns")
+	}
+}
+
+// TestAPI_GetTemplate_CreatesResolvablePlan is the end-to-end on-ramp: fetch a
+// template, POST its training to create a plan, attach the overlay, and confirm
+// it round-trips (gettable by id). Proves "New from template" yields a real,
+// persisted plan — the GUI's create flow over the same routes.
+func TestAPI_GetTemplate_CreatesResolvablePlan(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	tr := do(t, mux, http.MethodGet, "/api/templates/xoc-64-mesh", nil)
+	if tr.Code != http.StatusOK {
+		t.Fatalf("get template: %d; body=%s", tr.Code, tr.Body.String())
+	}
+	var tpl struct {
+		Training string `json:"training"`
+		Overlay  string `json:"overlay"`
+	}
+	if err := json.Unmarshal(tr.Body.Bytes(), &tpl); err != nil {
+		t.Fatalf("decode template: %v", err)
+	}
+	cr := do(t, mux, http.MethodPost, "/api/plans", []byte(tpl.Training))
+	if cr.Code != http.StatusOK && cr.Code != http.StatusCreated {
+		t.Fatalf("create from template: %d; body=%s", cr.Code, cr.Body.String())
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(cr.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created: %v", err)
+	}
+	if created.ID == "" {
+		t.Fatal("created plan has no id")
+	}
+	if ov := do(t, mux, http.MethodPut, "/api/plans/"+created.ID+"/overlay", []byte(tpl.Overlay)); ov.Code != http.StatusNoContent {
+		t.Fatalf("attach overlay: %d; body=%s", ov.Code, ov.Body.String())
+	}
+	if g := do(t, mux, http.MethodGet, "/api/plans/"+created.ID, nil); g.Code != http.StatusOK {
+		t.Errorf("get created plan: %d; body=%s", g.Code, g.Body.String())
+	}
+}
+
+func TestAPI_GetTemplate_NotFound(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	rec := do(t, mux, http.MethodGet, "/api/templates/no-such-template", nil)
+	assertJSONError(t, rec, http.StatusNotFound)
+}
