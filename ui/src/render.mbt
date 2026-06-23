@@ -63,6 +63,47 @@ fn warn_box(msg : String) -> String {
   "<div class=\"alert alert-warning\">\{esc(msg)}</div>"
 }
 
+// error_html is the shared HTTP/network error alert (P0.4). It renders a clear,
+// human danger alert — never success/empty markup — for a non-2xx response or a
+// network failure (status==0). When the body carries a structured {"error": ...}
+// message it is shown; otherwise a status-derived fallback is used. This is
+// distinct from calc-as-data (is_valid:false), which stays the calc-summary path.
+pub fn error_html(status : Int, body : String) -> String {
+  // Prefer the server's structured error message when present.
+  let detail = error_message(body)
+  let headline = if status == 0 {
+    "Network error"
+  } else {
+    "Request failed (HTTP \{status})"
+  }
+  let msg = if detail != "" {
+    detail
+  } else if status == 0 {
+    "Could not reach the server. Check that it is running and try again."
+  } else {
+    "The server returned an error."
+  }
+  "<div class=\"alert alert-danger\" role=\"alert\">" +
+  "<strong>\{esc(headline)}:</strong> \{esc(msg)}</div>"
+}
+
+// error_message extracts a top-level {"error": "..."} string from a JSON body, or
+// "" when the body is not JSON / has no error key. Used both to surface a server
+// error message and to detect an error body on an otherwise 2xx-shaped response.
+fn error_message(body : String) -> String {
+  let root = try {
+    @json.parse(body)
+  } catch {
+    _ => return ""
+  }
+  str_at(root, "error")
+}
+
+// body_has_error reports whether a (2xx) body is actually a structured error.
+pub fn body_has_error(body : String) -> Bool {
+  error_message(body) != ""
+}
+
 // status_badge maps a plan status to a Bootstrap badge.
 fn status_badge(status : String) -> String {
   let cls = match status {
@@ -191,13 +232,64 @@ pub fn calc_summary_html(calc_json : String) -> String {
   } else {
     ""
   }
+  // Per-fabric wiring download (P0.3): rendered only on a VALID calc, populated
+  // from the server-derived managed_fabrics list (never guessed). app.mbt wires
+  // each button (id "wiring-<fabric>") to download_wiring(plan_id, fabric).
+  let wiring_block = if is_valid {
+    wiring_download_html(arr_at(root, "managed_fabrics"))
+  } else {
+    ""
+  }
   "<div class=\"card\">" +
   "<div class=\"card-header d-flex justify-content-between align-items-center\"><span>Validation</span>\{badge}</div>" +
   "<div class=\"card-body\">" +
   quantity_table(root, "switch_quantity", "Switch quantities") +
   quantity_table(root, "server_quantity", "Server quantities") +
   "<p class=\"mb-0 text-muted small\">\{endpoints} endpoint(s) · \{verdicts} transceiver verdict(s)</p>" +
+  wiring_block +
   "</div>\{err_block}</div>"
+}
+
+// managed_fabrics extracts the managed-fabric name strings from a calc-result
+// JSON body (the server-derived list). Empty when absent or not an array.
+pub fn managed_fabrics(calc_json : String) -> Array[String] {
+  let root = try {
+    @json.parse(calc_json)
+  } catch {
+    _ => return []
+  }
+  let names : Array[String] = []
+  for f in arr_at(root, "managed_fabrics") {
+    match f {
+      String(s) => names.push(s)
+      _ => ()
+    }
+  }
+  names
+}
+
+// wiring_download_html renders one "Download wiring" button per managed fabric,
+// each with a stable id "wiring-<fabric>" the event wiring binds. "" when there
+// are no managed fabrics (nothing to offer).
+fn wiring_download_html(fabrics : Array[Json]) -> String {
+  let names : Array[String] = []
+  for f in fabrics {
+    match f {
+      String(s) => names.push(s)
+      _ => ()
+    }
+  }
+  if names.length() == 0 {
+    return ""
+  }
+  let mut btns = ""
+  for name in names {
+    btns = btns +
+      "<button id=\"wiring-\{esc(name)}\" class=\"btn btn-outline-success btn-sm me-2 mb-2\" " +
+      "data-fabric=\"\{esc(name)}\">Download wiring: \{esc(name)}</button>"
+  }
+  "<hr><h4 class=\"h6\">Validated wiring (hhfab)</h4>" +
+  "<div class=\"d-flex flex-wrap\">\{btns}</div>"
 }
 
 // bom_html: the F7b BOM — a flat table of rows[] (the projection's string cells:

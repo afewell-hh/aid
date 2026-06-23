@@ -221,6 +221,88 @@ func TestAPI_F7b_Wiring_ReproducesOracle(t *testing.T) {
 	}
 }
 
+// --- managed-fabric discovery + bad-fabric 404 (Issue #65, P0.3) --------------
+
+// TestAPI_F7b_Calc_ExposesManagedFabrics pins that POST /calc carries the plan's
+// managed fabric names (fabric_class == managed), so the GUI can populate
+// per-fabric download buttons from real data instead of guessing. The names must
+// match the composition's authoritative Managed list.
+func TestAPI_F7b_Calc_ExposesManagedFabrics(t *testing.T) {
+	for _, comp := range []string{"xoc-64-mesh-conv-ro", "xoc-256-2xopg128-clos-ro"} {
+		t.Run(comp, func(t *testing.T) {
+			training, _, _ := oracleArtifacts(t, comp)
+			mux, dir := newTestAPI(t)
+			seedDIET(t, dir, "p", training)
+
+			rec := do(t, mux, http.MethodPost, "/api/plans/p/calc", nil)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("calc status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+			}
+			var got struct {
+				ManagedFabrics []string `json:"managed_fabrics"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode calc: %v; body=%s", err, rec.Body.String())
+			}
+			var want []string
+			for _, c := range oracle.Compositions() {
+				if c.Name == comp {
+					want = c.Managed
+				}
+			}
+			if !reflect.DeepEqual(got.ManagedFabrics, want) {
+				t.Errorf("%s managed_fabrics = %v, want %v", comp, got.ManagedFabrics, want)
+			}
+		})
+	}
+}
+
+// TestAPI_F7b_Wiring_ManagedFabricSucceeds confirms a real managed fabric still
+// streams wiring YAML (200, not the new 404 path) — a regression guard on the
+// fabric validation added for the bad-fabric case.
+func TestAPI_F7b_Wiring_ManagedFabricSucceeds(t *testing.T) {
+	training, overlay, _ := oracleArtifacts(t, "xoc-256-2xopg128-clos-ro")
+	mux, dir := newTestAPI(t)
+	seedDIET(t, dir, "p", training)
+	seedOverlayFile(t, dir, "p", overlay)
+
+	rec := do(t, mux, http.MethodGet, "/api/plans/p/wiring/frontend", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("wiring/frontend status: got %d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "wiring.githedgehog.com") {
+		t.Errorf("wiring/frontend body is not a CRD stream: %s", rec.Body.String())
+	}
+}
+
+// TestAPI_F7b_Wiring_BadFabric404 pins the P0.3 fix: an unknown/non-managed
+// fabric returns 404 + the valid-fabric list in the JSON body, instead of the
+// old 200 + empty body (which the GUI could not distinguish from real wiring).
+func TestAPI_F7b_Wiring_BadFabric404(t *testing.T) {
+	training, overlay, _ := oracleArtifacts(t, "xoc-256-2xopg128-clos-ro")
+	mux, dir := newTestAPI(t)
+	seedDIET(t, dir, "p", training)
+	seedOverlayFile(t, dir, "p", overlay)
+
+	rec := do(t, mux, http.MethodGet, "/api/plans/p/wiring/nonsuch", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("bad fabric status: got %d want 404; body=%s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Error        string   `json:"error"`
+		ValidFabrics []string `json:"valid_fabrics"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode bad-fabric error: %v; body=%s", err, rec.Body.String())
+	}
+	if got.Error == "" {
+		t.Errorf("bad fabric must carry an error message; body=%s", rec.Body.String())
+	}
+	if !reflect.DeepEqual(got.ValidFabrics, []string{"backend", "frontend"}) {
+		t.Errorf("bad fabric valid_fabrics = %v, want [backend frontend]", got.ValidFabrics)
+	}
+}
+
 // --- GET/PUT /api/plans/{id}/overlay (new sub-resource) -----------------------
 
 // TestAPI_F7b_Overlay_RoundTrip asserts EXACT byte fidelity: GET returns verbatim
