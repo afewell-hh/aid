@@ -354,6 +354,192 @@ test.describe("AID GUI P0.4 — HTTP / network error handling", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Issue #65 — P0.2: in-browser authoring (create / edit / delete / duplicate).
+//
+// These drive the REAL authoring UI against the LIVE seeded server: New-from-
+// template, raw-YAML edit, delete, and the create error path. They CREATE new
+// plans at runtime (distinct ids) and clean up via the Delete affordance so the
+// seeded read-only fixtures are unaffected. window.confirm is auto-accepted via a
+// dialog handler so the delete-confirm step does not hang headless chromium.
+// ---------------------------------------------------------------------------
+test.describe("AID GUI P0.2 — create / edit / delete authoring", () => {
+  // Auto-accept the native confirm() (delete) dialog for every test here.
+  test.beforeEach(async ({ page }) => {
+    page.on("dialog", (d) => d.accept());
+  });
+
+  // setTextarea sets a (large) textarea's value directly + fires input, instead of
+  // page.fill — fill() is pathologically slow (~12s) on the 24KB plan YAML because
+  // it re-verifies the value char-by-char. This is still a real DOM mutation the
+  // app reads back via get_value(). Small inputs still use fill() for fidelity.
+  async function setTextarea(page, selector, value) {
+    await page.locator(selector).waitFor();
+    await page.locator(selector).evaluate((el, v) => {
+      el.value = v;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, value);
+  }
+
+  // (a) New-from-template (mesh xoc-64): pick the starter -> the YAML textarea
+  // prefills -> Create -> lands on the new plan's detail -> Calculate shows Valid
+  // + the known quantities -> View BOM shows non-blank optic identity (the
+  // template's overlay was attached, so the BOM is full, not blank optics).
+  //
+  // NOTE: a template-created plan's derived id == the template's case_id, which is
+  // the SAME id as the seeded mesh-64 fixture; creating it re-writes the identical
+  // plan + overlay (idempotent). We deliberately do NOT delete here — that would
+  // remove the shared read-only fixture other tests rely on. (The dedicated delete
+  // coverage uses throwaway unique-id plans below.)
+  test("New from template (mesh) -> create -> Calculate Valid + full BOM (optics populated)", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await waitForApp(page);
+
+    await page.getByRole("button", { name: "+ New plan" }).click();
+    await expect(page.getByRole("heading", { name: "New plan" })).toBeVisible();
+
+    // Choose the xoc-64 mesh starter; the textarea prefills from GET the template.
+    await page.locator("#new-template").selectOption("xoc-64-mesh");
+    await expect(page.locator("#new-yaml")).toHaveValue(/case_id:\s*training_xoc64/);
+
+    await page.locator("#new-submit-btn").click();
+
+    // Landed on the created plan's detail (derived id == the template's case_id).
+    await expect(page.getByRole("heading", { name: MESH_64_NAME })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Calculate" })).toBeVisible();
+
+    // Calculate: Valid + the known mesh quantities (proves the created plan really
+    // computes against the live kernel).
+    await page.getByRole("button", { name: "Calculate" }).click();
+    const result = page.locator("#detail-result");
+    await expect(result.getByText("Valid", { exact: true })).toBeVisible();
+    await expect(result.locator("tr", { hasText: "soc_storage_scale_out_leaf" })).toContainText("2");
+    await expect(result.locator("tr", { hasText: "compute_xpu" })).toContainText("8");
+
+    // View BOM: the attached template overlay populates optic identity — assert a
+    // non-blank optical standard cell (blank without the overlay).
+    await page.getByRole("button", { name: "View BOM" }).click();
+    await expect(result.getByRole("heading", { name: "Bill of Materials" })).toBeVisible();
+    await expect(result.getByText(/400GBASE-DR4|200GBASE-SR2/).first()).toBeVisible();
+    // Still present in the list afterward (the seeded fixture remains intact).
+    await page.getByRole("button", { name: "← All plans" }).click();
+    await expect(page.getByText(MESH_64_ID, { exact: true })).toBeVisible();
+  });
+
+  // (b) Edit: create a throwaway plan from pasted YAML, open it, bump a
+  // server-class quantity in the textarea, Save, re-Calculate -> the changed
+  // quantity is reflected. Then delete it.
+  test("Edit the YAML -> Save -> re-Calculate reflects the change, then delete", async ({
+    page,
+  }) => {
+    const id = "e2e_edit_" + Date.now();
+    // A minimal real DIET plan: clone xoc-64 training via the template, but with a
+    // unique case_id so it does not collide with the seeded fixture. We fetch the
+    // template YAML through the page, rewrite identity + a quantity, and paste it.
+    await page.goto("/");
+    await waitForApp(page);
+    const tplYaml = await page.evaluate(async () => {
+      const r = await fetch("/api/templates/xoc-64-mesh");
+      return (await r.json()).training;
+    });
+    const yaml = tplYaml
+      .replace(/case_id:\s*training_xoc64_1xopg64_mesh_conv_ro/, "case_id: " + id)
+      .replace(/name:\s*Training XOC-64 1x OPG-64 Mesh Converged RO/, "name: E2E Edit Plan");
+
+    await page.getByRole("button", { name: "+ New plan" }).click();
+    await setTextarea(page, "#new-yaml", yaml);
+    await page.locator("#new-submit-btn").click();
+    await expect(page.getByRole("heading", { name: "E2E Edit Plan" })).toBeVisible();
+
+    // Baseline calc: compute_xpu == 8.
+    await page.getByRole("button", { name: "Calculate" }).click();
+    const result = page.locator("#detail-result");
+    await expect(result.locator("tr", { hasText: "compute_xpu" })).toContainText("8");
+
+    // Edit: drop compute_xpu quantity 8 -> 4 in the editable textarea, Save.
+    const edited = yaml.replace(/quantity:\s*8/, "quantity: 4");
+    await setTextarea(page, "#edit-yaml", edited);
+    await page.locator("#save-btn").click();
+    // Re-render of detail after save; re-Calculate and assert the new quantity.
+    await expect(page.getByRole("button", { name: "Calculate" })).toBeVisible();
+    await page.getByRole("button", { name: "Calculate" }).click();
+    await expect(result.locator("tr", { hasText: "compute_xpu" })).toContainText("4");
+
+    // Clean up.
+    await page.getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByRole("heading", { name: "Topology Plans" })).toBeVisible();
+    await expect(page.getByText(id, { exact: true })).toHaveCount(0);
+  });
+
+  // (c) Delete from the list row: create a throwaway plan, then delete it via the
+  // per-row Delete button and assert it disappears from the table.
+  test("Delete from the list row removes the plan", async ({ page }) => {
+    const id = "e2e_del_" + Date.now();
+    await page.goto("/");
+    await waitForApp(page);
+    const tplYaml = await page.evaluate(async () => {
+      const r = await fetch("/api/templates/xoc-64-mesh");
+      return (await r.json()).training;
+    });
+    const yaml = tplYaml.replace(/case_id:\s*training_xoc64_1xopg64_mesh_conv_ro/, "case_id: " + id);
+
+    await page.getByRole("button", { name: "+ New plan" }).click();
+    await setTextarea(page, "#new-yaml", yaml);
+    await page.locator("#new-submit-btn").click();
+    // Back to the list (via the detail Back link) to use the row Delete.
+    await page.getByRole("button", { name: "← All plans" }).click();
+    await expect(page.getByText(id, { exact: true })).toBeVisible();
+
+    await page.locator(`#del-${id}`).click();
+    await expect(page.getByText(id, { exact: true })).toHaveCount(0);
+  });
+
+  // (d) Create error path: submit malformed YAML -> the shared error alert renders
+  // IN the form and NO ghost plan appears in the list.
+  test("malformed YAML create shows the error alert, no ghost plan", async ({ page }) => {
+    await page.goto("/");
+    await waitForApp(page);
+    await page.getByRole("button", { name: "+ New plan" }).click();
+    await page.locator("#new-yaml").fill("this: : not: valid: yaml\n  - [");
+    await page.locator("#new-submit-btn").click();
+
+    // Error alert in the form; still on the New-plan screen (no navigation).
+    await expect(page.locator("#new-error .alert-danger")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "New plan" })).toBeVisible();
+
+    // Cancel back to the list and confirm no ghost plan was created.
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("heading", { name: "Topology Plans" })).toBeVisible();
+    // The seeded count is 4; a failed create must not have added a row.
+    await expect(page.getByText("4 plan(s)", { exact: true })).toBeVisible();
+  });
+
+  // (e) Duplicate: clone a seeded plan; the copy appears with a -copy id suffix,
+  // computes Valid, then delete the clone (leaving the original).
+  test("Duplicate a plan -> clone appears, computes Valid, then delete the clone", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await waitForApp(page);
+    await page.locator(`#dup-${MESH_64_ID}`).click();
+
+    const cloneId = `${MESH_64_ID}-copy`;
+    await expect(page.getByText(cloneId, { exact: true })).toBeVisible();
+
+    // The clone calculates Valid (identity-suffixed copy of a valid plan).
+    await page.locator(`#view-${cloneId}`).click();
+    await page.getByRole("button", { name: "Calculate" }).click();
+    await expect(page.locator("#detail-result").getByText("Valid", { exact: true })).toBeVisible();
+
+    // Clean up the clone.
+    await page.getByRole("button", { name: "← All plans" }).click();
+    await page.locator(`#del-${cloneId}`).click();
+    await expect(page.getByText(cloneId, { exact: true })).toHaveCount(0);
+  });
+});
+
 // streamToString drains a Node Readable (download.createReadStream) to a string.
 async function streamToString(stream) {
   const chunks = [];

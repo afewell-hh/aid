@@ -1,0 +1,173 @@
+# AID-owned optic/description catalog OVERLAY for the xoc-128 BOM projection (F5).
+#
+# Per-composition overlay (Issue #62, lead decision: per-composition not shared).
+# Same provenance discipline as the xoc-64 overlay (tests/fixtures/f3/optic-
+# overlay.yaml; D1/D12): training.yaml `module_types` carry only {id, manufacturer,
+# model}. bom.csv columns 7–19 (cage/medium/connector/standard/reach/wavelength/
+# lanes/breakout) and the manufacturer/description casing are PUBLIC OPTICAL-
+# STANDARD FACTS that AID OWNS. Authored BY HAND from public facts — NOT read back
+# from bom.csv (circular) and NOT imported from HNP seed_catalog.py. Merged by
+# pinned id onto the catalog extracted from training.yaml.
+#
+# What differs from the xoc-64 overlay (note §3.3):
+#   1. NEW transceiver SKU `osfp_200g_dr4` (200GBASE-DR4: 4 lanes × 50 Gbps/lane
+#      PAM4, 1310 nm, SMF, MPO-12, DR reach — IEEE 802.3 public facts). xoc-128
+#      has NO switch_transceiver rows, so only the two server-side OSFP DR4 optics
+#      appear.
+#   2. NEW per-OPG `_a/_b` class ids for descriptive identity (cols 2+5). The
+#      bom.csv identity is an inconsistent mix AID must pin exactly: switches use
+#      the device-type SLUG (celestica-ds5000/ds2000) EXCEPT oob_leaf which uses
+#      the MODEL string (Celestica DS1000); manufacturer is title-cased.
+items:
+  # --- server transceiver SKUs (cols 7–19) -----------------------------------
+  - id: { name: osfp_400g_dr4, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Generic
+    model: OSFP-400G-DR4
+    description: ""
+    calc_profile:
+      cage_type: OSFP
+      medium: SMF
+      connector: MPO-12
+      standard: 400GBASE-DR4
+      reach_class: DR
+      wavelength_nm: "1310"
+      host_lane_count: "4"
+      host_serdes_gbps_per_lane: "100"
+      optical_lane_pattern: DR4
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 1x
+      is_cable_assembly: "false"
+
+  - id: { name: osfp_200g_dr4, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Generic
+    model: OSFP-200G-DR4
+    description: ""
+    calc_profile:
+      cage_type: OSFP
+      medium: SMF
+      connector: MPO-12
+      standard: 200GBASE-DR4
+      reach_class: DR
+      wavelength_nm: "1310"
+      host_lane_count: "4"
+      host_serdes_gbps_per_lane: "50"
+      optical_lane_pattern: DR4
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 1x
+      is_cable_assembly: "false"
+
+  # --- NIC modules: cols 7–19 mostly empty; optical_lane_pattern "Unknown" ----
+  - id: { name: bmc_module, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: Generic
+    model: BMC Management Port
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
+
+  - id: { name: nic_dual_200g, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: Generic
+    model: Generic Dual-Port 200G NIC
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
+
+  - id: { name: nic_dual_25g, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: Generic
+    model: Generic Dual-Port 25GbE NIC
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
+
+  - id: { name: nic_xpu_scale_out_8x400, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: NVIDIA
+    model: Generic xPU Scale-Out 8x400G NIC
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
+
+  - id: { name: nic_xpu_soc_storage_2x200, version: "1" }
+    kind: nic
+    layer: hardware_type
+    manufacturer: NVIDIA
+    model: Generic xPU SoC/Storage 2x200G NIC
+    calc_profile: { gearbox_present: Unknown, is_cable_assembly: "false" }
+
+  # --- base device descriptive identity (projection cols 2 + 5) --------------
+  # bom.csv `module_type_model` / `manufacturer` for base server/switch rows,
+  # keyed by the xoc-128 per-OPG class ids.
+  - id: { name: compute_xpu_a, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OCP-Compliant xPU Server
+  - id: { name: compute_xpu_b, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OCP-Compliant xPU Server
+  - id: { name: storage_srv_a, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OCP-Compliant Storage Server
+  - id: { name: storage_srv_b, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OCP-Compliant Storage Server
+  - id: { name: metadata_srv_a, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OCP-Compliant Metadata Server
+  - id: { name: metadata_srv_b, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: OCP-Compliant Metadata Server
+  - id: { name: hh_gateway, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: Hedgehog Gateway x86
+  - id: { name: hh_controller, version: "1" }
+    kind: server
+    layer: class
+    manufacturer: Generic
+    model: Hedgehog Controller x86
+  - id: { name: scale_out_leaf_a, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds5000
+  - id: { name: scale_out_leaf_b, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds5000
+  - id: { name: soc_storage_leaf_a, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds5000
+  - id: { name: soc_storage_leaf_b, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds5000
+  - id: { name: inb_mgmt_leaf, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: celestica-ds2000
+  - id: { name: oob_leaf, version: "1" }
+    kind: switch
+    layer: class
+    manufacturer: Celestica
+    model: Celestica DS1000

@@ -318,10 +318,16 @@ function _M0TPB9ArrayViewGUsRPB4JsonEE(param0, param1, param2) {
 const _M0FP25aidui3src12console__log = (m) => console.log(m);
 const _M0FP25aidui3src9set__html = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
 const _M0FP25aidui3src9on__click = (id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("click", () => cb()); };
+const _M0FP25aidui3src10on__change = (id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("change", () => cb()); };
 const _M0FP25aidui3src13set__disabled = (id, disabled) => { const e = document.getElementById(id); if (e) e.disabled = disabled; };
 const _M0FP25aidui3src9set__text = (id, text) => { const e = document.getElementById(id); if (e) e.textContent = text; };
 const _M0FP25aidui3src10fetch__get = (url, cb) => { fetch(url).then(r => r.text().then(t => cb(r.ok, r.status, t))).catch(() => cb(false, 0, "")); };
 const _M0FP25aidui3src11fetch__post = (url, body, cb) => { fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }).then(r => r.text().then(t => cb(r.ok, r.status, t))).catch(() => cb(false, 0, "")); };
+const _M0FP25aidui3src10fetch__put = (url, body, cb) => { fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body }).then(r => r.text().then(t => cb(r.ok, r.status, t))).catch(() => cb(false, 0, "")); };
+const _M0FP25aidui3src13fetch__delete = (url, cb) => { fetch(url, { method: "DELETE" }).then(r => r.text().then(t => cb(r.ok, r.status, t))).catch(() => cb(false, 0, "")); };
+const _M0FP25aidui3src10get__value = (id) => { const e = document.getElementById(id); return e ? (e.value || "") : ""; };
+const _M0FP25aidui3src10set__value = (id, value) => { const e = document.getElementById(id); if (e) e.value = value; };
+const _M0FP25aidui3src7confirm = (m) => (typeof confirm === 'function' ? confirm(m) : true);
 const _M0FP25aidui3src10save__file = (filename, content) => { const b = new Blob([content], {type:"text/yaml"}); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = filename; a.click(); URL.revokeObjectURL(u); };
 const _M0FPB4null = _M0DTPB4Json4Null__;
 const _M0FPC16double14not__a__number = $i64_reinterpret_f64(9221120237041090561n);
@@ -617,6 +623,9 @@ function _M0IPB13StringBuilderPB6Logger11write__view(self, str) {
 function _M0MPC15array5Array4pushGsE(self, value) {
   _M0MPB7JSArray4push(self, value);
 }
+function _M0MPC15array5Array4pushGcE(self, value) {
+  _M0MPB7JSArray4push(self, value);
+}
 function _M0MPC16string10StringView9is__empty(self) {
   return (self.end - self.start | 0) === 0;
 }
@@ -907,6 +916,15 @@ function _M0IPC16string6StringPB4Hash4hash(self) {
 }
 function _M0MPC16double6Double7to__int(self) {
   return self !== self ? 0 : self >= 2147483647 ? 2147483647 : self <= -2147483648 ? -2147483648 : self | 0;
+}
+function _M0MPC15array5Array2atGcE(self, index) {
+  const len = self.length;
+  if (index >= 0 && index < len) {
+    $bound_check(self, index);
+    return self[index];
+  } else {
+    return $panic();
+  }
 }
 function _M0FPC28internal7strconv10range__errGuE() {
   return new _M0DTPC16result6ResultGuRPB7FailureE3Err(new _M0DTPC15error5Error48moonbitlang_2fcore_2fbuiltin_2eFailure_2eFailure(_M0FPC28internal7strconv15range__err__str));
@@ -4096,6 +4114,249 @@ function _M0FP25aidui3src7arr__at(j, key) {
   }
   return [];
 }
+function _M0FP25aidui3src5chars(s) {
+  const cs = [];
+  const _bind = s.length;
+  let _tmp = 0;
+  while (true) {
+    const _string_index = _tmp;
+    if (_string_index < _bind) {
+      let _decoded_next_string_index;
+      let _decoded_char;
+      _L: {
+        const _bind$2 = s.charCodeAt(_string_index);
+        if (_bind$2 >= 55296 && _bind$2 <= 56319 && (_string_index + 1 | 0) < _bind) {
+          const _bind$3 = s.charCodeAt(_string_index + 1 | 0);
+          if (_bind$3 >= 56320 && _bind$3 <= 57343) {
+            const _tmp$2 = _string_index + 2 | 0;
+            const _p = (((Math.imul(_bind$2 - 55296 | 0, 1024) | 0) + _bind$3 | 0) - 56320 | 0) + 65536 | 0;
+            _decoded_next_string_index = _tmp$2;
+            _decoded_char = _p;
+            break _L;
+          } else {
+            const _tmp$2 = _string_index + 1 | 0;
+            const _p = _bind$2;
+            _decoded_next_string_index = _tmp$2;
+            _decoded_char = _p;
+            break _L;
+          }
+        } else {
+          const _tmp$2 = _string_index + 1 | 0;
+          const _p = _bind$2;
+          _decoded_next_string_index = _tmp$2;
+          _decoded_char = _p;
+          break _L;
+        }
+      }
+      _M0MPC15array5Array4pushGcE(cs, _decoded_char);
+      _tmp = _decoded_next_string_index;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return cs;
+}
+function _M0FP25aidui3src13append__value(line, extra) {
+  const cs = _M0FP25aidui3src5chars(line);
+  const n = cs.length;
+  if (n > 0 && _M0MPC15array5Array2atGcE(cs, n - 1 | 0) === 13) {
+    let body = "";
+    let i = 0;
+    while (true) {
+      if (i < (n - 1 | 0)) {
+        body = `${body}${_M0IPC14char4CharPB4Show10to__string(_M0MPC15array5Array2atGcE(cs, i))}`;
+        i = i + 1 | 0;
+        continue;
+      } else {
+        break;
+      }
+    }
+    return `${body}${extra}\r`;
+  }
+  return `${line}${extra}`;
+}
+function _M0FP25aidui3src20sanitize__id__suffix(s) {
+  let out = "";
+  const _bind = s.length;
+  let _tmp = 0;
+  while (true) {
+    const _string_index = _tmp;
+    if (_string_index < _bind) {
+      let _decoded_next_string_index;
+      let _decoded_char;
+      _L: {
+        const _bind$2 = s.charCodeAt(_string_index);
+        if (_bind$2 >= 55296 && _bind$2 <= 56319 && (_string_index + 1 | 0) < _bind) {
+          const _bind$3 = s.charCodeAt(_string_index + 1 | 0);
+          if (_bind$3 >= 56320 && _bind$3 <= 57343) {
+            const _tmp$2 = _string_index + 2 | 0;
+            const _p = (((Math.imul(_bind$2 - 55296 | 0, 1024) | 0) + _bind$3 | 0) - 56320 | 0) + 65536 | 0;
+            _decoded_next_string_index = _tmp$2;
+            _decoded_char = _p;
+            break _L;
+          } else {
+            const _tmp$2 = _string_index + 1 | 0;
+            const _p = _bind$2;
+            _decoded_next_string_index = _tmp$2;
+            _decoded_char = _p;
+            break _L;
+          }
+        } else {
+          const _tmp$2 = _string_index + 1 | 0;
+          const _p = _bind$2;
+          _decoded_next_string_index = _tmp$2;
+          _decoded_char = _p;
+          break _L;
+        }
+      }
+      const _tmp$2 = out;
+      let _tmp$3;
+      _L$2: {
+        _L$3: {
+          switch (_decoded_char) {
+            case 45: {
+              break _L$3;
+            }
+            case 95: {
+              break _L$3;
+            }
+            default: {
+              _tmp$3 = _decoded_char >= 97 && _decoded_char <= 122 || (_decoded_char >= 65 && _decoded_char <= 90 || _decoded_char >= 48 && _decoded_char <= 57) ? _M0IPC14char4CharPB4Show10to__string(_decoded_char) : "";
+            }
+          }
+          break _L$2;
+        }
+        _tmp$3 = _M0IPC14char4CharPB4Show10to__string(_decoded_char);
+      }
+      out = `${_tmp$2}${_tmp$3}`;
+      _tmp = _decoded_next_string_index;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return out;
+}
+function _M0FP25aidui3src12split__lines(s) {
+  const lines = [];
+  let cur = "";
+  const _bind = s.length;
+  let _tmp = 0;
+  while (true) {
+    const _string_index = _tmp;
+    if (_string_index < _bind) {
+      let _decoded_next_string_index;
+      let _decoded_char;
+      _L: {
+        const _bind$2 = s.charCodeAt(_string_index);
+        if (_bind$2 >= 55296 && _bind$2 <= 56319 && (_string_index + 1 | 0) < _bind) {
+          const _bind$3 = s.charCodeAt(_string_index + 1 | 0);
+          if (_bind$3 >= 56320 && _bind$3 <= 57343) {
+            const _tmp$2 = _string_index + 2 | 0;
+            const _p = (((Math.imul(_bind$2 - 55296 | 0, 1024) | 0) + _bind$3 | 0) - 56320 | 0) + 65536 | 0;
+            _decoded_next_string_index = _tmp$2;
+            _decoded_char = _p;
+            break _L;
+          } else {
+            const _tmp$2 = _string_index + 1 | 0;
+            const _p = _bind$2;
+            _decoded_next_string_index = _tmp$2;
+            _decoded_char = _p;
+            break _L;
+          }
+        } else {
+          const _tmp$2 = _string_index + 1 | 0;
+          const _p = _bind$2;
+          _decoded_next_string_index = _tmp$2;
+          _decoded_char = _p;
+          break _L;
+        }
+      }
+      if (_decoded_char === 10) {
+        _M0MPC15array5Array4pushGsE(lines, cur);
+        cur = "";
+      } else {
+        cur = `${cur}${_M0IPC14char4CharPB4Show10to__string(_decoded_char)}`;
+      }
+      _tmp = _decoded_next_string_index;
+      continue;
+    } else {
+      break;
+    }
+  }
+  _M0MPC15array5Array4pushGsE(lines, cur);
+  return lines;
+}
+function _M0FP25aidui3src12starts__with(s, prefix) {
+  const sc = _M0FP25aidui3src5chars(s);
+  const pc = _M0FP25aidui3src5chars(prefix);
+  if (sc.length < pc.length) {
+    return false;
+  }
+  let i = 0;
+  while (true) {
+    if (i < pc.length) {
+      if (_M0MPC15array5Array2atGcE(sc, i) !== _M0MPC15array5Array2atGcE(pc, i)) {
+        return false;
+      }
+      i = i + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return true;
+}
+function _M0FP25aidui3src21clone__yaml__identity(yaml, suffix) {
+  const id_suffix = _M0FP25aidui3src20sanitize__id__suffix(suffix);
+  const lines = _M0FP25aidui3src12split__lines(yaml);
+  let did_case_id = false;
+  let did_meta_name = false;
+  let did_top_id = false;
+  let did_top_name = false;
+  let out = "";
+  let first = true;
+  const _bind = lines.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind) {
+      const l = lines[_];
+      let rewritten = l;
+      if (!did_case_id && _M0FP25aidui3src12starts__with(l, "  case_id:")) {
+        rewritten = _M0FP25aidui3src13append__value(l, id_suffix);
+        did_case_id = true;
+      } else {
+        if (!did_meta_name && _M0FP25aidui3src12starts__with(l, "  name:")) {
+          rewritten = _M0FP25aidui3src13append__value(l, " (copy)");
+          did_meta_name = true;
+        } else {
+          if (!did_top_id && _M0FP25aidui3src12starts__with(l, "id:")) {
+            rewritten = _M0FP25aidui3src13append__value(l, id_suffix);
+            did_top_id = true;
+          } else {
+            if (!did_top_name && _M0FP25aidui3src12starts__with(l, "name:")) {
+              rewritten = _M0FP25aidui3src13append__value(l, " (copy)");
+              did_top_name = true;
+            }
+          }
+        }
+      }
+      if (first) {
+        out = rewritten;
+        first = false;
+      } else {
+        out = `${out}\n${rewritten}`;
+      }
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return out;
+}
 function _M0FP25aidui3src3esc(s) {
   let out = "";
   const _bind = s.length;
@@ -4256,7 +4517,7 @@ function _M0FP25aidui3src16plan__list__html(plans_json) {
       const id = _M0FP25aidui3src7str__at(p, "id");
       const name = _M0FP25aidui3src7str__at(p, "name");
       const status = _M0FP25aidui3src7str__at(p, "status");
-      rows = `${rows}<tr><td>${_M0FP25aidui3src3esc(name)}</td><td><code>${_M0FP25aidui3src3esc(id)}</code></td><td>${_M0FP25aidui3src13status__badge(status)}</td><td class=\"text-end\"><button id=\"view-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-primary\">View</button></td></tr>`;
+      rows = `${rows}<tr><td>${_M0FP25aidui3src3esc(name)}</td><td><code>${_M0FP25aidui3src3esc(id)}</code></td><td>${_M0FP25aidui3src13status__badge(status)}</td><td class=\"text-end\"><button id=\"view-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-primary me-1\">View</button><button id=\"dup-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-secondary me-1\">Duplicate</button><button id=\"del-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-danger\">Delete</button></td></tr>`;
       _tmp = _ + 1 | 0;
       continue;
     } else {
@@ -4264,7 +4525,46 @@ function _M0FP25aidui3src16plan__list__html(plans_json) {
     }
   }
   const count = _M0MPC13int3Int18to__string_2einner(plans.length, 10);
-  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">Topology Plans</h2><span class=\"badge text-bg-secondary\">${count} plan(s)</span></div><table class=\"table table-hover align-middle\"><thead><tr><th>Name</th><th>ID</th><th>Status</th><th class=\"text-end\">Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">Topology Plans</h2><div><span class=\"badge text-bg-secondary me-2\">${count} plan(s)</span><button id=\"new-plan-btn\" class=\"btn btn-sm btn-success\">+ New plan</button></div></div><div id=\"list-error\" class=\"mb-2\"></div><table class=\"table table-hover align-middle\"><thead><tr><th>Name</th><th>ID</th><th>Status</th><th class=\"text-end\">Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function _M0FP25aidui3src21new__plan__form__html(templates_json) {
+  let tpls;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(templates_json, 0, templates_json.length), 1024);
+      let _tmp;
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        _tmp = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      tpls = _M0FP25aidui3src7arr__at(_tmp, "templates");
+      break _L;
+    }
+    tpls = [];
+  }
+  let opts = "<option value=\"\">— Blank (paste your own YAML) —</option>";
+  const _bind = tpls.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind) {
+      const t = tpls[_];
+      const id = _M0FP25aidui3src7str__at(t, "id");
+      const name = _M0FP25aidui3src7str__at(t, "name");
+      const topo = _M0FP25aidui3src7str__at(t, "topology");
+      opts = `${opts}<option value=\"${_M0FP25aidui3src3esc(id)}\">${_M0FP25aidui3src3esc(name)} (${_M0FP25aidui3src3esc(topo)})</option>`;
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">New plan</h2><button id=\"new-cancel-btn\" class=\"btn btn-sm btn-outline-secondary\">Cancel</button></div><div id=\"new-error\" class=\"mb-2\"></div><div class=\"card\"><div class=\"card-body\"><div class=\"mb-3\"><label class=\"form-label\" for=\"new-name\">Name (optional — used as a label)</label><input id=\"new-name\" class=\"form-control\" type=\"text\" placeholder=\"My fabric plan\"></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-template\">Start from</label><select id=\"new-template\" class=\"form-select\">${opts}</select><div class=\"form-text\">Pick a starter to prefill the YAML, or leave Blank to paste your own.</div></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-yaml\">Plan YAML</label><textarea id=\"new-yaml\" class=\"form-control font-monospace\" rows=\"18\" spellcheck=\"false\" placeholder=\"meta:\n  case_id: my-plan\n  name: My Plan\n...\"></textarea></div><button id=\"new-submit-btn\" class=\"btn btn-primary\">Create plan</button></div></div>`;
 }
 function _M0FP25aidui3src18plan__detail__html(detail_json) {
   let root;
@@ -4288,7 +4588,7 @@ function _M0FP25aidui3src18plan__detail__html(detail_json) {
   const name = _M0FP25aidui3src7str__at(root, "name");
   const status = _M0FP25aidui3src7str__at(root, "status");
   const yaml = _M0FP25aidui3src7str__at(root, "yaml");
-  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header\">Topology (fabrics &amp; device classes)</div><div class=\"card-body\"><pre class=\"mb-0\"><code>${_M0FP25aidui3src3esc(yaml)}</code></pre></div></div></div></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
+  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
 }
 function _M0FP25aidui3src15quantity__table(root, key, title) {
   const items = _M0FP25aidui3src7arr__at(root, key);
@@ -4488,6 +4788,45 @@ function _M0FP25aidui3src11render__bom(target, bom_json) {
 function _M0FP25aidui3src8api__get(path, cb) {
   _M0FP25aidui3src10fetch__get(`${_M0FP25aidui3src9api__base}${path}`, cb);
 }
+function _M0FP25aidui3src23prefill__from__template(template_id) {
+  if (template_id === "") {
+    _M0FP25aidui3src10set__value("new-yaml", "");
+    return undefined;
+  }
+  _M0FP25aidui3src8api__get(`/templates/${template_id}`, (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("new-error", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    let root;
+    let _try_err;
+    _L: {
+      _L$2: {
+        const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
+        if (_bind.$tag === 1) {
+          const _ok = _bind;
+          root = _ok._0;
+        } else {
+          const _err = _bind;
+          _try_err = _err._0;
+          break _L$2;
+        }
+        break _L;
+      }
+      return undefined;
+    }
+    _M0FP25aidui3src10set__value("new-yaml", _M0FP25aidui3src7str__at(root, "training"));
+  });
+}
+function _M0FP25aidui3src9api__post(path, body, cb) {
+  _M0FP25aidui3src11fetch__post(`${_M0FP25aidui3src9api__base}${path}`, body, cb);
+}
+function _M0FP25aidui3src8api__put(path, body, cb) {
+  _M0FP25aidui3src10fetch__put(`${_M0FP25aidui3src9api__base}${path}`, body, cb);
+}
+function _M0FP25aidui3src11api__delete(path, cb) {
+  _M0FP25aidui3src13fetch__delete(`${_M0FP25aidui3src9api__base}${path}`, cb);
+}
 function _M0FP25aidui3src13set__inflight(id, busy, label) {
   _M0FP25aidui3src13set__disabled(id, busy);
   _M0FP25aidui3src9set__text(id, label);
@@ -4503,8 +4842,25 @@ function _M0FP25aidui3src9load__bom(target, plan_id) {
     _M0FP25aidui3src9set__html(target, _M0FP25aidui3src9bom__html(body));
   });
 }
-function _M0FP25aidui3src9api__post(path, body, cb) {
-  _M0FP25aidui3src11fetch__post(`${_M0FP25aidui3src9api__base}${path}`, body, cb);
+function _M0FP25aidui3src13str__at__body(body, key) {
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return "";
+  }
+  return _M0FP25aidui3src7str__at(root, key);
 }
 function _M0FP25aidui3src16download__wiring(plan_id, fabric) {
   const btn = `wiring-${fabric}`;
@@ -4548,6 +4904,109 @@ function _M0FP25aidui3src13trigger__calc(target, plan_id) {
     _M0FP25aidui3src21wire__wiring__buttons(plan_id, body);
   });
 }
+function _M0FP25aidui3src11load__plans(target) {
+  _M0FP25aidui3src8api__get("/plans", (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html(target, _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src9set__html(target, _M0FP25aidui3src16plan__list__html(body));
+    _M0FP25aidui3src16wire__plan__rows(body);
+    _M0FP25aidui3src9on__click("new-plan-btn", () => {
+      _M0FP25aidui3src21open__new__plan__form();
+    });
+  });
+}
+function _M0FP25aidui3src21open__new__plan__form() {
+  _M0FP25aidui3src8api__get("/templates", (ok, status, body) => {
+    const templates_json = ok && !_M0FP25aidui3src16body__has__error(body) ? body : "{}";
+    _M0FP25aidui3src9set__html("app", _M0FP25aidui3src21new__plan__form__html(templates_json));
+    _M0FP25aidui3src9on__click("new-cancel-btn", () => {
+      _M0FP25aidui3src11load__plans("app");
+    });
+    _M0FP25aidui3src9on__click("new-submit-btn", () => {
+      _M0FP25aidui3src17submit__new__plan();
+    });
+    _M0FP25aidui3src10on__change("new-template", () => {
+      _M0FP25aidui3src23prefill__from__template(_M0FP25aidui3src10get__value("new-template"));
+    });
+  });
+}
+function _M0FP25aidui3src17submit__new__plan() {
+  const yaml = _M0FP25aidui3src10get__value("new-yaml");
+  const template_id = _M0FP25aidui3src10get__value("new-template");
+  _M0FP25aidui3src13set__inflight("new-submit-btn", true, "Creating…");
+  _M0FP25aidui3src9api__post("/plans", yaml, (ok, status, body) => {
+    _M0FP25aidui3src13set__inflight("new-submit-btn", false, "Create plan");
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("new-error", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    let root;
+    let _try_err;
+    _L: {
+      _L$2: {
+        const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
+        if (_bind.$tag === 1) {
+          const _ok = _bind;
+          root = _ok._0;
+        } else {
+          const _err = _bind;
+          _try_err = _err._0;
+          break _L$2;
+        }
+        break _L;
+      }
+      return undefined;
+    }
+    const new_id = _M0FP25aidui3src7str__at(root, "id");
+    if (new_id === "") {
+      _M0FP25aidui3src9set__html("new-error", _M0FP25aidui3src11error__html(0, body));
+      return undefined;
+    }
+    if (template_id === "") {
+      _M0FP25aidui3src12load__detail(new_id);
+      return;
+    } else {
+      _M0FP25aidui3src25attach__template__overlay(template_id, new_id);
+      return;
+    }
+  });
+}
+function _M0FP25aidui3src25attach__template__overlay(template_id, plan_id) {
+  _M0FP25aidui3src8api__get(`/templates/${template_id}`, (ok, _status, body) => {
+    if (!ok) {
+      _M0FP25aidui3src12load__detail(plan_id);
+      return undefined;
+    }
+    let root;
+    let _try_err;
+    _L: {
+      _L$2: {
+        const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
+        if (_bind.$tag === 1) {
+          const _ok = _bind;
+          root = _ok._0;
+        } else {
+          const _err = _bind;
+          _try_err = _err._0;
+          break _L$2;
+        }
+        break _L;
+      }
+      _M0FP25aidui3src12load__detail(plan_id);
+      return undefined;
+    }
+    const overlay = _M0FP25aidui3src7str__at(root, "overlay");
+    if (overlay === "") {
+      _M0FP25aidui3src12load__detail(plan_id);
+      return undefined;
+    }
+    _M0FP25aidui3src8api__put(`/plans/${plan_id}/overlay`, overlay, (_ok2, _s2, _b2) => {
+      _M0FP25aidui3src12load__detail(plan_id);
+    });
+  });
+}
 function _M0FP25aidui3src12load__detail(id) {
   _M0FP25aidui3src8api__get(`/plans/${id}`, (ok, status, body) => {
     if (!ok || _M0FP25aidui3src16body__has__error(body)) {
@@ -4561,6 +5020,40 @@ function _M0FP25aidui3src12load__detail(id) {
     _M0FP25aidui3src9on__click("bom-btn", () => {
       _M0FP25aidui3src9load__bom("detail-result", id);
     });
+    _M0FP25aidui3src9on__click("save-btn", () => {
+      _M0FP25aidui3src10save__plan(id);
+    });
+    _M0FP25aidui3src9on__click("back-btn", () => {
+      _M0FP25aidui3src11load__plans("app");
+    });
+    _M0FP25aidui3src9on__click("detail-del-btn", () => {
+      _M0FP25aidui3src26delete__plan__from__detail(id, _M0FP25aidui3src13str__at__body(body, "name"));
+    });
+  });
+}
+function _M0FP25aidui3src26delete__plan__from__detail(id, name) {
+  const label = name === "" ? id : name;
+  if (!_M0FP25aidui3src7confirm(`Delete plan \"${label}\"? This cannot be undone.`)) {
+    return undefined;
+  }
+  _M0FP25aidui3src11api__delete(`/plans/${id}`, (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("detail-result", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src11load__plans("app");
+  });
+}
+function _M0FP25aidui3src10save__plan(id) {
+  const yaml = _M0FP25aidui3src10get__value("edit-yaml");
+  _M0FP25aidui3src13set__inflight("save-btn", true, "Saving…");
+  _M0FP25aidui3src8api__put(`/plans/${id}`, yaml, (ok, status, body) => {
+    _M0FP25aidui3src13set__inflight("save-btn", false, "Save");
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("edit-error", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src12load__detail(id);
   });
 }
 function _M0FP25aidui3src16wire__plan__rows(plans_json) {
@@ -4589,8 +5082,15 @@ function _M0FP25aidui3src16wire__plan__rows(plans_json) {
     if (_ < _bind$2) {
       const p = _bind[_];
       const id = _M0FP25aidui3src7str__at(p, "id");
+      const name = _M0FP25aidui3src7str__at(p, "name");
       _M0FP25aidui3src9on__click(`view-${id}`, () => {
         _M0FP25aidui3src12load__detail(id);
+      });
+      _M0FP25aidui3src9on__click(`dup-${id}`, () => {
+        _M0FP25aidui3src15duplicate__plan(id, name);
+      });
+      _M0FP25aidui3src9on__click(`del-${id}`, () => {
+        _M0FP25aidui3src12delete__plan(id, name);
       });
       _tmp = _ + 1 | 0;
       continue;
@@ -4599,18 +5099,89 @@ function _M0FP25aidui3src16wire__plan__rows(plans_json) {
     }
   }
 }
-function _M0FP25aidui3src11load__plans(target) {
-  _M0FP25aidui3src8api__get("/plans", (ok, status, body) => {
+function _M0FP25aidui3src12delete__plan(id, name) {
+  const label = name === "" ? id : name;
+  if (!_M0FP25aidui3src7confirm(`Delete plan \"${label}\"? This cannot be undone.`)) {
+    return undefined;
+  }
+  _M0FP25aidui3src11api__delete(`/plans/${id}`, (ok, status, body) => {
     if (!ok || _M0FP25aidui3src16body__has__error(body)) {
-      _M0FP25aidui3src9set__html(target, _M0FP25aidui3src11error__html(status, body));
+      _M0FP25aidui3src9set__html("list-error", _M0FP25aidui3src11error__html(status, body));
       return undefined;
     }
-    _M0FP25aidui3src9set__html(target, _M0FP25aidui3src16plan__list__html(body));
-    _M0FP25aidui3src16wire__plan__rows(body);
+    _M0FP25aidui3src11load__plans("app");
+  });
+}
+function _M0FP25aidui3src15duplicate__plan(id, _name) {
+  _M0FP25aidui3src8api__get(`/plans/${id}`, (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("list-error", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    let root;
+    let _try_err;
+    _L: {
+      _L$2: {
+        const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
+        if (_bind.$tag === 1) {
+          const _ok = _bind;
+          root = _ok._0;
+        } else {
+          const _err = _bind;
+          _try_err = _err._0;
+          break _L$2;
+        }
+        break _L;
+      }
+      return undefined;
+    }
+    const yaml = _M0FP25aidui3src7str__at(root, "yaml");
+    const cloned = _M0FP25aidui3src21clone__yaml__identity(yaml, "-copy");
+    _M0FP25aidui3src9api__post("/plans", cloned, (ok2, status2, body2) => {
+      if (!ok2 || _M0FP25aidui3src16body__has__error(body2)) {
+        _M0FP25aidui3src9set__html("list-error", _M0FP25aidui3src11error__html(status2, body2));
+        return undefined;
+      }
+      let r2;
+      let _try_err$2;
+      _L$2: {
+        _L$3: {
+          const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body2, 0, body2.length), 1024);
+          if (_bind.$tag === 1) {
+            const _ok = _bind;
+            r2 = _ok._0;
+          } else {
+            const _err = _bind;
+            _try_err$2 = _err._0;
+            break _L$3;
+          }
+          break _L$2;
+        }
+        _M0FP25aidui3src11load__plans("app");
+        return undefined;
+      }
+      const new_id = _M0FP25aidui3src7str__at(r2, "id");
+      _M0FP25aidui3src28copy__overlay__then__refresh(id, new_id);
+    });
+  });
+}
+function _M0FP25aidui3src28copy__overlay__then__refresh(src_id, new_id) {
+  if (new_id === "") {
+    _M0FP25aidui3src11load__plans("app");
+    return undefined;
+  }
+  _M0FP25aidui3src8api__get(`/plans/${src_id}/overlay`, (ok, _s, body) => {
+    if (!ok || (body === "" || _M0FP25aidui3src16body__has__error(body))) {
+      _M0FP25aidui3src11load__plans("app");
+      return undefined;
+    }
+    _M0FP25aidui3src8api__put(`/plans/${new_id}/overlay`, body, (_o, _os, _ob) => {
+      _M0FP25aidui3src11load__plans("app");
+    });
   });
 }
 function _M0FP25aidui3src11main__entry() {
   _M0FP25aidui3src12console__log("AID UI starting");
   _M0FP25aidui3src11load__plans("app");
 }
-export { _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }
+export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }

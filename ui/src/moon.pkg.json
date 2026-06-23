@@ -11,7 +11,9 @@
         "render_plan_detail",
         "trigger_calc",
         "render_bom",
-        "download_wiring"
+        "download_wiring",
+        "new_plan_form_html",
+        "clone_yaml_identity"
       ],
       "format": "esm"
     }

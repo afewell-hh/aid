@@ -14,6 +14,7 @@ import (
 	"github.com/afewell-hh/aid/internal/calc"
 	"github.com/afewell-hh/aid/internal/design"
 	"github.com/afewell-hh/aid/internal/planstore"
+	"github.com/afewell-hh/aid/internal/templates"
 	"github.com/afewell-hh/aid/ui"
 	"github.com/spf13/cobra"
 )
@@ -28,6 +29,8 @@ var serveRoutes = []string{
 	"POST /api/plans/{id}/calc",
 	"GET /api/plans/{id}/bom",
 	"GET /api/plans/{id}/wiring/{fabric}",
+	"GET /api/templates",
+	"GET /api/templates/{id}",
 }
 
 // api holds the handler dependencies (the plan store). Handlers reuse
@@ -68,9 +71,11 @@ func (a *api) fail(w http.ResponseWriter, err error) {
 func newServeMux(store *planstore.Store) http.Handler {
 	a := &api{store: store}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/plans", a.routePlans)   // collection: GET list, POST create
-	mux.HandleFunc("/api/plans/", a.routePlanID) // item + sub-resources
-	mux.Handle("/", ui.Handler())                // embedded frontend (Bootstrap 5 + app.js)
+	mux.HandleFunc("/api/plans", a.routePlans)        // collection: GET list, POST create
+	mux.HandleFunc("/api/plans/", a.routePlanID)      // item + sub-resources
+	mux.HandleFunc("/api/templates", a.listTemplates) // starter-template catalog (P0.2)
+	mux.HandleFunc("/api/templates/", a.getTemplate)  // one starter's training + overlay YAML
+	mux.Handle("/", ui.Handler())                     // embedded frontend (Bootstrap 5 + app.js)
 	return mux
 }
 
@@ -137,6 +142,50 @@ func (a *api) routePlanID(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSONError(w, http.StatusNotFound, "not found")
 	}
+}
+
+// --- templates (P0.2 "New from template") -----------------------------------
+
+// listTemplates: GET /api/templates → {"templates": [{id,name,topology,
+// description}]}. The starter catalog the GUI offers in the "New plan" form; each
+// id is fetchable via getTemplate. No YAML in the list (kept small).
+func (a *api) listTemplates(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"templates": templates.List()})
+}
+
+// getTemplate: GET /api/templates/{id} → 200 {id,name,topology,training,overlay}.
+// training is the starter DIET YAML; overlay is the optic/identity overlay (""
+// when the template ships without one). The GUI POSTs `training` to create the
+// plan, then — when `overlay` is non-empty — PUTs it to .../overlay so the BOM is
+// complete. 404 for an unknown template id.
+func (a *api) getTemplate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/templates/")
+	tpl, ok := templates.Get(id)
+	if !ok || id == "" {
+		writeJSONError(w, http.StatusNotFound, "unknown template: "+id)
+		return
+	}
+	training, ok := templates.Training(id)
+	if !ok {
+		writeJSONError(w, http.StatusInternalServerError, "template training unavailable")
+		return
+	}
+	overlay, _ := templates.Overlay(id) // ok==false -> "" (no overlay to attach)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":       tpl.ID,
+		"name":     tpl.Name,
+		"topology": tpl.Topology,
+		"training": string(training),
+		"overlay":  string(overlay),
+	})
 }
 
 // --- handlers ---------------------------------------------------------------

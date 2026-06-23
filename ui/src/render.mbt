@@ -42,6 +42,127 @@ fn arr_at(j : Json, key : String) -> Array[Json] {
   }
 }
 
+// clone_yaml_identity rewrites a plan YAML's identity so a duplicate does not
+// collide with its source: it suffixes the `meta.case_id` (with `suffix`, kept
+// id-safe) and the `meta.name` (with a human " (copy)"), plus any top-level
+// fallback `id:`/`name:` for non-DIET plans. Line-based (no YAML lib in
+// MoonBit-JS): it rewrites the FIRST 2-space-indented `case_id:`/`name:` (the
+// meta block) and a column-0 `id:`/`name:`. Unknown shapes pass through unchanged
+// — the server then derives an id, still avoiding silent data loss.
+pub fn clone_yaml_identity(yaml : String, suffix : String) -> String {
+  let id_suffix = sanitize_id_suffix(suffix)
+  let lines = split_lines(yaml)
+  let mut did_case_id = false
+  let mut did_meta_name = false
+  let mut did_top_id = false
+  let mut did_top_name = false
+  let mut out = ""
+  let mut first = true
+  for l in lines {
+    let mut rewritten = l
+    if !did_case_id && starts_with(l, "  case_id:") {
+      rewritten = append_value(l, id_suffix)
+      did_case_id = true
+    } else if !did_meta_name && starts_with(l, "  name:") {
+      rewritten = append_value(l, " (copy)")
+      did_meta_name = true
+    } else if !did_top_id && starts_with(l, "id:") {
+      rewritten = append_value(l, id_suffix)
+      did_top_id = true
+    } else if !did_top_name && starts_with(l, "name:") {
+      rewritten = append_value(l, " (copy)")
+      did_top_name = true
+    }
+    if first {
+      out = rewritten
+      first = false
+    } else {
+      out = out + "\n" + rewritten
+    }
+  }
+  out
+}
+
+// split_lines splits s on '\n' into owned Strings (avoids the StringView APIs).
+fn split_lines(s : String) -> Array[String] {
+  let lines : Array[String] = []
+  let mut cur = ""
+  for c in s {
+    if c == '\n' {
+      lines.push(cur)
+      cur = ""
+    } else {
+      cur = cur + c.to_string()
+    }
+  }
+  lines.push(cur)
+  lines
+}
+
+// starts_with reports whether s begins with prefix (char-wise; no slicing).
+fn starts_with(s : String, prefix : String) -> Bool {
+  let sc = chars(s)
+  let pc = chars(prefix)
+  if sc.length() < pc.length() {
+    return false
+  }
+  let mut i = 0
+  while i < pc.length() {
+    if sc[i] != pc[i] {
+      return false
+    }
+    i = i + 1
+  }
+  true
+}
+
+// chars collects s into an Array[Char] (`for c in s` yields Char; String indexing
+// yields UInt16, so we materialize once for char-wise work).
+fn chars(s : String) -> Array[Char] {
+  let cs : Array[Char] = []
+  for c in s {
+    cs.push(c)
+  }
+  cs
+}
+
+// append_value appends extra to a `key: value` line, keeping a trailing carriage
+// return (CRLF inputs) after the inserted text.
+fn append_value(line : String, extra : String) -> String {
+  let cs = chars(line)
+  let n = cs.length()
+  if n > 0 && cs[n - 1] == '\r' {
+    // Rebuild without the trailing CR, append extra, then restore CR.
+    let mut body = ""
+    let mut i = 0
+    while i < n - 1 {
+      body = body + cs[i].to_string()
+      i = i + 1
+    }
+    return body + extra + "\r"
+  }
+  line + extra
+}
+
+// sanitize_id_suffix keeps only id-safe chars ([A-Za-z0-9_-]) from a suffix so the
+// cloned case_id still matches the store's id pattern.
+fn sanitize_id_suffix(s : String) -> String {
+  let mut out = ""
+  for c in s {
+    out = out +
+      (match c {
+        '-' | '_' => c.to_string()
+        _ =>
+          if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+            c.to_string()
+          } else {
+            ""
+          }
+      })
+  }
+  out
+}
+
 // esc HTML-escapes text destined for element content / attributes.
 fn esc(s : String) -> String {
   let mut out = ""
@@ -136,16 +257,57 @@ pub fn plan_list_html(plans_json : String) -> String {
       "<td>\{esc(name)}</td>" +
       "<td><code>\{esc(id)}</code></td>" +
       "<td>\{status_badge(status)}</td>" +
-      "<td class=\"text-end\"><button id=\"view-\{esc(id)}\" class=\"btn btn-sm btn-outline-primary\">View</button></td>" +
+      "<td class=\"text-end\">" +
+      "<button id=\"view-\{esc(id)}\" class=\"btn btn-sm btn-outline-primary me-1\">View</button>" +
+      "<button id=\"dup-\{esc(id)}\" class=\"btn btn-sm btn-outline-secondary me-1\">Duplicate</button>" +
+      "<button id=\"del-\{esc(id)}\" class=\"btn btn-sm btn-outline-danger\">Delete</button>" +
+      "</td>" +
       "</tr>"
   }
   let count = plans.length().to_string()
   "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
   "<h2 class=\"h4 mb-0\">Topology Plans</h2>" +
-  "<span class=\"badge text-bg-secondary\">\{count} plan(s)</span></div>" +
+  "<div><span class=\"badge text-bg-secondary me-2\">\{count} plan(s)</span>" +
+  "<button id=\"new-plan-btn\" class=\"btn btn-sm btn-success\">+ New plan</button></div></div>" +
+  "<div id=\"list-error\" class=\"mb-2\"></div>" +
   "<table class=\"table table-hover align-middle\">" +
   "<thead><tr><th>Name</th><th>ID</th><th>Status</th><th class=\"text-end\">Actions</th></tr></thead>" +
   "<tbody>\{rows}</tbody></table>"
+}
+
+// new_plan_form_html: the "New plan" authoring form (P0.2). A name field, a
+// template <select> (populated from GET /api/templates), and a raw-YAML textarea.
+// "From template" prefills the textarea (handled in app.mbt on select-change);
+// "import/paste" just leaves it blank to paste into. Submit POSTs the YAML.
+pub fn new_plan_form_html(templates_json : String) -> String {
+  let tpls : Array[Json] = try {
+    arr_at(@json.parse(templates_json), "templates")
+  } catch {
+    _ => []
+  }
+  let mut opts = "<option value=\"\">— Blank (paste your own YAML) —</option>"
+  for t in tpls {
+    let id = str_at(t, "id")
+    let name = str_at(t, "name")
+    let topo = str_at(t, "topology")
+    opts = opts +
+      "<option value=\"\{esc(id)}\">\{esc(name)} (\{esc(topo)})</option>"
+  }
+  "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
+  "<h2 class=\"h4 mb-0\">New plan</h2>" +
+  "<button id=\"new-cancel-btn\" class=\"btn btn-sm btn-outline-secondary\">Cancel</button></div>" +
+  "<div id=\"new-error\" class=\"mb-2\"></div>" +
+  "<div class=\"card\"><div class=\"card-body\">" +
+  "<div class=\"mb-3\"><label class=\"form-label\" for=\"new-name\">Name (optional — used as a label)</label>" +
+  "<input id=\"new-name\" class=\"form-control\" type=\"text\" placeholder=\"My fabric plan\"></div>" +
+  "<div class=\"mb-3\"><label class=\"form-label\" for=\"new-template\">Start from</label>" +
+  "<select id=\"new-template\" class=\"form-select\">\{opts}</select>" +
+  "<div class=\"form-text\">Pick a starter to prefill the YAML, or leave Blank to paste your own.</div></div>" +
+  "<div class=\"mb-3\"><label class=\"form-label\" for=\"new-yaml\">Plan YAML</label>" +
+  "<textarea id=\"new-yaml\" class=\"form-control font-monospace\" rows=\"18\" spellcheck=\"false\" " +
+  "placeholder=\"meta:\n  case_id: my-plan\n  name: My Plan\n...\"></textarea></div>" +
+  "<button id=\"new-submit-btn\" class=\"btn btn-primary\">Create plan</button>" +
+  "</div></div>"
 }
 
 // plan_detail_html: cards for the plan summary and its topology (fabrics +
@@ -171,11 +333,18 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "<dt class=\"col-5\">Status</dt><dd class=\"col-7\">\{status_badge(status)}</dd></dl>" +
   "<button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button>" +
   "<button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button>" +
+  "<hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button>" +
+  "<button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button>" +
   "</div></div></div>" +
   "<div class=\"col-md-8\"><div class=\"card\">" +
-  "<div class=\"card-header\">Topology (fabrics &amp; device classes)</div>" +
-  "<div class=\"card-body\"><pre class=\"mb-0\"><code>\{esc(yaml)}</code></pre></div>" +
-  "</div></div></div>" +
+  "<div class=\"card-header d-flex justify-content-between align-items-center\">" +
+  "<span>Plan YAML (editable)</span>" +
+  "<button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div>" +
+  "<div class=\"card-body\">" +
+  "<div id=\"edit-error\" class=\"mb-2\"></div>" +
+  "<textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">\{esc(yaml)}</textarea>" +
+  "<div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div>" +
+  "</div></div></div></div>" +
   "<div id=\"detail-result\" class=\"mt-3\"></div>"
 }
 

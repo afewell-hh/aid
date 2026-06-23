@@ -16,6 +16,11 @@ extern "js" fn set_html(id : String, html : String) -> Unit =
 extern "js" fn on_click(id : String, cb : () -> Unit) -> Unit =
   #|(id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("click", () => cb()); }
 
+// Register a change handler (e.g. the New-plan template <select>); the MoonBit
+// callback runs when the control's value changes.
+extern "js" fn on_change(id : String, cb : () -> Unit) -> Unit =
+  #|(id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("change", () => cb()); }
+
 // Enable/disable a button (in-flight feedback; no-op if absent). A disabled
 // button cannot be re-clicked, so an async action does not double-fire.
 extern "js" fn set_disabled(id : String, disabled : Bool) -> Unit =
@@ -44,6 +49,35 @@ extern "js" fn fetch_post(
   cb : (Bool, Int, String) -> Unit
 ) -> Unit =
   #|(url, body, cb) => { fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }).then(r => r.text().then(t => cb(r.ok, r.status, t))).catch(() => cb(false, 0, "")); }
+
+// PUT a body to url; deliver (ok, status, body) to the MoonBit callback (same
+// failure contract as fetch_get/fetch_post). Used for plan edit (PUT
+// .../plans/{id}) and overlay attach (PUT .../plans/{id}/overlay).
+extern "js" fn fetch_put(
+  url : String,
+  body : String,
+  cb : (Bool, Int, String) -> Unit
+) -> Unit =
+  #|(url, body, cb) => { fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body }).then(r => r.text().then(t => cb(r.ok, r.status, t))).catch(() => cb(false, 0, "")); }
+
+// DELETE url; deliver (ok, status, body) to the MoonBit callback. A 204 No Content
+// has an empty body; the caller keys off ok/status (same failure contract).
+extern "js" fn fetch_delete(url : String, cb : (Bool, Int, String) -> Unit) -> Unit =
+  #|(url, cb) => { fetch(url, { method: "DELETE" }).then(r => r.text().then(t => cb(r.ok, r.status, t))).catch(() => cb(false, 0, "")); }
+
+// Read the current value of an <input>/<textarea>/<select> by id ("" if absent).
+// The authoring forms (New plan, Edit YAML) collect user input through this.
+extern "js" fn get_value(id : String) -> String =
+  #|(id) => { const e = document.getElementById(id); return e ? (e.value || "") : ""; }
+
+// Set the value of an <input>/<textarea>/<select> by id (no-op if absent). Used to
+// prefill the New-plan textarea from a fetched template.
+extern "js" fn set_value(id : String, value : String) -> Unit =
+  #|(id, value) => { const e = document.getElementById(id); if (e) e.value = value; }
+
+// window.confirm: a blocking native confirm dialog (true = OK). Backs the
+// delete-confirm step. In the Node mock harness this is stubbed to auto-confirm.
+extern "js" fn confirm(message : String) -> Bool = "(m) => (typeof confirm === 'function' ? confirm(m) : true)"
 
 // Trigger a client-side file download of text content (wiring YAML export).
 extern "js" fn save_file(filename : String, content : String) -> Unit =
