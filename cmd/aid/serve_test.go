@@ -22,6 +22,48 @@ import (
 	"github.com/afewell-hh/aid/internal/planstore"
 )
 
+// TestAPI_CreatePlan_VendoredOracle_RoundTrips is the documented on-ramp, end to
+// end over HTTP: POST a real vendored DIET plan to /api/plans and confirm it is
+// accepted and round-trips (listable + gettable by its derived id). This is the
+// path a new user / the GUI take. Regression guard for the meta.case_id identity
+// contract — before the fix, every vendored plan returned 400 "plan has no id or
+// name", and the F7b tests missed it by seeding the store dir directly.
+func TestAPI_CreatePlan_VendoredOracle_RoundTrips(t *testing.T) {
+	mux, _ := newTestAPI(t)
+	for _, tc := range []struct{ name, wantID string }{
+		{"xoc-64-mesh-conv-ro", "training_xoc64_1xopg64_mesh_conv_ro"},
+		{"xoc-256-2xopg128-clos-ro", "training_xoc256_2xopg128_clos_ro"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			trainingPath, _, _ := oracleArtifacts(t, tc.name)
+			training, err := os.ReadFile(trainingPath)
+			if err != nil {
+				t.Fatalf("read training fixture: %v", err)
+			}
+			rec := do(t, mux, http.MethodPost, "/api/plans", training)
+			if rec.Code != http.StatusOK && rec.Code != http.StatusCreated {
+				t.Fatalf("POST /api/plans = %d, want 2xx; body=%s", rec.Code, rec.Body.String())
+			}
+			var created struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+				t.Fatalf("decode create response: %v; body=%s", err, rec.Body.String())
+			}
+			if created.ID != tc.wantID {
+				t.Errorf("created id = %q, want %q (from meta.case_id)", created.ID, tc.wantID)
+			}
+			if created.Name == "" {
+				t.Errorf("created name empty, want meta.name resolved")
+			}
+			if g := do(t, mux, http.MethodGet, "/api/plans/"+created.ID, nil); g.Code != http.StatusOK {
+				t.Errorf("GET created plan = %d, want 200; body=%s", g.Code, g.Body.String())
+			}
+		})
+	}
+}
+
 // newTestAPI returns a mux backed by a fresh temp-dir plan store, plus the dir.
 func newTestAPI(t *testing.T) (http.Handler, string) {
 	t.Helper()

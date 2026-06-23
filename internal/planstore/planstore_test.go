@@ -27,6 +27,53 @@ func TestIDSanitization(t *testing.T) {
 	}
 }
 
+// TestCreate_VendoredOraclePlans exercises the REAL create path with the real
+// DIET plan shape: identity nested under meta.case_id / meta.name (no top-level
+// id/name). This is the path the REST POST /api/plans and the GUI use — and the
+// one the F7b integration tests bypassed by seeding the store dir directly, which
+// hid that Create rejected every real plan with "plan has no id or name".
+func TestCreate_VendoredOraclePlans(t *testing.T) {
+	cases := map[string]string{
+		"../../tests/oracle/xoc-64-mesh-conv-ro/training.yaml":          "training_xoc64_1xopg64_mesh_conv_ro",
+		"../../tests/oracle/xoc-128-2xopg64-mesh-conv-ro/training.yaml": "training_xoc128_2xopg64_mesh_conv_ro",
+		"../../tests/oracle/xoc-256-2xopg128-clos-ro/training.yaml":     "training_xoc256_2xopg128_clos_ro",
+	}
+	for path, wantID := range cases {
+		t.Run(filepath.Base(filepath.Dir(path)), func(t *testing.T) {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read fixture: %v", err)
+			}
+			s, err := Open(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, err := s.Create(b)
+			if err != nil {
+				t.Fatalf("Create(real DIET plan) failed (the canonical meta.case_id identity must be honored): %v", err)
+			}
+			if p.ID != wantID {
+				t.Errorf("Create id = %q, want %q (from meta.case_id)", p.ID, wantID)
+			}
+			if p.Name == "" {
+				t.Errorf("Create name empty, want meta.name resolved")
+			}
+			// Round-trips: the created plan must be listable and gettable by its id.
+			got, err := s.Get(p.ID)
+			if err != nil {
+				t.Fatalf("Get(%q) after Create: %v", p.ID, err)
+			}
+			if got.YAML == "" {
+				t.Errorf("Get returned empty YAML")
+			}
+			list, err := s.List()
+			if err != nil || len(list) != 1 || list[0].ID != wantID {
+				t.Errorf("List after Create = %+v (err %v), want one plan id %q", list, err, wantID)
+			}
+		})
+	}
+}
+
 // TestStoreCRUDRoundtrip exercises Create→Get→List→Update→Delete on disk.
 func TestStoreCRUDRoundtrip(t *testing.T) {
 	dir := t.TempDir()
