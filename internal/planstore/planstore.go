@@ -44,11 +44,21 @@ type Plan struct {
 	YAML   string `json:"yaml,omitempty"`
 }
 
-// planMeta is the subset of plan YAML the store reads for summaries.
+// planMeta is the subset of plan YAML the store reads for summaries. Identity is
+// canonically carried under the nested `meta:` block (meta.case_id / meta.name —
+// the real DIET/XOC shape the engine ingests, see internal/topology.Meta); the
+// top-level id/name fields are a fallback for legacy/non-DIET plans. parseMeta
+// resolves the canonical fields into ID/Name/Status so callers read them flat.
 type planMeta struct {
 	ID     string `yaml:"id"`
 	Name   string `yaml:"name"`
 	Status string `yaml:"status"`
+	Meta   struct {
+		ID     string `yaml:"id"`
+		CaseID string `yaml:"case_id"`
+		Name   string `yaml:"name"`
+		Status string `yaml:"status"`
+	} `yaml:"meta"`
 }
 
 // Store is a plan store rooted at a directory of <id>.yaml files.
@@ -262,6 +272,22 @@ func parseMeta(b []byte) (planMeta, error) {
 	var m planMeta
 	if err := yaml.Unmarshal(b, &m); err != nil {
 		return planMeta{}, err
+	}
+	// Canonical DIET identity lives under `meta:` (meta.case_id / meta.name).
+	// Prefer it; fall back to any top-level id/name so non-DIET plans still work.
+	if m.ID == "" {
+		switch {
+		case m.Meta.CaseID != "":
+			m.ID = m.Meta.CaseID
+		case m.Meta.ID != "":
+			m.ID = m.Meta.ID
+		}
+	}
+	if m.Name == "" && m.Meta.Name != "" {
+		m.Name = m.Meta.Name
+	}
+	if m.Status == "" && m.Meta.Status != "" {
+		m.Status = m.Meta.Status
 	}
 	return m, nil
 }
