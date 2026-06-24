@@ -51,17 +51,17 @@ test.describe("AID GUI golden path (read-only)", () => {
     await expect(page.getByRole("button", { name: "View" })).toHaveCount(4);
   });
 
-  // (b) empty-state: an empty store renders the table shell with "0 plan(s)"
-  // and no View buttons (the current GUI has no dedicated empty message; this
-  // asserts the actual rendered behavior, not an aspirational one).
-  test("empty store renders zero plans and no rows", async ({ page }) => {
+  // (b) empty-state (P1.5, #66): an empty store renders a first-run guidance
+  // panel with a New-plan CTA — not a bare "0 plan(s)" table.
+  test("empty store renders a first-run empty-state with guidance + CTA", async ({ page }) => {
     const emptyURL = process.env.EMPTY_URL;
     test.skip(!emptyURL, "EMPTY_URL not provided by the harness");
     await page.goto(emptyURL + "/");
     await waitForApp(page);
 
-    await expect(page.getByRole("heading", { name: "Topology Plans" })).toBeVisible();
-    await expect(page.getByText("0 plan(s)", { exact: true })).toBeVisible();
+    await expect(page.locator("#empty-state")).toBeVisible();
+    await expect(page.getByText(/No topology plans yet|Design your first/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /new plan/i })).toBeVisible();
     await expect(page.getByRole("button", { name: "View" })).toHaveCount(0);
   });
 
