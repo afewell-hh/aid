@@ -99,15 +99,21 @@ globalThis.fetch = (url, opts = {}) => {
   } catch (e) {
     return Promise.reject(e); // network failure
   }
-  let ok, status, body;
+  let ok, status, body, delay;
   if (r != null && typeof r === "object") {
     body = r.body ?? "";
     status = r.status ?? (r.ok === false ? 500 : 200);
     ok = r.ok ?? (status >= 200 && status < 300);
+    delay = r.delay ?? 0; // optional ms delay → lets tests force out-of-order responses
   } else {
     body = r ?? "";
     status = 200;
     ok = true;
+    delay = 0;
   }
-  return Promise.resolve({ ok, status, text: () => Promise.resolve(body) });
+  const resp = { ok, status, text: () => Promise.resolve(body) };
+  if (delay > 0) {
+    return new Promise((res) => setTimeout(() => res(resp), delay));
+  }
+  return Promise.resolve(resp);
 };

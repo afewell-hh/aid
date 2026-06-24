@@ -637,3 +637,78 @@ test("P1.1 structured editor: data-derived forms for server + switch classes", (
   assert.match(html, /id="save-sw-btn"/, "save switch classes button");
   assert.match(html, /id="structure-data"/, "hidden structure-data carrier");
 });
+
+// --- P1.3 (#68): live (dry-run) validation handler ----------------------------
+const VALID_CALC = JSON.stringify({
+  is_valid: true, errors: [],
+  switch_quantity: [{ class_id: "fe-leaf", quantity: 2 }],
+  server_quantity: [{ class_id: "compute", quantity: 8 }],
+  endpoints: [{}], transceiver_verdicts: [{}], managed_fabrics: ["frontend"],
+});
+
+test("P1.3 live validate: POSTs /api/validate and renders the Valid summary inline", async () => {
+  reset();
+  el("edit-yaml").value = "meta:\n  case_id: x\n";
+  setResponder((url) => (url === "/api/validate" ? VALID_CALC : ""));
+  app.validate_raw();
+  await flush();
+  assert.ok(
+    fetches.some((f) => f.url === "/api/validate" && f.method === "POST"),
+    `expected POST /api/validate; got ${JSON.stringify(fetches)}`,
+  );
+  const html = dom["live-validation"]?.innerHTML ?? "";
+  assert.match(html, /Valid/, "expected the inline Valid badge");
+  assert.match(html, /fe-leaf/, "expected computed quantities inline");
+});
+
+test("P1.3 live validate: a structural 4xx renders the distinct 'cannot compute' alert", async () => {
+  reset();
+  el("edit-yaml").value = "broken: : yaml";
+  setResponder(() => ({ status: 422, body: JSON.stringify({ error: "cannot resolve plan: parse" }) }));
+  app.validate_raw();
+  await flush();
+  const html = dom["live-validation"]?.innerHTML ?? "";
+  assert.match(html, /alert-danger/, "structural failure must be the error alert");
+  assert.doesNotMatch(html, /badge[^>]*text-bg-success/, "must not show a Valid badge for a structural failure");
+});
+
+// --- P1.3 (#68) devb review: stored-base + stale-response guard ---------------
+const STRUCT_PROJ = JSON.stringify({
+  server_classes: [{ id: "compute_xpu", quantity: 8, gpus_per_server: 8, server_device_type: "srv_xpu_generic_dt", nics: [] }],
+  switch_classes: [],
+  catalog: { module_types: [], device_types: ["srv_xpu_generic_dt"], device_type_extensions: [], breakout_options: [] },
+});
+
+test("P1.3 validate_structured uses the STORED plan YAML (not the editable textarea)", async () => {
+  reset();
+  el("stored-plan-yaml").value = "STORED_CANONICAL";
+  el("edit-yaml").value = "RAW_DIVERGENT_DRAFT"; // user's separate raw edits
+  el("structure-data").value = STRUCT_PROJ;
+  setResponder(() => VALID_CALC);
+  app.validate_structured();
+  await flush();
+  const sent = fetches.find((f) => f.url === "/api/validate");
+  assert.ok(sent, "expected POST /api/validate");
+  assert.match(sent.body, /STORED_CANONICAL/, "structured dry-run must use the stored plan as base");
+  assert.doesNotMatch(sent.body, /RAW_DIVERGENT_DRAFT/, "must NOT use the editable textarea as base");
+  assert.match(sent.body, /"ops":\[/, "must include the structured ops");
+});
+
+test("P1.3 stale-response guard: an older slower response never overwrites a newer one", async () => {
+  reset();
+  el("edit-yaml").value = "draft";
+  let n = 0;
+  setResponder(() => {
+    n += 1;
+    // 1st (older) response is SLOW + Invalid; 2nd (newer) is FAST + Valid.
+    return n === 1
+      ? { delay: 40, body: JSON.stringify({ is_valid: false, errors: [{ code: "STALE_BADGE" }], switch_quantity: [], server_quantity: [], endpoints: [], transceiver_verdicts: [] }) }
+      : { delay: 0, body: VALID_CALC };
+  });
+  app.validate_raw(); // seq 1 (slow)
+  app.validate_raw(); // seq 2 (fast)
+  await new Promise((r) => setTimeout(r, 80)); // let both resolve (fast then slow)
+  const html = dom["live-validation"]?.innerHTML ?? "";
+  assert.match(html, /Valid/, "newest (fast) result must stand");
+  assert.doesNotMatch(html, /STALE_BADGE/, "the older slow response must be dropped");
+});

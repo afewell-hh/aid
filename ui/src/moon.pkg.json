@@ -14,7 +14,9 @@
         "download_wiring",
         "new_plan_form_html",
         "clone_yaml_identity",
-        "structure_editor_html"
+        "structure_editor_html",
+        "validate_raw",
+        "validate_structured"
       ],
       "format": "esm"
     }
