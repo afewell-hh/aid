@@ -4594,7 +4594,7 @@ function _M0FP25aidui3src18plan__detail__html(detail_json) {
   const name = _M0FP25aidui3src7str__at(root, "name");
   const status = _M0FP25aidui3src7str__at(root, "status");
   const yaml = _M0FP25aidui3src7str__at(root, "yaml");
-  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
+  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"structure-editor\" class=\"mt-3\"></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
 }
 function _M0FP25aidui3src15quantity__table(root, key, title) {
   const items = _M0FP25aidui3src7arr__at(root, key);
@@ -4782,6 +4782,229 @@ function _M0FP25aidui3src9bom__html(bom_json) {
   const suppressed = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(root, "suppressed_cable_assembly_count"), 10);
   return `<h3 class=\"h5\">Bill of Materials</h3><table class=\"table table-sm\"><thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th></tr></thead><tbody>${rows}</tbody></table><p class=\"text-muted small mb-0\">Suppressed cable assemblies: ${suppressed}</p>`;
 }
+function _M0FP25aidui3src4jval(j) {
+  if (j.$tag === 4) {
+    const _String = j;
+    return _String._0;
+  } else {
+    return "";
+  }
+}
+function _M0FP25aidui3src12json__escape(s) {
+  let out = "";
+  const _bind = s.length;
+  let _tmp = 0;
+  while (true) {
+    const _string_index = _tmp;
+    if (_string_index < _bind) {
+      let _decoded_next_string_index;
+      let _decoded_char;
+      _L: {
+        const _bind$2 = s.charCodeAt(_string_index);
+        if (_bind$2 >= 55296 && _bind$2 <= 56319 && (_string_index + 1 | 0) < _bind) {
+          const _bind$3 = s.charCodeAt(_string_index + 1 | 0);
+          if (_bind$3 >= 56320 && _bind$3 <= 57343) {
+            const _tmp$2 = _string_index + 2 | 0;
+            const _p = (((Math.imul(_bind$2 - 55296 | 0, 1024) | 0) + _bind$3 | 0) - 56320 | 0) + 65536 | 0;
+            _decoded_next_string_index = _tmp$2;
+            _decoded_char = _p;
+            break _L;
+          } else {
+            const _tmp$2 = _string_index + 1 | 0;
+            const _p = _bind$2;
+            _decoded_next_string_index = _tmp$2;
+            _decoded_char = _p;
+            break _L;
+          }
+        } else {
+          const _tmp$2 = _string_index + 1 | 0;
+          const _p = _bind$2;
+          _decoded_next_string_index = _tmp$2;
+          _decoded_char = _p;
+          break _L;
+        }
+      }
+      const _tmp$2 = out;
+      let _tmp$3;
+      switch (_decoded_char) {
+        case 92: {
+          _tmp$3 = "\\\\";
+          break;
+        }
+        case 34: {
+          _tmp$3 = "\\\"";
+          break;
+        }
+        case 10: {
+          _tmp$3 = "\\n";
+          break;
+        }
+        case 13: {
+          _tmp$3 = "\\r";
+          break;
+        }
+        case 9: {
+          _tmp$3 = "\\t";
+          break;
+        }
+        default: {
+          _tmp$3 = _M0IPC14char4CharPB4Show10to__string(_decoded_char);
+        }
+      }
+      out = `${_tmp$2}${_tmp$3}`;
+      _tmp = _decoded_next_string_index;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return out;
+}
+function _M0FP25aidui3src12select__html(id, options, selected, blank) {
+  let opts = blank ? "<option value=\"\"></option>" : "";
+  const _bind = options.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind) {
+      const o = options[_];
+      const v = _M0FP25aidui3src4jval(o);
+      const sel = v === selected ? " selected" : "";
+      opts = `${opts}<option value=\"${_M0FP25aidui3src3esc(v)}\"${sel}>${_M0FP25aidui3src3esc(v)}</option>`;
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${opts}</select>`;
+}
+function _M0FP25aidui3src12topo__selectN3optS222(current, v) {
+  const sel = v === current ? " selected" : "";
+  return `<option value=\"${v}\"${sel}>${v}</option>`;
+}
+function _M0FP25aidui3src12topo__select(id, current) {
+  const blank = current === "" ? "<option value=\"\" selected></option>" : "";
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${blank}${_M0FP25aidui3src12topo__selectN3optS222(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS222(current, "clos")}</select>`;
+}
+function _M0FP25aidui3src15override__value(sw) {
+  const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
+  if (_bind === undefined) {
+    return "";
+  } else {
+    const _Some = _bind;
+    const _x = _Some;
+    if (_x.$tag === 3) {
+      const _Number = _x;
+      const _n = _Number._0;
+      return _M0MPC13int3Int18to__string_2einner(_M0MPC16double6Double7to__int(_n), 10);
+    } else {
+      return "";
+    }
+  }
+}
+function _M0FP25aidui3src23structure__editor__html(structure_json) {
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(structure_json, 0, structure_json.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return _M0FP25aidui3src9warn__box("Could not parse plan structure.");
+  }
+  const _bind = _M0FP25aidui3src3get(root, "catalog");
+  let module_types;
+  if (_bind === undefined) {
+    module_types = [];
+  } else {
+    const _Some = _bind;
+    const _c = _Some;
+    module_types = _M0FP25aidui3src7arr__at(_c, "module_types");
+  }
+  const _bind$2 = _M0FP25aidui3src3get(root, "catalog");
+  let device_type_extensions;
+  if (_bind$2 === undefined) {
+    device_type_extensions = [];
+  } else {
+    const _Some = _bind$2;
+    const _c = _Some;
+    device_type_extensions = _M0FP25aidui3src7arr__at(_c, "device_type_extensions");
+  }
+  const _bind$3 = _M0FP25aidui3src3get(root, "catalog");
+  let device_types;
+  if (_bind$3 === undefined) {
+    device_types = [];
+  } else {
+    const _Some = _bind$3;
+    const _c = _Some;
+    device_types = _M0FP25aidui3src7arr__at(_c, "device_types");
+  }
+  let srv = "";
+  const _bind$4 = _M0FP25aidui3src7arr__at(root, "server_classes");
+  const _bind$5 = _bind$4.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind$5) {
+      const sc = _bind$4[_];
+      const id = _M0FP25aidui3src7str__at(sc, "id");
+      const qty = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(sc, "quantity"), 10);
+      const gpus = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(sc, "gpus_per_server"), 10);
+      const devtype = _M0FP25aidui3src7str__at(sc, "server_device_type");
+      let nic_rows = "";
+      const _bind$6 = _M0FP25aidui3src7arr__at(sc, "nics");
+      const _bind$7 = _bind$6.length;
+      let _tmp$2 = 0;
+      while (true) {
+        const _$2 = _tmp$2;
+        if (_$2 < _bind$7) {
+          const n = _bind$6[_$2];
+          const nicid = _M0FP25aidui3src7str__at(n, "nic_id");
+          const mt = _M0FP25aidui3src7str__at(n, "module_type");
+          nic_rows = `${nic_rows}<div class=\"row g-2 align-items-center mb-1\"><div class=\"col-4\"><code>${_M0FP25aidui3src3esc(nicid)}</code></div><div class=\"col-8\">${_M0FP25aidui3src12select__html(`nic-${id}-${nicid}`, module_types, mt, false)}</div></div>`;
+          _tmp$2 = _$2 + 1 | 0;
+          continue;
+        } else {
+          break;
+        }
+      }
+      srv = `${srv}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2 mb-2\"><div class=\"col-6\"><label class=\"form-label mb-0 small\">Quantity</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${qty}\"></div><div class=\"col-6\"><label class=\"form-label mb-0 small\">GPUs/server</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${gpus}\"></div></div><div class=\"mb-2\"><label class=\"form-label mb-0 small\">Device type</label>${_M0FP25aidui3src12select__html(`srv-${id}-devtype`, device_types, devtype, false)}</div><div class=\"small text-muted\">NICs (module type)</div>${nic_rows}</div></div>`;
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  let sw = "";
+  const _bind$6 = _M0FP25aidui3src7arr__at(root, "switch_classes");
+  const _bind$7 = _bind$6.length;
+  let _tmp$2 = 0;
+  while (true) {
+    const _ = _tmp$2;
+    if (_ < _bind$7) {
+      const s = _bind$6[_];
+      const id = _M0FP25aidui3src7str__at(s, "id");
+      const topo = _M0FP25aidui3src7str__at(s, "topology_mode");
+      const devext = _M0FP25aidui3src7str__at(s, "device_type_extension");
+      const ov = _M0FP25aidui3src15override__value(s);
+      sw = `${sw}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2\"><div class=\"col-4\"><label class=\"form-label mb-0 small\">Topology</label>${_M0FP25aidui3src12topo__select(`sw-${id}-topo`, topo)}</div><div class=\"col-5\"><label class=\"form-label mb-0 small\">Device type</label>${_M0FP25aidui3src12select__html(`sw-${id}-devext`, device_type_extensions, devext, false)}</div><div class=\"col-3\"><label class=\"form-label mb-0 small\">Override qty</label><input id=\"sw-${_M0FP25aidui3src3esc(id)}-override\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" placeholder=\"(derived)\" value=\"${_M0FP25aidui3src3esc(ov)}\"></div></div></div></div>`;
+      _tmp$2 = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Structured editor</span></div><div class=\"card-body\"><input type=\"hidden\" id=\"structure-data\" value=\"${_M0FP25aidui3src3esc(structure_json)}\"><div id=\"structure-error\" class=\"mb-2\"></div><h3 class=\"h6\">Server classes</h3>${srv}<div class=\"card mb-3\"><div class=\"card-body\"><div class=\"small text-muted mb-2\">Add server class</div><div class=\"row g-2\"><div class=\"col-3\"><input id=\"add-srv-id\" class=\"form-control form-control-sm\" placeholder=\"new_class_id\"></div><div class=\"col-2\"><input id=\"add-srv-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"1\"></div><div class=\"col-2\"><input id=\"add-srv-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"0\"></div><div class=\"col-3\">${_M0FP25aidui3src12select__html("add-srv-devtype", device_types, "", true)}</div><div class=\"col-2\"><button id=\"add-srv-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div></div></div></div><button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm mb-3\">Save server classes</button><h3 class=\"h6\">Switch classes</h3>${sw}<button id=\"save-sw-btn\" class=\"btn btn-primary btn-sm\">Save switch classes</button></div></div>`;
+}
 function _M0FP25aidui3src18render__plan__list(target, plans_json) {
   _M0FP25aidui3src9set__html(target, _M0FP25aidui3src16plan__list__html(plans_json));
 }
@@ -4847,6 +5070,37 @@ function _M0FP25aidui3src9load__bom(target, plan_id) {
     }
     _M0FP25aidui3src9set__html(target, _M0FP25aidui3src9bom__html(body));
   });
+}
+function _M0FP25aidui3src9join__ops(ops) {
+  let body = "{\"ops\":[";
+  let first = true;
+  const _bind = ops.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind) {
+      const o = ops[_];
+      if (!first) {
+        body = `${body},`;
+      }
+      body = `${body}${o}`;
+      first = false;
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return `${body}]}`;
+}
+function _M0FP25aidui3src12op__set__nic(scid, nicid, value) {
+  return `{\"op\":\"set_nic_module_type\",\"server_class\":\"${_M0FP25aidui3src12json__escape(scid)}\",\"nic_id\":\"${_M0FP25aidui3src12json__escape(nicid)}\",\"value\":\"${_M0FP25aidui3src12json__escape(value)}\"}`;
+}
+function _M0FP25aidui3src15op__set__server(scid, field, value) {
+  return `{\"op\":\"set_server_field\",\"server_class\":\"${_M0FP25aidui3src12json__escape(scid)}\",\"field\":\"${field}\",\"value\":\"${_M0FP25aidui3src12json__escape(value)}\"}`;
+}
+function _M0FP25aidui3src15op__set__switch(swid, field, value) {
+  return `{\"op\":\"set_switch_field\",\"switch_class\":\"${_M0FP25aidui3src12json__escape(swid)}\",\"field\":\"${field}\",\"value\":\"${_M0FP25aidui3src12json__escape(value)}\"}`;
 }
 function _M0FP25aidui3src13str__at__body(body, key) {
   let root;
@@ -5037,6 +5291,7 @@ function _M0FP25aidui3src12load__detail(id) {
     _M0FP25aidui3src9on__click("crumb-plans", () => {
       _M0FP25aidui3src11load__plans("app");
     });
+    _M0FP25aidui3src15load__structure(id);
     _M0FP25aidui3src9on__click("detail-del-btn", () => {
       _M0FP25aidui3src26delete__plan__from__detail(id, _M0FP25aidui3src13str__at__body(body, "name"));
     });
@@ -5054,6 +5309,140 @@ function _M0FP25aidui3src26delete__plan__from__detail(id, name) {
     }
     _M0FP25aidui3src11load__plans("app");
   });
+}
+function _M0FP25aidui3src15load__structure(id) {
+  _M0FP25aidui3src8api__get(`/plans/${id}/structure`, (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("structure-editor", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src9set__html("structure-editor", _M0FP25aidui3src23structure__editor__html(body));
+    _M0FP25aidui3src9on__click("save-srv-btn", () => {
+      _M0FP25aidui3src21save__server__classes(id);
+    });
+    _M0FP25aidui3src9on__click("save-sw-btn", () => {
+      _M0FP25aidui3src21save__switch__classes(id);
+    });
+    _M0FP25aidui3src9on__click("add-srv-btn", () => {
+      _M0FP25aidui3src18add__server__class(id);
+    });
+  });
+}
+function _M0FP25aidui3src18add__server__class(id) {
+  const newid = _M0FP25aidui3src10get__value("add-srv-id");
+  if (newid === "") {
+    _M0FP25aidui3src9set__html("structure-error", _M0FP25aidui3src9warn__box("Enter an id for the new server class."));
+    return undefined;
+  }
+  const op = `{\"op\":\"add_server_class\",\"server_class\":\"${_M0FP25aidui3src12json__escape(newid)}\",\"quantity\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-srv-qty"))}\",\"gpus_per_server\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-srv-gpus"))}\",\"server_device_type\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-srv-devtype"))}\"}`;
+  _M0FP25aidui3src16patch__structure(id, [op], "add-srv-btn");
+}
+function _M0FP25aidui3src16patch__structure(id, ops, btn) {
+  if (ops.length === 0) {
+    return undefined;
+  }
+  _M0FP25aidui3src13set__inflight(btn, true, "Saving…");
+  _M0FP25aidui3src8api__put(`/plans/${id}/structure`, _M0FP25aidui3src9join__ops(ops), (ok, status, body) => {
+    _M0FP25aidui3src13set__inflight(btn, false, "Save");
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("structure-error", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src12load__detail(id);
+  });
+}
+function _M0FP25aidui3src21save__server__classes(id) {
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FP25aidui3src10get__value("structure-data");
+      const _bind$2 = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(_bind, 0, _bind.length), 1024);
+      if (_bind$2.$tag === 1) {
+        const _ok = _bind$2;
+        root = _ok._0;
+      } else {
+        const _err = _bind$2;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return undefined;
+  }
+  const ops = [];
+  const _bind = _M0FP25aidui3src7arr__at(root, "server_classes");
+  const _bind$2 = _bind.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind$2) {
+      const sc = _bind[_];
+      const scid = _M0FP25aidui3src7str__at(sc, "id");
+      _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src15op__set__server(scid, "quantity", _M0FP25aidui3src10get__value(`srv-${scid}-qty`)));
+      _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src15op__set__server(scid, "gpus_per_server", _M0FP25aidui3src10get__value(`srv-${scid}-gpus`)));
+      _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src15op__set__server(scid, "server_device_type", _M0FP25aidui3src10get__value(`srv-${scid}-devtype`)));
+      const _bind$3 = _M0FP25aidui3src7arr__at(sc, "nics");
+      const _bind$4 = _bind$3.length;
+      let _tmp$2 = 0;
+      while (true) {
+        const _$2 = _tmp$2;
+        if (_$2 < _bind$4) {
+          const n = _bind$3[_$2];
+          const nicid = _M0FP25aidui3src7str__at(n, "nic_id");
+          _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src12op__set__nic(scid, nicid, _M0FP25aidui3src10get__value(`nic-${scid}-${nicid}`)));
+          _tmp$2 = _$2 + 1 | 0;
+          continue;
+        } else {
+          break;
+        }
+      }
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  _M0FP25aidui3src16patch__structure(id, ops, "save-srv-btn");
+}
+function _M0FP25aidui3src21save__switch__classes(id) {
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FP25aidui3src10get__value("structure-data");
+      const _bind$2 = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(_bind, 0, _bind.length), 1024);
+      if (_bind$2.$tag === 1) {
+        const _ok = _bind$2;
+        root = _ok._0;
+      } else {
+        const _err = _bind$2;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return undefined;
+  }
+  const ops = [];
+  const _bind = _M0FP25aidui3src7arr__at(root, "switch_classes");
+  const _bind$2 = _bind.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind$2) {
+      const s = _bind[_];
+      const swid = _M0FP25aidui3src7str__at(s, "id");
+      _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src15op__set__switch(swid, "topology_mode", _M0FP25aidui3src10get__value(`sw-${swid}-topo`)));
+      _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src15op__set__switch(swid, "device_type_extension", _M0FP25aidui3src10get__value(`sw-${swid}-devext`)));
+      _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src15op__set__switch(swid, "override_quantity", _M0FP25aidui3src10get__value(`sw-${swid}-override`)));
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  _M0FP25aidui3src16patch__structure(id, ops, "save-sw-btn");
 }
 function _M0FP25aidui3src10save__plan(id) {
   const yaml = _M0FP25aidui3src10get__value("edit-yaml");
@@ -5198,4 +5587,4 @@ function _M0FP25aidui3src11main__entry() {
   });
   _M0FP25aidui3src11load__plans("app");
 }
-export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }
+export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }

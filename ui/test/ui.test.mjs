@@ -599,3 +599,41 @@ test("P1.5 loading: load_detail (View) shows a spinner before the detail resolve
   assert.match(loading, /spinner-border/, "expected a spinner while the detail loads");
   assert.match(loading, /Loading/i, "expected a loading label");
 });
+
+// --- P1.1 (#67): structured editor render --------------------------------------
+const STRUCTURE = JSON.stringify({
+  server_classes: [
+    { id: "compute_xpu", quantity: 8, gpus_per_server: 8, server_device_type: "srv_xpu_generic_dt",
+      nics: [{ nic_id: "scale_out", module_type: "nic_xpu_scale_out_8x400" }] },
+  ],
+  switch_classes: [
+    { id: "soc_storage_scale_out_leaf", topology_mode: "mesh", device_type_extension: "sw_ds5000_soc_storage_scale_out_ext", override_quantity: 2 },
+  ],
+  catalog: {
+    module_types: ["nic_xpu_scale_out_8x400", "nic_dual_200g"],
+    device_types: ["srv_xpu_generic_dt"],
+    device_type_extensions: ["sw_ds5000_soc_storage_scale_out_ext"],
+    breakout_options: ["b_1x800"],
+  },
+});
+
+test("P1.1 structured editor: data-derived forms for server + switch classes", () => {
+  reset();
+  const html = app.structure_editor_html(STRUCTURE);
+  // server class: quantity + gpus inputs, NIC module-type select with options.
+  assert.match(html, /id="srv-compute_xpu-qty"[^>]*value="8"/, "server quantity input");
+  assert.match(html, /id="srv-compute_xpu-gpus"[^>]*value="8"/, "gpus input");
+  assert.match(html, /id="srv-compute_xpu-devtype"/, "server device-type select (editable on existing classes)");
+  assert.match(html, /id="nic-compute_xpu-scale_out"/, "NIC module-type select");
+  assert.match(html, /<option value="nic_dual_200g"/, "NIC dropdown is data-derived from the catalog");
+  // switch class: explicit mesh|clos selector (the headline capability).
+  assert.match(html, /id="sw-soc_storage_scale_out_leaf-topo"/, "topology selector");
+  assert.match(html, /<option value="clos"/, "clos option present");
+  assert.match(html, /<option value="mesh" selected/, "current mesh mode selected");
+  assert.match(html, /id="sw-soc_storage_scale_out_leaf-override"[^>]*value="2"/, "override qty input");
+  // add-server-class form + save buttons + the hidden id carrier.
+  assert.match(html, /id="add-srv-id"/, "add-class id input");
+  assert.match(html, /id="save-srv-btn"/, "save server classes button");
+  assert.match(html, /id="save-sw-btn"/, "save switch classes button");
+  assert.match(html, /id="structure-data"/, "hidden structure-data carrier");
+});

@@ -1,0 +1,400 @@
+// Package planedit is the server-side structured-editing core for the GUI's
+// structured plan editor (D26, Issue #67 / P1.1). It does two things over the
+// canonical DIET/training plan YAML:
+//
+//   - Project: parse the plan into a small JSON projection of the editable
+//     fields (server classes incl. joined NICs, switch classes incl. the
+//     mesh|clos topology mode) plus the dropdown id lists from reference_data,
+//     so the MoonBit UI can render data-derived forms without a YAML parser.
+//
+//   - Apply: apply structured field edits by SURGICALLY mutating the yaml.Node
+//     tree (never unmarshal-to-struct then remarshal — that reorders keys and
+//     strips comments on the ~900-line file), then re-validate the result
+//     through internal/topology ingest BEFORE returning it. A bad edit returns
+//     an error and never yields a plan the caller would persist.
+//
+// Untouched regions (switch_port_zones, server_connections, reference_data) keep
+// their content, key order, and comments faithfully across the round-trip;
+// yaml.v3 node encoding normalizes only insignificant whitespace (blank lines).
+// The proved kernel/engine is untouched — this is additive Go only.
+package planedit
+
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/afewell-hh/aid/internal/topology"
+	"gopkg.in/yaml.v3"
+)
+
+// --- Projection (read) ------------------------------------------------------
+
+// Projection is the editable view of a plan the structured form renders from.
+type Projection struct {
+	ServerClasses []ServerClass `json:"server_classes"`
+	SwitchClasses []SwitchClass `json:"switch_classes"`
+	Catalog       Catalog       `json:"catalog"`
+}
+
+// NIC is one server-class NIC row (joined from the top-level server_nics list).
+type NIC struct {
+	NicID      string `json:"nic_id"`
+	ModuleType string `json:"module_type"`
+}
+
+type ServerClass struct {
+	ID               string `json:"id"`
+	Quantity         int    `json:"quantity"`
+	GpusPerServer    int    `json:"gpus_per_server"`
+	ServerDeviceType string `json:"server_device_type"`
+	Nics             []NIC  `json:"nics"`
+}
+
+type SwitchClass struct {
+	ID                  string `json:"id"`
+	TopologyMode        string `json:"topology_mode"` // "" | mesh | clos | spine-leaf
+	DeviceTypeExtension string `json:"device_type_extension"`
+	OverrideQuantity    *int   `json:"override_quantity"` // nil when absent
+}
+
+// Catalog carries the dropdown id lists the form binds to (data-derived, never
+// hardcoded) — D26 / ticket: reference_data.{module_types, device_types,
+// device_type_extensions, breakout_options}.
+type Catalog struct {
+	ModuleTypes          []string `json:"module_types"`
+	DeviceTypes          []string `json:"device_types"`
+	DeviceTypeExtensions []string `json:"device_type_extensions"`
+	BreakoutOptions      []string `json:"breakout_options"`
+}
+
+// read structs (projection only; the WRITE path never round-trips through these).
+type rawPlan struct {
+	ServerClasses []struct {
+		ID               string `yaml:"server_class_id"`
+		Quantity         int    `yaml:"quantity"`
+		GpusPerServer    int    `yaml:"gpus_per_server"`
+		ServerDeviceType string `yaml:"server_device_type"`
+	} `yaml:"server_classes"`
+	SwitchClasses []struct {
+		ID                  string `yaml:"switch_class_id"`
+		TopologyMode        string `yaml:"topology_mode"`
+		DeviceTypeExtension string `yaml:"device_type_extension"`
+		OverrideQuantity    *int   `yaml:"override_quantity"`
+	} `yaml:"switch_classes"`
+	ServerNics []struct {
+		ServerClass string `yaml:"server_class"`
+		NicID       string `yaml:"nic_id"`
+		ModuleType  string `yaml:"module_type"`
+	} `yaml:"server_nics"`
+	ReferenceData struct {
+		ModuleTypes          []idOnly `yaml:"module_types"`
+		DeviceTypes          []idOnly `yaml:"device_types"`
+		DeviceTypeExtensions []idOnly `yaml:"device_type_extensions"`
+		BreakoutOptions      []idOnly `yaml:"breakout_options"`
+	} `yaml:"reference_data"`
+}
+
+type idOnly struct {
+	ID string `yaml:"id"`
+}
+
+func ids(xs []idOnly) []string {
+	out := make([]string, 0, len(xs))
+	for _, x := range xs {
+		out = append(out, x.ID)
+	}
+	return out
+}
+
+// Project parses the plan YAML into the editable projection.
+func Project(src []byte) (*Projection, error) {
+	var rp rawPlan
+	if err := yaml.Unmarshal(src, &rp); err != nil {
+		return nil, fmt.Errorf("planedit: parse plan: %w", err)
+	}
+	nicsByClass := map[string][]NIC{}
+	for _, n := range rp.ServerNics {
+		nicsByClass[n.ServerClass] = append(nicsByClass[n.ServerClass], NIC{NicID: n.NicID, ModuleType: n.ModuleType})
+	}
+	p := &Projection{ServerClasses: []ServerClass{}, SwitchClasses: []SwitchClass{}}
+	for _, sc := range rp.ServerClasses {
+		nics := nicsByClass[sc.ID]
+		if nics == nil {
+			nics = []NIC{}
+		}
+		p.ServerClasses = append(p.ServerClasses, ServerClass{
+			ID: sc.ID, Quantity: sc.Quantity, GpusPerServer: sc.GpusPerServer,
+			ServerDeviceType: sc.ServerDeviceType, Nics: nics,
+		})
+	}
+	for _, sw := range rp.SwitchClasses {
+		p.SwitchClasses = append(p.SwitchClasses, SwitchClass{
+			ID: sw.ID, TopologyMode: sw.TopologyMode,
+			DeviceTypeExtension: sw.DeviceTypeExtension, OverrideQuantity: sw.OverrideQuantity,
+		})
+	}
+	p.Catalog = Catalog{
+		ModuleTypes:          ids(rp.ReferenceData.ModuleTypes),
+		DeviceTypes:          ids(rp.ReferenceData.DeviceTypes),
+		DeviceTypeExtensions: ids(rp.ReferenceData.DeviceTypeExtensions),
+		BreakoutOptions:      ids(rp.ReferenceData.BreakoutOptions),
+	}
+	return p, nil
+}
+
+// --- Patch (write) ----------------------------------------------------------
+
+// Op is one structured edit. The discriminator is Op; the other fields are read
+// per op kind. Values arrive as strings (the form's field values); numeric
+// fields are emitted as unquoted YAML scalars so they decode as ints.
+type Op struct {
+	Op          string `json:"op"`
+	ServerClass string `json:"server_class,omitempty"`
+	SwitchClass string `json:"switch_class,omitempty"`
+	NicID       string `json:"nic_id,omitempty"`
+	Field       string `json:"field,omitempty"`
+	Value       string `json:"value,omitempty"`
+	// add_server_class:
+	Quantity         string `json:"quantity,omitempty"`
+	GpusPerServer    string `json:"gpus_per_server,omitempty"`
+	ServerDeviceType string `json:"server_device_type,omitempty"`
+}
+
+// Patch is the request body for the structured field-patch endpoint.
+type Patch struct {
+	Ops []Op `json:"ops"`
+}
+
+// Apply applies the ops to the plan by surgically editing the yaml.Node tree,
+// re-encodes it, and re-validates the result through topology ingest (the D26
+// safety invariant). On any op error or a failed re-validate it returns an
+// error and the ORIGINAL plan is left for the caller to keep.
+func Apply(src []byte, ops []Op) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(src, &doc); err != nil {
+		return nil, fmt.Errorf("planedit: parse plan: %w", err)
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("planedit: plan is not a YAML mapping")
+	}
+	root := doc.Content[0]
+	for i, op := range ops {
+		if err := applyOne(root, op); err != nil {
+			return nil, fmt.Errorf("planedit: op[%d] %q: %w", i, op.Op, err)
+		}
+	}
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, fmt.Errorf("planedit: re-encode plan: %w", err)
+	}
+	_ = enc.Close()
+	out := buf.Bytes()
+
+	// Safety invariant (D26): the edited plan MUST still ingest. A bad edit is
+	// rejected here — never persisted.
+	if _, _, err := topology.IngestBundled(out); err != nil {
+		return nil, fmt.Errorf("planedit: edited plan fails validation: %w", err)
+	}
+	return out, nil
+}
+
+func applyOne(root *yaml.Node, op Op) error {
+	switch op.Op {
+	case "set_server_field":
+		sc, err := findInSeq(root, "server_classes", "server_class_id", op.ServerClass)
+		if err != nil {
+			return err
+		}
+		switch op.Field {
+		case "quantity", "gpus_per_server":
+			setScalar(sc, op.Field, op.Value)
+		case "server_device_type":
+			// A structured edit must not leave a server class without a real
+			// device type (devb #67 finding: the ingest guard alone permits it).
+			if err := validateDeviceType(root, op.Value); err != nil {
+				return err
+			}
+			setScalar(sc, op.Field, op.Value)
+		default:
+			return fmt.Errorf("unsupported server field %q", op.Field)
+		}
+	case "set_nic_module_type":
+		nic, err := findNic(root, op.ServerClass, op.NicID)
+		if err != nil {
+			return err
+		}
+		setScalar(nic, "module_type", op.Value)
+	case "set_switch_field":
+		sw, err := findInSeq(root, "switch_classes", "switch_class_id", op.SwitchClass)
+		if err != nil {
+			return err
+		}
+		switch op.Field {
+		case "topology_mode", "device_type_extension":
+			setScalar(sw, op.Field, op.Value)
+		case "override_quantity":
+			if op.Value == "" {
+				deleteKey(sw, "override_quantity") // clear the override → derived
+			} else {
+				setScalar(sw, "override_quantity", op.Value)
+			}
+		default:
+			return fmt.Errorf("unsupported switch field %q", op.Field)
+		}
+	case "add_server_class":
+		return addServerClass(root, op)
+	default:
+		return fmt.Errorf("unknown op")
+	}
+	return nil
+}
+
+// --- yaml.Node helpers ------------------------------------------------------
+
+// mapValue returns the value node for key in a mapping node, or nil.
+func mapValue(m *yaml.Node, key string) *yaml.Node {
+	if m == nil || m.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			return m.Content[i+1]
+		}
+	}
+	return nil
+}
+
+// setScalar sets (or appends) key=value as a plain scalar (untyped tag so YAML
+// infers int/bool/string), preserving any existing comments on the value node.
+func setScalar(m *yaml.Node, key, value string) {
+	if v := mapValue(m, key); v != nil {
+		v.Kind = yaml.ScalarNode
+		v.Tag = ""
+		v.Style = 0
+		v.Value = value
+		v.Content = nil
+		return
+	}
+	m.Content = append(m.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Value: key},
+		&yaml.Node{Kind: yaml.ScalarNode, Value: value},
+	)
+}
+
+// deleteKey removes a key/value pair from a mapping node (no-op if absent).
+func deleteKey(m *yaml.Node, key string) {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			m.Content = append(m.Content[:i], m.Content[i+2:]...)
+			return
+		}
+	}
+}
+
+// deviceTypeIDs collects the reference_data.device_types ids (the server-device
+// dropdown source) from the plan node tree.
+func deviceTypeIDs(root *yaml.Node) map[string]bool {
+	out := map[string]bool{}
+	rd := mapValue(root, "reference_data")
+	if rd == nil {
+		return out
+	}
+	dts := mapValue(rd, "device_types")
+	if dts == nil || dts.Kind != yaml.SequenceNode {
+		return out
+	}
+	for _, item := range dts.Content {
+		if v := mapValue(item, "id"); v != nil {
+			out[v.Value] = true
+		}
+	}
+	return out
+}
+
+// validateDeviceType rejects a blank or unknown server_device_type so the
+// structured editor cannot store a semantically incomplete server class.
+func validateDeviceType(root *yaml.Node, value string) error {
+	if value == "" {
+		return fmt.Errorf("server_device_type is required")
+	}
+	if !deviceTypeIDs(root)[value] {
+		return fmt.Errorf("server_device_type %q is not a known device type", value)
+	}
+	return nil
+}
+
+// findInSeq finds the mapping item in root[seqKey] whose idKey == idVal.
+func findInSeq(root *yaml.Node, seqKey, idKey, idVal string) (*yaml.Node, error) {
+	seq := mapValue(root, seqKey)
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return nil, fmt.Errorf("no %s sequence", seqKey)
+	}
+	for _, item := range seq.Content {
+		if v := mapValue(item, idKey); v != nil && v.Value == idVal {
+			return item, nil
+		}
+	}
+	return nil, fmt.Errorf("%s %q not found", idKey, idVal)
+}
+
+// findNic finds the server_nics row for (server_class, nic_id).
+func findNic(root *yaml.Node, serverClass, nicID string) (*yaml.Node, error) {
+	seq := mapValue(root, "server_nics")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return nil, fmt.Errorf("no server_nics sequence")
+	}
+	for _, item := range seq.Content {
+		sc := mapValue(item, "server_class")
+		nid := mapValue(item, "nic_id")
+		if sc != nil && sc.Value == serverClass && nid != nil && nid.Value == nicID {
+			return item, nil
+		}
+	}
+	return nil, fmt.Errorf("nic %q on server_class %q not found", nicID, serverClass)
+}
+
+// addServerClass appends a new server class mapping to the server_classes seq.
+func addServerClass(root *yaml.Node, op Op) error {
+	seq := mapValue(root, "server_classes")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return fmt.Errorf("no server_classes sequence")
+	}
+	if op.ServerClass == "" {
+		return fmt.Errorf("add_server_class needs a server_class id")
+	}
+	// A new server class must carry a real device type — never store a
+	// semantically incomplete class (devb #67 finding).
+	if err := validateDeviceType(root, op.ServerDeviceType); err != nil {
+		return err
+	}
+	// reject a duplicate id up front (clearer than a downstream ingest error).
+	for _, item := range seq.Content {
+		if v := mapValue(item, "server_class_id"); v != nil && v.Value == op.ServerClass {
+			return fmt.Errorf("server class %q already exists", op.ServerClass)
+		}
+	}
+	q := op.Quantity
+	if q == "" {
+		q = "1"
+	}
+	g := op.GpusPerServer
+	if g == "" {
+		g = "0"
+	}
+	item := &yaml.Node{Kind: yaml.MappingNode}
+	add := func(k, v string) {
+		item.Content = append(item.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: k},
+			&yaml.Node{Kind: yaml.ScalarNode, Value: v},
+		)
+	}
+	add("server_class_id", op.ServerClass)
+	add("quantity", q)
+	add("gpus_per_server", g)
+	add("server_device_type", op.ServerDeviceType)
+	seq.Content = append(seq.Content, item)
+	return nil
+}
