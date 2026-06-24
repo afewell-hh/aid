@@ -373,6 +373,7 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "<textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">\{esc(yaml)}</textarea>" +
   "<div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div>" +
   "</div></div></div></div>" +
+  "<div id=\"structure-editor\" class=\"mt-3\"></div>" +
   "<div id=\"detail-result\" class=\"mt-3\"></div>"
 }
 
@@ -517,4 +518,157 @@ pub fn bom_html(bom_json : String) -> String {
   "<thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th></tr></thead>" +
   "<tbody>\{rows}</tbody></table>" +
   "<p class=\"text-muted small mb-0\">Suppressed cable assemblies: \{suppressed}</p>"
+}
+
+// --- P1.1 (#67): structured editor for server & switch classes --------------
+// Renders data-derived forms from the GET /structure projection (D26). Dropdowns
+// are sourced from the projection's catalog id lists, never hardcoded. The raw
+// JSON is stashed in a hidden #structure-data input so the save handlers can
+// re-read the id list to collect each field's value.
+
+fn jval(j : Json) -> String {
+  match j {
+    String(s) => s
+    _ => ""
+  }
+}
+
+// json_escape escapes a value for embedding in a JSON string literal (the save
+// handlers build the ops body by hand).
+pub fn json_escape(s : String) -> String {
+  let mut out = ""
+  for c in s {
+    out = out +
+      (match c {
+        '\\' => "\\\\"
+        '"' => "\\\""
+        '\n' => "\\n"
+        '\r' => "\\r"
+        '\t' => "\\t"
+        _ => c.to_string()
+      })
+  }
+  out
+}
+
+// select_html renders a <select> over option id strings, marking `selected`.
+fn select_html(
+  id : String,
+  options : Array[Json],
+  selected : String,
+  blank : Bool
+) -> String {
+  let mut opts = if blank { "<option value=\"\"></option>" } else { "" }
+  for o in options {
+    let v = jval(o)
+    let sel = if v == selected { " selected" } else { "" }
+    opts = opts + "<option value=\"\{esc(v)}\"\{sel}>\{esc(v)}</option>"
+  }
+  "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\">\{opts}</select>"
+}
+
+// topo_select renders the explicit mesh|clos selector (the headline P1.1/P1.2
+// capability), preserving the current value.
+fn topo_select(id : String, current : String) -> String {
+  let opt = fn(v : String) -> String {
+    let sel = if v == current { " selected" } else { "" }
+    "<option value=\"\{v}\"\{sel}>\{v}</option>"
+  }
+  let blank = if current == "" { "<option value=\"\" selected></option>" } else {
+      ""
+    }
+  "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\">\{blank}\{opt("mesh")}\{opt("clos")}</select>"
+}
+
+fn override_value(sw : Json) -> String {
+  match get(sw, "override_quantity") {
+    Some(Number(n, ..)) => n.to_int().to_string()
+    _ => ""
+  }
+}
+
+// structure_editor_html renders the structured editor (server + switch class
+// forms + an add-server-class form) from the /structure projection JSON.
+pub fn structure_editor_html(structure_json : String) -> String {
+  let root = try {
+    @json.parse(structure_json)
+  } catch {
+    _ => return warn_box("Could not parse plan structure.")
+  }
+  let module_types = match get(root, "catalog") {
+    Some(c) => arr_at(c, "module_types")
+    None => []
+  }
+  let device_type_extensions = match get(root, "catalog") {
+    Some(c) => arr_at(c, "device_type_extensions")
+    None => []
+  }
+  let device_types = match get(root, "catalog") {
+    Some(c) => arr_at(c, "device_types")
+    None => []
+  }
+
+  // server classes
+  let mut srv = ""
+  for sc in arr_at(root, "server_classes") {
+    let id = str_at(sc, "id")
+    let qty = int_at(sc, "quantity").to_string()
+    let gpus = int_at(sc, "gpus_per_server").to_string()
+    let mut nic_rows = ""
+    for n in arr_at(sc, "nics") {
+      let nicid = str_at(n, "nic_id")
+      let mt = str_at(n, "module_type")
+      nic_rows = nic_rows +
+        "<div class=\"row g-2 align-items-center mb-1\">" +
+        "<div class=\"col-4\"><code>\{esc(nicid)}</code></div>" +
+        "<div class=\"col-8\">\{select_html("nic-" + id + "-" + nicid, module_types, mt, false)}</div></div>"
+    }
+    srv = srv +
+      "<div class=\"card mb-2\"><div class=\"card-body\">" +
+      "<div class=\"fw-semibold mb-2\">\{esc(id)}</div>" +
+      "<div class=\"row g-2 mb-2\">" +
+      "<div class=\"col-6\"><label class=\"form-label mb-0 small\">Quantity</label>" +
+      "<input id=\"srv-\{esc(id)}-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"\{qty}\"></div>" +
+      "<div class=\"col-6\"><label class=\"form-label mb-0 small\">GPUs/server</label>" +
+      "<input id=\"srv-\{esc(id)}-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"\{gpus}\"></div></div>" +
+      "<div class=\"small text-muted\">NICs (module type)</div>\{nic_rows}" +
+      "</div></div>"
+  }
+
+  // switch classes
+  let mut sw = ""
+  for s in arr_at(root, "switch_classes") {
+    let id = str_at(s, "id")
+    let topo = str_at(s, "topology_mode")
+    let devext = str_at(s, "device_type_extension")
+    let ov = override_value(s)
+    sw = sw +
+      "<div class=\"card mb-2\"><div class=\"card-body\">" +
+      "<div class=\"fw-semibold mb-2\">\{esc(id)}</div>" +
+      "<div class=\"row g-2\">" +
+      "<div class=\"col-4\"><label class=\"form-label mb-0 small\">Topology</label>\{topo_select("sw-" + id + "-topo", topo)}</div>" +
+      "<div class=\"col-5\"><label class=\"form-label mb-0 small\">Device type</label>\{select_html("sw-" + id + "-devext", device_type_extensions, devext, false)}</div>" +
+      "<div class=\"col-3\"><label class=\"form-label mb-0 small\">Override qty</label>" +
+      "<input id=\"sw-\{esc(id)}-override\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" placeholder=\"(derived)\" value=\"\{esc(ov)}\"></div>" +
+      "</div></div></div>"
+  }
+
+  "<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\">" +
+  "<span>Structured editor</span></div><div class=\"card-body\">" +
+  "<input type=\"hidden\" id=\"structure-data\" value=\"\{esc(structure_json)}\">" +
+  "<div id=\"structure-error\" class=\"mb-2\"></div>" +
+  "<h3 class=\"h6\">Server classes</h3>\{srv}" +
+  "<div class=\"card mb-3\"><div class=\"card-body\">" +
+  "<div class=\"small text-muted mb-2\">Add server class</div>" +
+  "<div class=\"row g-2\">" +
+  "<div class=\"col-3\"><input id=\"add-srv-id\" class=\"form-control form-control-sm\" placeholder=\"new_class_id\"></div>" +
+  "<div class=\"col-2\"><input id=\"add-srv-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"1\"></div>" +
+  "<div class=\"col-2\"><input id=\"add-srv-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"0\"></div>" +
+  "<div class=\"col-3\">\{select_html("add-srv-devtype", device_types, "", true)}</div>" +
+  "<div class=\"col-2\"><button id=\"add-srv-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div>" +
+  "</div></div></div>" +
+  "<button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm mb-3\">Save server classes</button>" +
+  "<h3 class=\"h6\">Switch classes</h3>\{sw}" +
+  "<button id=\"save-sw-btn\" class=\"btn btn-primary btn-sm\">Save switch classes</button>" +
+  "</div></div>"
 }

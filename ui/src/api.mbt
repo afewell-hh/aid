@@ -56,6 +56,10 @@ pub fn plan_path(id : String) -> String {
   "/plans/" + id
 }
 
+pub fn structure_path(id : String) -> String {
+  "/plans/" + id + "/structure"
+}
+
 pub fn calc_path(id : String) -> String {
   "/plans/" + id + "/calc"
 }

@@ -248,6 +248,7 @@ fn load_detail(id : String) -> Unit {
     on_click("save-btn", fn() { save_plan(id) })
     on_click("back-btn", fn() { load_plans("app") })
     on_click("crumb-plans", fn() { load_plans("app") }) // P1.5 breadcrumb
+    load_structure(id) // P1.1 structured editor (#67)
     on_click("detail-del-btn", fn() {
       delete_plan_from_detail(id, str_at_body(body, "name"))
     })
@@ -297,6 +298,149 @@ fn delete_plan_from_detail(id : String, name : String) -> Unit {
     }
     load_plans("app")
   })
+}
+
+// --- P1.1 (#67): structured editor ------------------------------------------
+
+// load_structure: GET /api/plans/{id}/structure and render the structured forms
+// into #structure-editor, then wire the Save / Add buttons. The raw-YAML card
+// stays as the escape hatch; a structured save reloads the whole detail so the
+// two views never drift.
+fn load_structure(id : String) -> Unit {
+  api_get(structure_path(id), fn(ok, status, body) {
+    if (!ok) || body_has_error(body) {
+      set_html("structure-editor", error_html(status, body))
+      return
+    }
+    set_html("structure-editor", structure_editor_html(body))
+    on_click("save-srv-btn", fn() { save_server_classes(id) })
+    on_click("save-sw-btn", fn() { save_switch_classes(id) })
+    on_click("add-srv-btn", fn() { add_server_class(id) })
+  })
+}
+
+// --- op builders (hand-built JSON; values json-escaped) ---------------------
+
+fn op_set_server(scid : String, field : String, value : String) -> String {
+  "{\"op\":\"set_server_field\",\"server_class\":\"" +
+  json_escape(scid) +
+  "\",\"field\":\"" +
+  field +
+  "\",\"value\":\"" +
+  json_escape(value) +
+  "\"}"
+}
+
+fn op_set_nic(scid : String, nicid : String, value : String) -> String {
+  "{\"op\":\"set_nic_module_type\",\"server_class\":\"" +
+  json_escape(scid) +
+  "\",\"nic_id\":\"" +
+  json_escape(nicid) +
+  "\",\"value\":\"" +
+  json_escape(value) +
+  "\"}"
+}
+
+fn op_set_switch(swid : String, field : String, value : String) -> String {
+  "{\"op\":\"set_switch_field\",\"switch_class\":\"" +
+  json_escape(swid) +
+  "\",\"field\":\"" +
+  field +
+  "\",\"value\":\"" +
+  json_escape(value) +
+  "\"}"
+}
+
+fn join_ops(ops : Array[String]) -> String {
+  let mut body = "{\"ops\":["
+  let mut first = true
+  for o in ops {
+    if !first {
+      body = body + ","
+    }
+    body = body + o
+    first = false
+  }
+  body + "]}"
+}
+
+// patch_structure PUTs the ops body; on success reloads the whole detail so the
+// structured editor, the raw-YAML card, and the (re-)Calculate all reflect the
+// edit consistently. On a rejected edit (422) the error renders in-place and the
+// stored plan is untouched (server guard).
+fn patch_structure(id : String, ops : Array[String], btn : String) -> Unit {
+  if ops.length() == 0 {
+    return
+  }
+  set_inflight(btn, true, "Saving…")
+  api_put(structure_path(id), join_ops(ops), fn(ok, status, body) {
+    set_inflight(btn, false, "Save")
+    if (!ok) || body_has_error(body) {
+      set_html("structure-error", error_html(status, body))
+      return
+    }
+    load_detail(id)
+  })
+}
+
+// save_server_classes reads each server class's quantity/gpus + NIC module types
+// from the form (id list recovered from the hidden #structure-data) and patches.
+fn save_server_classes(id : String) -> Unit {
+  let root = try {
+    @json.parse(get_value("structure-data"))
+  } catch {
+    _ => return
+  }
+  let ops : Array[String] = []
+  for sc in arr_at(root, "server_classes") {
+    let scid = str_at(sc, "id")
+    ops.push(op_set_server(scid, "quantity", get_value("srv-" + scid + "-qty")))
+    ops.push(op_set_server(scid, "gpus_per_server", get_value("srv-" + scid + "-gpus")))
+    for n in arr_at(sc, "nics") {
+      let nicid = str_at(n, "nic_id")
+      ops.push(op_set_nic(scid, nicid, get_value("nic-" + scid + "-" + nicid)))
+    }
+  }
+  patch_structure(id, ops, "save-srv-btn")
+}
+
+// save_switch_classes patches each switch class's topology_mode / device type /
+// override quantity (empty override clears it → derived).
+fn save_switch_classes(id : String) -> Unit {
+  let root = try {
+    @json.parse(get_value("structure-data"))
+  } catch {
+    _ => return
+  }
+  let ops : Array[String] = []
+  for s in arr_at(root, "switch_classes") {
+    let swid = str_at(s, "id")
+    ops.push(op_set_switch(swid, "topology_mode", get_value("sw-" + swid + "-topo")))
+    ops.push(
+      op_set_switch(swid, "device_type_extension", get_value("sw-" + swid + "-devext")),
+    )
+    ops.push(op_set_switch(swid, "override_quantity", get_value("sw-" + swid + "-override")))
+  }
+  patch_structure(id, ops, "save-sw-btn")
+}
+
+// add_server_class submits the add-server-class mini-form as a single op.
+fn add_server_class(id : String) -> Unit {
+  let newid = get_value("add-srv-id")
+  if newid == "" {
+    set_html("structure-error", warn_box("Enter an id for the new server class."))
+    return
+  }
+  let op = "{\"op\":\"add_server_class\",\"server_class\":\"" +
+    json_escape(newid) +
+    "\",\"quantity\":\"" +
+    json_escape(get_value("add-srv-qty")) +
+    "\",\"gpus_per_server\":\"" +
+    json_escape(get_value("add-srv-gpus")) +
+    "\",\"server_device_type\":\"" +
+    json_escape(get_value("add-srv-devtype")) +
+    "\"}"
+  patch_structure(id, [op], "add-srv-btn")
 }
 
 // trigger_calc: POST /api/plans/{id}/calc, render the validation summary, and

@@ -13,6 +13,7 @@ import (
 	"github.com/afewell-hh/aid/internal/bom"
 	"github.com/afewell-hh/aid/internal/calc"
 	"github.com/afewell-hh/aid/internal/design"
+	"github.com/afewell-hh/aid/internal/planedit"
 	"github.com/afewell-hh/aid/internal/planstore"
 	"github.com/afewell-hh/aid/internal/templates"
 	"github.com/afewell-hh/aid/ui"
@@ -118,6 +119,15 @@ func (a *api) routePlanID(w http.ResponseWriter, r *http.Request) {
 			a.getOverlay(w, r, id)
 		case http.MethodPut:
 			a.putOverlay(w, r, id)
+		default:
+			writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+	case len(segs) == 2 && segs[1] == "structure": // GET/PUT /api/plans/{id}/structure
+		switch r.Method {
+		case http.MethodGet:
+			a.getStructure(w, r, id)
+		case http.MethodPut, http.MethodPatch:
+			a.patchStructure(w, r, id)
 		default:
 			writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		}
@@ -271,6 +281,61 @@ func (a *api) resolve(w http.ResponseWriter, id string) (*design.Resolved, bool)
 		return nil, false
 	}
 	return res, true
+}
+
+// getStructure: GET /api/plans/{id}/structure → the editable projection (server/
+// switch classes + dropdown id lists) the structured editor renders forms from
+// (D26 / #67). A plan that cannot be projected is a 422, not a 500.
+func (a *api) getStructure(w http.ResponseWriter, _ *http.Request, id string) {
+	yamlBytes, err := a.store.GetYAML(id)
+	if err != nil {
+		a.fail(w, err)
+		return
+	}
+	proj, err := planedit.Project(yamlBytes)
+	if err != nil {
+		writeJSONError(w, http.StatusUnprocessableEntity, "cannot project plan: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, proj)
+}
+
+// patchStructure: PUT/PATCH /api/plans/{id}/structure (body = {"ops":[...]}) →
+// apply the structured edits via yaml.Node surgery, re-validate through ingest
+// (planedit.Apply's safety invariant), persist, and return the fresh projection.
+// A malformed body is 400; an edit that fails validation is 422 and the stored
+// plan is left untouched (D26).
+func (a *api) patchStructure(w http.ResponseWriter, r *http.Request, id string) {
+	yamlBytes, err := a.store.GetYAML(id)
+	if err != nil {
+		a.fail(w, err)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "read body: "+err.Error())
+		return
+	}
+	var patch planedit.Patch
+	if err := json.Unmarshal(body, &patch); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid patch JSON: "+err.Error())
+		return
+	}
+	out, err := planedit.Apply(yamlBytes, patch.Ops)
+	if err != nil {
+		writeJSONError(w, http.StatusUnprocessableEntity, "invalid edit: "+err.Error())
+		return
+	}
+	if _, err := a.store.Update(id, out); err != nil {
+		a.fail(w, err)
+		return
+	}
+	proj, err := planedit.Project(out)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, proj)
 }
 
 // calcView flattens CalcOutput (switch/server quantities, endpoints, verdicts,

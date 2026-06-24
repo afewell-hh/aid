@@ -13,7 +13,8 @@
         "render_bom",
         "download_wiring",
         "new_plan_form_html",
-        "clone_yaml_identity"
+        "clone_yaml_identity",
+        "structure_editor_html"
       ],
       "format": "esm"
     }
