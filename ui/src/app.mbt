@@ -319,7 +319,22 @@ fn load_structure(id : String) -> Unit {
     set_html("structure-editor", structure_editor_html(body))
     on_click("save-srv-btn", fn() { save_server_classes(id) })
     on_click("save-sw-btn", fn() { save_switch_classes(id) })
+    on_click("save-conn-btn", fn() { save_connections(id) })
     on_click("add-srv-btn", fn() { add_server_class(id) })
+    // P1.1b: wire the per-class add-connection + per-connection remove buttons
+    // (ids are dynamic, recovered from the just-rendered projection).
+    match (try { Some(@json.parse(body)) } catch { _ => None }) {
+      Some(root) =>
+        for sc in arr_at(root, "server_classes") {
+          let class_id = str_at(sc, "id")
+          on_click("addconn-" + class_id, fn() { add_connection_submit(id, class_id) })
+          for cn in arr_at(sc, "connections") {
+            let ci = int_at(cn, "index").to_string()
+            on_click("conn-rm-" + ci, fn() { remove_connection_submit(id, ci) })
+          }
+        }
+      None => ()
+    }
     // P1.3: debounced live validation of the structured draft (no persist).
     on_change_within("structure-editor", fn() {
       schedule("live-validate", 500, fn() { validate_structured() })
@@ -425,6 +440,63 @@ fn collect_switch_ops(root : Json) -> Array[String] {
   ops
 }
 
+// --- P1.1b (#69): connection ops ---------------------------------------------
+
+fn op_set_conn(idx : String, field : String, value : String) -> String {
+  "{\"op\":\"set_connection_field\",\"conn_index\":" +
+  idx +
+  ",\"field\":\"" +
+  field +
+  "\",\"value\":\"" +
+  json_escape(value) +
+  "\"}"
+}
+
+fn op_remove_conn(idx : String) -> String {
+  "{\"op\":\"remove_connection\",\"conn_index\":" + idx + "}"
+}
+
+fn op_add_conn(
+  class_id : String,
+  conn_id : String,
+  tz : String,
+  nic : String,
+  speed : String
+) -> String {
+  "{\"op\":\"add_connection\",\"server_class\":\"" +
+  json_escape(class_id) +
+  "\",\"connection_id\":\"" +
+  json_escape(conn_id) +
+  "\",\"fields\":{\"target_zone\":\"" +
+  json_escape(tz) +
+  "\",\"nic\":\"" +
+  json_escape(nic) +
+  "\",\"speed\":\"" +
+  json_escape(speed) +
+  "\",\"ports_per_connection\":\"1\",\"distribution\":\"same-switch\"}}"
+}
+
+// collect_connection_ops reads every connection's editable fields from the form
+// (keyed by its server_connections index).
+fn collect_connection_ops(root : Json) -> Array[String] {
+  let ops : Array[String] = []
+  for sc in arr_at(root, "server_classes") {
+    for cn in arr_at(sc, "connections") {
+      let ci = int_at(cn, "index").to_string()
+      ops.push(op_set_conn(ci, "target_zone", get_value("conn-" + ci + "-target_zone")))
+      ops.push(op_set_conn(ci, "nic", get_value("conn-" + ci + "-nic")))
+      ops.push(
+        op_set_conn(ci, "distribution", get_value("conn-" + ci + "-distribution")),
+      )
+      ops.push(op_set_conn(ci, "speed", get_value("conn-" + ci + "-speed")))
+      ops.push(
+        op_set_conn(ci, "ports_per_connection", get_value("conn-" + ci + "-ports")),
+      )
+    }
+  }
+  ops
+}
+
 fn parse_structure_data() -> Json? {
   try {
     Some(@json.parse(get_value("structure-data")))
@@ -446,6 +518,36 @@ fn save_switch_classes(id : String) -> Unit {
     Some(root) => patch_structure(id, collect_switch_ops(root), "save-sw-btn")
     None => ()
   }
+}
+
+// save_connections patches every connection's edited fields (P1.1b, #69).
+fn save_connections(id : String) -> Unit {
+  match parse_structure_data() {
+    Some(root) => patch_structure(id, collect_connection_ops(root), "save-conn-btn")
+    None => ()
+  }
+}
+
+// add_connection_submit submits the per-class add-connection mini-form.
+fn add_connection_submit(id : String, class_id : String) -> Unit {
+  let conn_id = get_value("addconn-" + class_id + "-id")
+  if conn_id == "" {
+    set_html("structure-error", warn_box("Enter a connection id."))
+    return
+  }
+  let op = op_add_conn(
+    class_id,
+    conn_id,
+    get_value("addconn-" + class_id + "-target_zone"),
+    get_value("addconn-" + class_id + "-nic"),
+    get_value("addconn-" + class_id + "-speed"),
+  )
+  patch_structure(id, [op], "addconn-" + class_id)
+}
+
+// remove_connection_submit removes the connection at the given index.
+fn remove_connection_submit(id : String, idx : String) -> Unit {
+  patch_structure(id, [op_remove_conn(idx)], "conn-rm-" + idx)
 }
 
 // --- P1.3 (#68): debounced live validation ----------------------------------
@@ -493,6 +595,9 @@ pub fn validate_structured() -> Unit {
     Some(root) => {
       let ops = collect_server_ops(root)
       for o in collect_switch_ops(root) {
+        ops.push(o)
+      }
+      for o in collect_connection_ops(root) {
         ops.push(o)
       }
       run_validate(

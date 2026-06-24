@@ -712,3 +712,29 @@ test("P1.3 stale-response guard: an older slower response never overwrites a new
   assert.match(html, /Valid/, "newest (fast) result must stand");
   assert.doesNotMatch(html, /STALE_BADGE/, "the older slow response must be dropped");
 });
+
+// --- P1.1b (#69): structured connections editor render ------------------------
+const CONN_STRUCT = JSON.stringify({
+  server_classes: [{
+    id: "compute_xpu", quantity: 8, gpus_per_server: 8, server_device_type: "srv_xpu_generic_dt",
+    nics: [{ nic_id: "scale_out", module_type: "nic_x" }, { nic_id: "inb_mgmt", module_type: "nic_y" }],
+    connections: [{ index: 0, connection_id: "scale-out-rail-0", connection_name: "scale-out", target_zone: "leaf/zoneA", nic: "scale_out", ports_per_connection: 1, hedgehog_conn_type: "unbundled", distribution: "rail-optimized", speed: 400, rail: 0 }],
+  }],
+  switch_classes: [],
+  catalog: { module_types: ["nic_x", "nic_y"], device_types: ["srv_xpu_generic_dt"], device_type_extensions: [], breakout_options: [], target_zones: ["leaf/zoneA", "leaf/zoneB"] },
+});
+
+test("P1.1b structured connections: target_zone dropdown + add/remove, data-derived", () => {
+  reset();
+  const html = app.structure_editor_html(CONN_STRUCT);
+  // connection row keyed by index, target_zone is a dropdown over the plan's zones.
+  assert.match(html, /id="conn-0-target_zone"/, "per-connection target_zone select");
+  assert.match(html, /<option value="leaf\/zoneB"/, "target_zone options are data-derived from the plan");
+  assert.match(html, /<option value="leaf\/zoneA" selected/, "current target_zone selected");
+  assert.match(html, /id="conn-0-nic"/, "connection NIC dropdown");
+  assert.match(html, /id="conn-rm-0"/, "per-connection remove button");
+  // per-class add-connection form + the Save connections button.
+  assert.match(html, /id="addconn-compute_xpu-id"/, "add-connection id input");
+  assert.match(html, /id="addconn-compute_xpu-target_zone"/, "add-connection target_zone dropdown");
+  assert.match(html, /id="save-conn-btn"/, "save connections button");
+});

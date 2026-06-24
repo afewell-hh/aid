@@ -99,3 +99,39 @@ func TestAPI_Structure_Patch_MalformedBody_400(t *testing.T) {
 	rec := do(t, mux, http.MethodPut, "/api/plans/p/structure", []byte("{not json"))
 	assertJSONError(t, rec, http.StatusBadRequest)
 }
+
+// connections (P1.1b, #69): the projection exposes connections + target_zone
+// options, and a connection target_zone edit round-trips via PUT .../structure.
+func TestAPI_Structure_Connections(t *testing.T) {
+	training, _, _ := oracleArtifacts(t, "xoc-64-mesh-conv-ro")
+	mux, dir := newTestAPI(t)
+	seedDIET(t, dir, "p", training)
+
+	// projection carries connections + the target_zone dropdown options.
+	get := do(t, mux, http.MethodGet, "/api/plans/p/structure", nil)
+	if get.Code != http.StatusOK {
+		t.Fatalf("GET structure: %d; %s", get.Code, get.Body.String())
+	}
+	body := get.Body.String()
+	if !strings.Contains(body, "\"connections\"") || !strings.Contains(body, "scale-out-rail-0") {
+		t.Errorf("projection missing connections: %s", body)
+	}
+	if !strings.Contains(body, "soc_storage_scale_out_leaf/scale_out_server_2x400") {
+		t.Errorf("projection missing target_zone options")
+	}
+
+	// retarget connection index 0's zone -> persists.
+	patch := `{"ops":[{"op":"set_connection_field","conn_index":0,"field":"target_zone","value":"soc_storage_scale_out_leaf/soc_storage_server_4x200"}]}`
+	rec := do(t, mux, http.MethodPut, "/api/plans/p/structure", []byte(patch))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT connection edit: %d; %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "soc_storage_server_4x200") {
+		t.Errorf("edited target_zone not reflected: %s", rec.Body.String())
+	}
+
+	// an invalid target_zone is rejected (422) and the plan is untouched.
+	bad := `{"ops":[{"op":"set_connection_field","conn_index":0,"field":"target_zone","value":"bad/zone"}]}`
+	rec2 := do(t, mux, http.MethodPut, "/api/plans/p/structure", []byte(bad))
+	assertJSONError(t, rec2, http.StatusUnprocessableEntity)
+}

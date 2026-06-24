@@ -241,3 +241,114 @@ func contains(xs []string, want string) bool {
 	}
 	return false
 }
+
+// --- connections (P1.1b, #69) ------------------------------------------------
+
+func conn(p *planedit.Projection, scID, connID string) *planedit.Connection {
+	for i := range p.ServerClasses {
+		if p.ServerClasses[i].ID != scID {
+			continue
+		}
+		for j := range p.ServerClasses[i].Connections {
+			if p.ServerClasses[i].Connections[j].ConnectionID == connID {
+				return &p.ServerClasses[i].Connections[j]
+			}
+		}
+	}
+	return nil
+}
+
+func TestProject_ConnectionsAndTargetZones(t *testing.T) {
+	p, err := planedit.Project(meshPlan(t))
+	if err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+	c := conn(p, "compute_xpu", "scale-out-rail-0")
+	if c == nil {
+		t.Fatal("compute_xpu connection scale-out-rail-0 missing")
+	}
+	if c.TargetZone != "soc_storage_scale_out_leaf/scale_out_server_2x400" {
+		t.Errorf("target_zone: got %q", c.TargetZone)
+	}
+	if c.NIC != "scale_out" || c.Speed != 400 {
+		t.Errorf("connection fields off: %+v", c)
+	}
+	if !contains(p.Catalog.TargetZones, "soc_storage_scale_out_leaf/scale_out_server_2x400") {
+		t.Errorf("catalog.target_zones missing the scale-out zone: %v", p.Catalog.TargetZones)
+	}
+	if !contains(p.Catalog.TargetZones, "inb_mgmt_leaf/inb_mgmt_server_25g") {
+		t.Errorf("catalog.target_zones missing the inb-mgmt zone: %v", p.Catalog.TargetZones)
+	}
+}
+
+func TestApply_SetConnectionTargetZone(t *testing.T) {
+	src := meshPlan(t)
+	p0, _ := planedit.Project(src)
+	idx := conn(p0, "compute_xpu", "scale-out-rail-0").Index
+	out, err := planedit.Apply(src, []planedit.Op{
+		{Op: "set_connection_field", ConnIndex: idx, Field: "target_zone", Value: "soc_storage_scale_out_leaf/soc_storage_server_4x200"},
+	})
+	if err != nil {
+		t.Fatalf("Apply(set target_zone): %v", err)
+	}
+	p, _ := planedit.Project(out)
+	if c := conn(p, "compute_xpu", "scale-out-rail-0"); c == nil || c.TargetZone != "soc_storage_scale_out_leaf/soc_storage_server_4x200" {
+		t.Errorf("target_zone not applied: %+v", c)
+	}
+	assertUntouchedFaithful(t, src, out)
+}
+
+func TestApply_RemoveConnection(t *testing.T) {
+	src := meshPlan(t)
+	p0, _ := planedit.Project(src)
+	before := len(p0.ServerClasses[0].Connections)
+	idx := conn(p0, "compute_xpu", "scale-out-rail-7").Index
+	out, err := planedit.Apply(src, []planedit.Op{{Op: "remove_connection", ConnIndex: idx}})
+	if err != nil {
+		t.Fatalf("Apply(remove): %v", err)
+	}
+	p, _ := planedit.Project(out)
+	if conn(p, "compute_xpu", "scale-out-rail-7") != nil {
+		t.Error("connection still present after remove")
+	}
+	if got := len(p.ServerClasses[0].Connections); got != before-1 {
+		t.Errorf("connection count: got %d want %d", got, before-1)
+	}
+}
+
+func TestApply_AddConnection(t *testing.T) {
+	src := meshPlan(t)
+	out, err := planedit.Apply(src, []planedit.Op{
+		{Op: "add_connection", ServerClass: "hh_controller", ConnectionID: "extra-inb-0", Fields: map[string]string{
+			"target_zone": "inb_mgmt_leaf/inb_mgmt_server_25g", "nic": "inb_mgmt", "speed": "25", "ports_per_connection": "1", "distribution": "same-switch",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Apply(add connection): %v", err)
+	}
+	p, _ := planedit.Project(out)
+	if c := conn(p, "hh_controller", "extra-inb-0"); c == nil || c.TargetZone != "inb_mgmt_leaf/inb_mgmt_server_25g" {
+		t.Errorf("added connection not projected: %+v", c)
+	}
+}
+
+func TestApply_ConnectionInvalidRejected(t *testing.T) {
+	src := meshPlan(t)
+	p0, _ := planedit.Project(src)
+	idx := conn(p0, "compute_xpu", "scale-out-rail-0").Index
+	cases := []struct {
+		name string
+		op   planedit.Op
+	}{
+		{"set blank target_zone", planedit.Op{Op: "set_connection_field", ConnIndex: idx, Field: "target_zone", Value: ""}},
+		{"set unknown target_zone", planedit.Op{Op: "set_connection_field", ConnIndex: idx, Field: "target_zone", Value: "no_such_class/no_zone"}},
+		{"add unknown target_zone", planedit.Op{Op: "add_connection", ServerClass: "hh_controller", ConnectionID: "x9", Fields: map[string]string{"target_zone": "bad/zone", "nic": "inb_mgmt"}}},
+		{"remove out of range", planedit.Op{Op: "remove_connection", ConnIndex: 9999}},
+		{"set out of range", planedit.Op{Op: "set_connection_field", ConnIndex: 9999, Field: "speed", Value: "100"}},
+	}
+	for _, c := range cases {
+		if _, err := planedit.Apply(src, []planedit.Op{c.op}); err == nil {
+			t.Errorf("%s: expected rejection", c.name)
+		}
+	}
+}
