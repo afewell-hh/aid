@@ -42,12 +42,34 @@ type NIC struct {
 	ModuleType string `json:"module_type"`
 }
 
+// Connection is one server-class connection row (joined from the top-level
+// server_connections list). target_zone is the raw "switch_class/zone_name" join
+// (P1.1b, #69) — the form turns it into a dropdown over the plan's valid zones.
+//
+// Index is the connection's position in the flat server_connections list — the
+// stable key edits/removes reference, because connection_id is NOT unique (a
+// class can have several connections sharing one id, e.g. compute_xpu's three
+// "soc-storage" rows differing by port_index).
+type Connection struct {
+	Index              int    `json:"index"`
+	ConnectionID       string `json:"connection_id"`
+	ConnectionName     string `json:"connection_name"`
+	TargetZone         string `json:"target_zone"`
+	NIC                string `json:"nic"`
+	PortsPerConnection int    `json:"ports_per_connection"`
+	HedgehogConnType   string `json:"hedgehog_conn_type"`
+	Distribution       string `json:"distribution"`
+	Speed              int    `json:"speed"`
+	Rail               *int   `json:"rail"`
+}
+
 type ServerClass struct {
-	ID               string `json:"id"`
-	Quantity         int    `json:"quantity"`
-	GpusPerServer    int    `json:"gpus_per_server"`
-	ServerDeviceType string `json:"server_device_type"`
-	Nics             []NIC  `json:"nics"`
+	ID               string       `json:"id"`
+	Quantity         int          `json:"quantity"`
+	GpusPerServer    int          `json:"gpus_per_server"`
+	ServerDeviceType string       `json:"server_device_type"`
+	Nics             []NIC        `json:"nics"`
+	Connections      []Connection `json:"connections"`
 }
 
 type SwitchClass struct {
@@ -65,6 +87,10 @@ type Catalog struct {
 	DeviceTypes          []string `json:"device_types"`
 	DeviceTypeExtensions []string `json:"device_type_extensions"`
 	BreakoutOptions      []string `json:"breakout_options"`
+	// TargetZones are the valid connection target_zone options — the
+	// "switch_class/zone_name" joins from switch_port_zones (P1.1b, #69), so the
+	// hand-typed string join becomes a dropdown.
+	TargetZones []string `json:"target_zones"`
 }
 
 // read structs (projection only; the WRITE path never round-trips through these).
@@ -86,6 +112,22 @@ type rawPlan struct {
 		NicID       string `yaml:"nic_id"`
 		ModuleType  string `yaml:"module_type"`
 	} `yaml:"server_nics"`
+	ServerConnections []struct {
+		ServerClass        string `yaml:"server_class"`
+		ConnectionID       string `yaml:"connection_id"`
+		ConnectionName     string `yaml:"connection_name"`
+		TargetZone         string `yaml:"target_zone"`
+		NIC                string `yaml:"nic"`
+		PortsPerConnection int    `yaml:"ports_per_connection"`
+		HedgehogConnType   string `yaml:"hedgehog_conn_type"`
+		Distribution       string `yaml:"distribution"`
+		Speed              int    `yaml:"speed"`
+		Rail               *int   `yaml:"rail"`
+	} `yaml:"server_connections"`
+	SwitchPortZones []struct {
+		SwitchClass string `yaml:"switch_class"`
+		ZoneName    string `yaml:"zone_name"`
+	} `yaml:"switch_port_zones"`
 	ReferenceData struct {
 		ModuleTypes          []idOnly `yaml:"module_types"`
 		DeviceTypes          []idOnly `yaml:"device_types"`
@@ -116,15 +158,27 @@ func Project(src []byte) (*Projection, error) {
 	for _, n := range rp.ServerNics {
 		nicsByClass[n.ServerClass] = append(nicsByClass[n.ServerClass], NIC{NicID: n.NicID, ModuleType: n.ModuleType})
 	}
+	connsByClass := map[string][]Connection{}
+	for i, c := range rp.ServerConnections {
+		connsByClass[c.ServerClass] = append(connsByClass[c.ServerClass], Connection{
+			Index: i, ConnectionID: c.ConnectionID, ConnectionName: c.ConnectionName, TargetZone: c.TargetZone,
+			NIC: c.NIC, PortsPerConnection: c.PortsPerConnection, HedgehogConnType: c.HedgehogConnType,
+			Distribution: c.Distribution, Speed: c.Speed, Rail: c.Rail,
+		})
+	}
 	p := &Projection{ServerClasses: []ServerClass{}, SwitchClasses: []SwitchClass{}}
 	for _, sc := range rp.ServerClasses {
 		nics := nicsByClass[sc.ID]
 		if nics == nil {
 			nics = []NIC{}
 		}
+		conns := connsByClass[sc.ID]
+		if conns == nil {
+			conns = []Connection{}
+		}
 		p.ServerClasses = append(p.ServerClasses, ServerClass{
 			ID: sc.ID, Quantity: sc.Quantity, GpusPerServer: sc.GpusPerServer,
-			ServerDeviceType: sc.ServerDeviceType, Nics: nics,
+			ServerDeviceType: sc.ServerDeviceType, Nics: nics, Connections: conns,
 		})
 	}
 	for _, sw := range rp.SwitchClasses {
@@ -133,11 +187,16 @@ func Project(src []byte) (*Projection, error) {
 			DeviceTypeExtension: sw.DeviceTypeExtension, OverrideQuantity: sw.OverrideQuantity,
 		})
 	}
+	targetZones := make([]string, 0, len(rp.SwitchPortZones))
+	for _, z := range rp.SwitchPortZones {
+		targetZones = append(targetZones, z.SwitchClass+"/"+z.ZoneName)
+	}
 	p.Catalog = Catalog{
 		ModuleTypes:          ids(rp.ReferenceData.ModuleTypes),
 		DeviceTypes:          ids(rp.ReferenceData.DeviceTypes),
 		DeviceTypeExtensions: ids(rp.ReferenceData.DeviceTypeExtensions),
 		BreakoutOptions:      ids(rp.ReferenceData.BreakoutOptions),
+		TargetZones:          targetZones,
 	}
 	return p, nil
 }
@@ -148,16 +207,23 @@ func Project(src []byte) (*Projection, error) {
 // per op kind. Values arrive as strings (the form's field values); numeric
 // fields are emitted as unquoted YAML scalars so they decode as ints.
 type Op struct {
-	Op          string `json:"op"`
-	ServerClass string `json:"server_class,omitempty"`
-	SwitchClass string `json:"switch_class,omitempty"`
-	NicID       string `json:"nic_id,omitempty"`
-	Field       string `json:"field,omitempty"`
-	Value       string `json:"value,omitempty"`
+	Op           string `json:"op"`
+	ServerClass  string `json:"server_class,omitempty"`
+	SwitchClass  string `json:"switch_class,omitempty"`
+	NicID        string `json:"nic_id,omitempty"`
+	ConnectionID string `json:"connection_id,omitempty"`
+	// ConnIndex is the position in server_connections that set/remove target
+	// (connection_id is not unique, so index is the stable key, P1.1b/#69).
+	ConnIndex int    `json:"conn_index,omitempty"`
+	Field     string `json:"field,omitempty"`
+	Value        string `json:"value,omitempty"`
 	// add_server_class:
 	Quantity         string `json:"quantity,omitempty"`
 	GpusPerServer    string `json:"gpus_per_server,omitempty"`
 	ServerDeviceType string `json:"server_device_type,omitempty"`
+	// add_connection: the connection's fields (connection_name, target_zone, nic,
+	// ports_per_connection, hedgehog_conn_type, distribution, speed, rail).
+	Fields map[string]string `json:"fields,omitempty"`
 }
 
 // Patch is the request body for the structured field-patch endpoint.
@@ -246,6 +312,35 @@ func applyOne(root *yaml.Node, op Op) error {
 		}
 	case "add_server_class":
 		return addServerClass(root, op)
+	case "set_connection_field":
+		conn, err := connectionAt(root, op.ConnIndex)
+		if err != nil {
+			return err
+		}
+		switch op.Field {
+		case "target_zone":
+			if err := validateTargetZone(root, op.Value); err != nil {
+				return err
+			}
+			setScalar(conn, op.Field, op.Value)
+		case "nic":
+			scID := ""
+			if sc := mapValue(conn, "server_class"); sc != nil {
+				scID = sc.Value
+			}
+			if err := validateNic(root, scID, op.Value); err != nil {
+				return err
+			}
+			setScalar(conn, op.Field, op.Value)
+		case "connection_name", "hedgehog_conn_type", "distribution", "speed", "ports_per_connection", "rail":
+			setScalar(conn, op.Field, op.Value)
+		default:
+			return fmt.Errorf("unsupported connection field %q", op.Field)
+		}
+	case "add_connection":
+		return addConnection(root, op)
+	case "remove_connection":
+		return removeConnectionAt(root, op.ConnIndex)
 	default:
 		return fmt.Errorf("unknown op")
 	}
@@ -396,5 +491,147 @@ func addServerClass(root *yaml.Node, op Op) error {
 	add("gpus_per_server", g)
 	add("server_device_type", op.ServerDeviceType)
 	seq.Content = append(seq.Content, item)
+	return nil
+}
+
+// --- connections (P1.1b, #69) -----------------------------------------------
+
+// targetZoneIDs collects the valid "switch_class/zone_name" joins from
+// switch_port_zones (the connection target_zone dropdown source).
+func targetZoneIDs(root *yaml.Node) map[string]bool {
+	out := map[string]bool{}
+	zones := mapValue(root, "switch_port_zones")
+	if zones == nil || zones.Kind != yaml.SequenceNode {
+		return out
+	}
+	for _, item := range zones.Content {
+		sc := mapValue(item, "switch_class")
+		zn := mapValue(item, "zone_name")
+		if sc != nil && zn != nil {
+			out[sc.Value+"/"+zn.Value] = true
+		}
+	}
+	return out
+}
+
+// validateTargetZone rejects a blank or unknown target_zone so a connection can
+// never point at a non-existent switch_class/zone (it would dangle at ingest).
+func validateTargetZone(root *yaml.Node, value string) error {
+	if value == "" {
+		return fmt.Errorf("target_zone is required")
+	}
+	if !targetZoneIDs(root)[value] {
+		return fmt.Errorf("target_zone %q is not a valid switch_class/zone_name", value)
+	}
+	return nil
+}
+
+// serverNicIDs collects the nic_id set declared for a server_class in server_nics
+// (a connection's nic must reference one of these).
+func serverNicIDs(root *yaml.Node, serverClass string) map[string]bool {
+	out := map[string]bool{}
+	seq := mapValue(root, "server_nics")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return out
+	}
+	for _, item := range seq.Content {
+		sc := mapValue(item, "server_class")
+		nid := mapValue(item, "nic_id")
+		if sc != nil && sc.Value == serverClass && nid != nil {
+			out[nid.Value] = true
+		}
+	}
+	return out
+}
+
+// validateNic rejects a blank or dangling connection nic — it must reference a
+// NIC the connection's server_class actually declares (devb #69 finding: the
+// ingest guard does not catch this; it is a calc-time check).
+func validateNic(root *yaml.Node, serverClass, value string) error {
+	if value == "" {
+		return fmt.Errorf("nic is required")
+	}
+	if !serverNicIDs(root, serverClass)[value] {
+		return fmt.Errorf("nic %q is not a NIC of server_class %q", value, serverClass)
+	}
+	return nil
+}
+
+// connectionAt returns the server_connections row at index idx (the stable key,
+// since connection_id is not unique).
+func connectionAt(root *yaml.Node, idx int) (*yaml.Node, error) {
+	seq := mapValue(root, "server_connections")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return nil, fmt.Errorf("no server_connections sequence")
+	}
+	if idx < 0 || idx >= len(seq.Content) {
+		return nil, fmt.Errorf("connection index %d out of range (0..%d)", idx, len(seq.Content)-1)
+	}
+	return seq.Content[idx], nil
+}
+
+// addConnection appends a new connection to server_connections. It requires a
+// valid target_zone; connection_id need not be unique (it isn't in the schema).
+// port_index/port_type/etc. get sane defaults so the result ingests; the
+// re-validate guard (Apply) is the backstop.
+func addConnection(root *yaml.Node, op Op) error {
+	seq := mapValue(root, "server_connections")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return fmt.Errorf("no server_connections sequence")
+	}
+	if op.ServerClass == "" || op.ConnectionID == "" {
+		return fmt.Errorf("add_connection needs server_class and connection_id")
+	}
+	f := op.Fields
+	if f == nil {
+		f = map[string]string{}
+	}
+	if err := validateTargetZone(root, f["target_zone"]); err != nil {
+		return err
+	}
+	if err := validateNic(root, op.ServerClass, f["nic"]); err != nil {
+		return err
+	}
+	defaulted := func(k, dflt string) string {
+		if v, ok := f[k]; ok && v != "" {
+			return v
+		}
+		return dflt
+	}
+	item := &yaml.Node{Kind: yaml.MappingNode}
+	add := func(k, v string) {
+		item.Content = append(item.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: k},
+			&yaml.Node{Kind: yaml.ScalarNode, Value: v},
+		)
+	}
+	add("server_class", op.ServerClass)
+	add("connection_id", op.ConnectionID)
+	add("connection_name", defaulted("connection_name", op.ConnectionID))
+	add("nic", f["nic"])
+	add("port_index", defaulted("port_index", "0"))
+	add("ports_per_connection", defaulted("ports_per_connection", "1"))
+	add("hedgehog_conn_type", defaulted("hedgehog_conn_type", "unbundled"))
+	add("distribution", defaulted("distribution", "same-switch"))
+	add("target_zone", f["target_zone"])
+	add("speed", defaulted("speed", "0"))
+	add("port_type", defaulted("port_type", "data"))
+	if r, ok := f["rail"]; ok && r != "" {
+		add("rail", r)
+	}
+	seq.Content = append(seq.Content, item)
+	return nil
+}
+
+// removeConnectionAt deletes the server_connections row at index idx.
+func removeConnectionAt(root *yaml.Node, idx int) error {
+	seq := mapValue(root, "server_connections")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return fmt.Errorf("no server_connections sequence")
+	}
+	if idx < 0 || idx >= len(seq.Content) {
+		return fmt.Errorf("connection index %d out of range (0..%d)", idx, len(seq.Content)-1)
+	}
+	seq.Content = append(seq.Content[:idx], seq.Content[idx+1:]...)
 	return nil
 }

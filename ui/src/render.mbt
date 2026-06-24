@@ -579,6 +579,20 @@ fn select_html(
   "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\">\{opts}</select>"
 }
 
+// select_strings renders a <select> over plain string options, marking selected.
+fn select_strings(
+  id : String,
+  options : Array[String],
+  selected : String
+) -> String {
+  let mut opts = ""
+  for v in options {
+    let sel = if v == selected { " selected" } else { "" }
+    opts = opts + "<option value=\"\{esc(v)}\"\{sel}>\{esc(v)}</option>"
+  }
+  "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\">\{opts}</select>"
+}
+
 // topo_select renders the explicit mesh|clos selector (the headline P1.1/P1.2
 // capability), preserving the current value.
 fn topo_select(id : String, current : String) -> String {
@@ -619,6 +633,10 @@ pub fn structure_editor_html(structure_json : String) -> String {
     Some(c) => arr_at(c, "device_types")
     None => []
   }
+  let target_zones = match get(root, "catalog") {
+    Some(c) => arr_at(c, "target_zones")
+    None => []
+  }
 
   // server classes
   let mut srv = ""
@@ -628,14 +646,47 @@ pub fn structure_editor_html(structure_json : String) -> String {
     let gpus = int_at(sc, "gpus_per_server").to_string()
     let devtype = str_at(sc, "server_device_type")
     let mut nic_rows = ""
+    let nic_ids : Array[String] = []
     for n in arr_at(sc, "nics") {
       let nicid = str_at(n, "nic_id")
+      nic_ids.push(nicid)
       let mt = str_at(n, "module_type")
       nic_rows = nic_rows +
         "<div class=\"row g-2 align-items-center mb-1\">" +
         "<div class=\"col-4\"><code>\{esc(nicid)}</code></div>" +
         "<div class=\"col-8\">\{select_html("nic-" + id + "-" + nicid, module_types, mt, false)}</div></div>"
     }
+    // connections (P1.1b, #69): each row keyed by its server_connections index;
+    // target_zone + nic + distribution are data-derived dropdowns.
+    let dist_opts = ["same-switch", "alternating", "rail-optimized"]
+    let mut conn_rows = ""
+    for cn in arr_at(sc, "connections") {
+      let ci = int_at(cn, "index").to_string()
+      conn_rows = conn_rows +
+        "<tr>" +
+        "<td class=\"text-nowrap\"><code>\{esc(str_at(cn, "connection_id"))}</code></td>" +
+        "<td>\{select_html("conn-" + ci + "-target_zone", target_zones, str_at(cn, "target_zone"), false)}</td>" +
+        "<td>\{select_strings("conn-" + ci + "-nic", nic_ids, str_at(cn, "nic"))}</td>" +
+        "<td>\{select_strings("conn-" + ci + "-distribution", dist_opts, str_at(cn, "distribution"))}</td>" +
+        "<td><input id=\"conn-\{ci}-speed\" class=\"form-control form-control-sm\" type=\"number\" value=\"\{int_at(cn, "speed").to_string()}\"></td>" +
+        "<td><input id=\"conn-\{ci}-ports\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"\{int_at(cn, "ports_per_connection").to_string()}\"></td>" +
+        "<td><button id=\"conn-rm-\{ci}\" class=\"btn btn-outline-danger btn-sm\">✕</button></td>" +
+        "</tr>"
+    }
+    let conn_table = if arr_at(sc, "connections").length() > 0 {
+      "<table class=\"table table-sm align-middle mb-2\"><thead><tr>" +
+      "<th>ID</th><th>Target zone</th><th>NIC</th><th>Distribution</th><th>Speed</th><th>Ports</th><th></th>" +
+      "</tr></thead><tbody>\{conn_rows}</tbody></table>"
+    } else {
+      "<div class=\"small text-muted mb-2\">No connections.</div>"
+    }
+    let add_conn = "<div class=\"row g-2 mb-1 align-items-center\">" +
+      "<div class=\"col-3\"><input id=\"addconn-\{esc(id)}-id\" class=\"form-control form-control-sm\" placeholder=\"connection_id\"></div>" +
+      "<div class=\"col-4\">\{select_html("addconn-" + id + "-target_zone", target_zones, "", true)}</div>" +
+      "<div class=\"col-2\">\{select_strings("addconn-" + id + "-nic", nic_ids, "")}</div>" +
+      "<div class=\"col-2\"><input id=\"addconn-\{esc(id)}-speed\" class=\"form-control form-control-sm\" type=\"number\" placeholder=\"speed\"></div>" +
+      "<div class=\"col-1\"><button id=\"addconn-\{esc(id)}\" class=\"btn btn-outline-success btn-sm\">+</button></div>" +
+      "</div>"
     srv = srv +
       "<div class=\"card mb-2\"><div class=\"card-body\">" +
       "<div class=\"fw-semibold mb-2\">\{esc(id)}</div>" +
@@ -647,6 +698,7 @@ pub fn structure_editor_html(structure_json : String) -> String {
       "<div class=\"mb-2\"><label class=\"form-label mb-0 small\">Device type</label>" +
       "\{select_html("srv-" + id + "-devtype", device_types, devtype, false)}</div>" +
       "<div class=\"small text-muted\">NICs (module type)</div>\{nic_rows}" +
+      "<hr class=\"my-2\"><div class=\"small text-muted\">Connections</div>\{conn_table}\{add_conn}" +
       "</div></div>"
   }
 
@@ -682,7 +734,8 @@ pub fn structure_editor_html(structure_json : String) -> String {
   "<div class=\"col-3\">\{select_html("add-srv-devtype", device_types, "", true)}</div>" +
   "<div class=\"col-2\"><button id=\"add-srv-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div>" +
   "</div></div></div>" +
-  "<button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm mb-3\">Save server classes</button>" +
+  "<button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm me-2 mb-3\">Save server classes</button>" +
+  "<button id=\"save-conn-btn\" class=\"btn btn-primary btn-sm mb-3\">Save connections</button>" +
   "<h3 class=\"h6\">Switch classes</h3>\{sw}" +
   "<button id=\"save-sw-btn\" class=\"btn btn-primary btn-sm\">Save switch classes</button>" +
   "</div></div>"
