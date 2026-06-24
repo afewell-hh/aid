@@ -91,6 +91,26 @@ func Resolve(in Inputs) (*Resolved, error) {
 	return res, nil
 }
 
+// Validate runs only the validation-relevant prefix of the engine —
+// IngestBundled → calc.Evaluate — and stops (no overlay merge, no bom.Resolve).
+// It is the primitive behind the stateless dry-run validate endpoint (P1.3,
+// #68): a structural failure is a Go error (→ 4xx "cannot compute"); calc
+// constraint violations ride back as data on the Resolved (is_valid:false), same
+// two-plane contract as Resolve. Overlay is intentionally not consumed — calc is
+// overlay-independent (the overlay only enriches BOM optic columns), so it does
+// not affect is_valid / quantities / errors. BOM is always nil here.
+func Validate(in Inputs) (*Resolved, error) {
+	plan, cat, err := topology.IngestBundled(in.TrainingYAML)
+	if err != nil {
+		return nil, err
+	}
+	calcOut, err := calc.Evaluate(plan, cat)
+	if err != nil {
+		return nil, err
+	}
+	return &Resolved{Plan: plan, Catalog: cat, Calc: calcOut}, nil
+}
+
 // Wiring renders the hhfab wiring docs on demand (note §1, F4). It refuses with a
 // Go error when calc is invalid (BOM/wiring would be unreliable). An empty fabric
 // returns all managed-fabric docs; a non-empty fabric filters to that one.

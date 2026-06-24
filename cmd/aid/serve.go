@@ -76,6 +76,7 @@ func newServeMux(store *planstore.Store) http.Handler {
 	mux.HandleFunc("/api/plans/", a.routePlanID)      // item + sub-resources
 	mux.HandleFunc("/api/templates", a.listTemplates) // starter-template catalog (P0.2)
 	mux.HandleFunc("/api/templates/", a.getTemplate)  // one starter's training + overlay YAML
+	mux.HandleFunc("/api/validate", a.validate)       // stateless dry-run validate (P1.3)
 	mux.Handle("/", ui.Handler())                     // embedded frontend (Bootstrap 5 + app.js)
 	return mux
 }
@@ -356,6 +357,61 @@ type calcView struct {
 func (a *api) calcPlan(w http.ResponseWriter, _ *http.Request, id string) {
 	res, ok := a.resolve(w, id)
 	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, calcView{
+		IsValid:        res.Valid(),
+		ManagedFabrics: res.ManagedFabrics(),
+		CalcOutput:     res.Calc,
+	})
+}
+
+// validateReq is the dry-run validate body (P1.3, #68): a draft plan YAML, plus
+// OPTIONAL structured ops applied to it first (so the structured editor can
+// validate a draft without the client building YAML — D26: no client YAML lib).
+// Overlay is not accepted: validation is overlay-independent (calc never reads
+// optics), so it would not change is_valid/quantities/errors.
+type validateReq struct {
+	YAML string        `json:"yaml"`
+	Ops  []planedit.Op `json:"ops,omitempty"`
+}
+
+// validate: POST /api/validate → the calc summary (is_valid + quantities +
+// errors) for a draft plan, WITHOUT persisting anything (no store access). Same
+// two-plane contract as calc: a structural parse/ingest failure is a 4xx
+// ("cannot compute"); calc constraint violations are 200 is_valid:false data.
+// Optional ops are applied via yaml.Node surgery first (a bad op/structural
+// result is the 4xx case).
+func (a *api) validate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "read body: "+err.Error())
+		return
+	}
+	var req validateReq
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid validate body: "+err.Error())
+		return
+	}
+	draft := []byte(req.YAML)
+	if len(req.Ops) > 0 {
+		// planedit.Apply does the yaml.Node surgery + re-validates via ingest; a
+		// structural failure here is the "cannot compute" 4xx (an over-allocating
+		// edit still ingests and is surfaced as calc data below).
+		applied, err := planedit.Apply(draft, req.Ops)
+		if err != nil {
+			writeJSONError(w, http.StatusUnprocessableEntity, "cannot apply edit: "+err.Error())
+			return
+		}
+		draft = applied
+	}
+	res, err := design.Validate(design.Inputs{TrainingYAML: draft})
+	if err != nil {
+		writeJSONError(w, http.StatusUnprocessableEntity, "cannot resolve plan: "+err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, calcView{

@@ -248,6 +248,10 @@ fn load_detail(id : String) -> Unit {
     on_click("save-btn", fn() { save_plan(id) })
     on_click("back-btn", fn() { load_plans("app") })
     on_click("crumb-plans", fn() { load_plans("app") }) // P1.5 breadcrumb
+    // P1.3: debounced live validation of the raw-YAML draft (no persist).
+    on_change_within("edit-yaml", fn() {
+      schedule("live-validate", 500, fn() { validate_raw() })
+    })
     load_structure(id) // P1.1 structured editor (#67)
     on_click("detail-del-btn", fn() {
       delete_plan_from_detail(id, str_at_body(body, "name"))
@@ -316,6 +320,10 @@ fn load_structure(id : String) -> Unit {
     on_click("save-srv-btn", fn() { save_server_classes(id) })
     on_click("save-sw-btn", fn() { save_switch_classes(id) })
     on_click("add-srv-btn", fn() { add_server_class(id) })
+    // P1.3: debounced live validation of the structured draft (no persist).
+    on_change_within("structure-editor", fn() {
+      schedule("live-validate", 500, fn() { validate_structured() })
+    })
   })
 }
 
@@ -383,14 +391,9 @@ fn patch_structure(id : String, ops : Array[String], btn : String) -> Unit {
   })
 }
 
-// save_server_classes reads each server class's quantity/gpus + NIC module types
-// from the form (id list recovered from the hidden #structure-data) and patches.
-fn save_server_classes(id : String) -> Unit {
-  let root = try {
-    @json.parse(get_value("structure-data"))
-  } catch {
-    _ => return
-  }
+// collect_server_ops reads each server class's quantity/gpus/device-type + NIC
+// module types from the form (id list recovered from the hidden #structure-data).
+fn collect_server_ops(root : Json) -> Array[String] {
   let ops : Array[String] = []
   for sc in arr_at(root, "server_classes") {
     let scid = str_at(sc, "id")
@@ -404,17 +407,12 @@ fn save_server_classes(id : String) -> Unit {
       ops.push(op_set_nic(scid, nicid, get_value("nic-" + scid + "-" + nicid)))
     }
   }
-  patch_structure(id, ops, "save-srv-btn")
+  ops
 }
 
-// save_switch_classes patches each switch class's topology_mode / device type /
+// collect_switch_ops reads each switch class's topology_mode / device type /
 // override quantity (empty override clears it → derived).
-fn save_switch_classes(id : String) -> Unit {
-  let root = try {
-    @json.parse(get_value("structure-data"))
-  } catch {
-    _ => return
-  }
+fn collect_switch_ops(root : Json) -> Array[String] {
   let ops : Array[String] = []
   for s in arr_at(root, "switch_classes") {
     let swid = str_at(s, "id")
@@ -424,7 +422,88 @@ fn save_switch_classes(id : String) -> Unit {
     )
     ops.push(op_set_switch(swid, "override_quantity", get_value("sw-" + swid + "-override")))
   }
-  patch_structure(id, ops, "save-sw-btn")
+  ops
+}
+
+fn parse_structure_data() -> Json? {
+  try {
+    Some(@json.parse(get_value("structure-data")))
+  } catch {
+    _ => None
+  }
+}
+
+// save_server_classes / save_switch_classes patch the stored plan from the form.
+fn save_server_classes(id : String) -> Unit {
+  match parse_structure_data() {
+    Some(root) => patch_structure(id, collect_server_ops(root), "save-srv-btn")
+    None => ()
+  }
+}
+
+fn save_switch_classes(id : String) -> Unit {
+  match parse_structure_data() {
+    Some(root) => patch_structure(id, collect_switch_ops(root), "save-sw-btn")
+    None => ()
+  }
+}
+
+// --- P1.3 (#68): debounced live validation ----------------------------------
+
+// render_validation renders a dry-run result into #live-validation: a structural
+// 4xx is the distinct "cannot compute" alert (error_html); a 200 is calc-as-data
+// (calc_summary_html — Valid badge + quantities, or red per-rule errors).
+fn render_validation(ok : Bool, status : Int, body : String) -> Unit {
+  if (!ok) || body_has_error(body) {
+    set_html("live-validation", error_html(status, body))
+  } else {
+    set_html("live-validation", calc_summary_html(body))
+  }
+}
+
+// validate_raw dry-runs the raw-YAML textarea draft (no persistence).
+pub fn validate_raw() -> Unit {
+  set_html("live-validation", validating_html())
+  let body = "{\"yaml\":\"" + json_escape(get_value("edit-yaml")) + "\"}"
+  api_post(validate_path(), body, fn(ok, status, b) { render_validation(ok, status, b) })
+}
+
+// validate_structured dry-runs the structured-editor draft: the stored plan YAML
+// (#edit-yaml) plus the current form field values as ops, applied + validated
+// server-side without persisting (D26: no client YAML lib).
+fn validate_structured() -> Unit {
+  match parse_structure_data() {
+    None => ()
+    Some(root) => {
+      set_html("live-validation", validating_html())
+      let ops = collect_server_ops(root)
+      for o in collect_switch_ops(root) {
+        ops.push(o)
+      }
+      let body = "{\"yaml\":\"" +
+        json_escape(get_value("edit-yaml")) +
+        "\",\"ops\":[" +
+        join_op_list(ops) +
+        "]}"
+      api_post(validate_path(), body, fn(ok, status, b) {
+        render_validation(ok, status, b)
+      })
+    }
+  }
+}
+
+// join_op_list joins pre-built op JSON objects with commas (no outer braces).
+fn join_op_list(ops : Array[String]) -> String {
+  let mut out = ""
+  let mut first = true
+  for o in ops {
+    if !first {
+      out = out + ","
+    }
+    out = out + o
+    first = false
+  }
+  out
 }
 
 // add_server_class submits the add-server-class mini-form as a single op.

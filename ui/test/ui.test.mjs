@@ -637,3 +637,37 @@ test("P1.1 structured editor: data-derived forms for server + switch classes", (
   assert.match(html, /id="save-sw-btn"/, "save switch classes button");
   assert.match(html, /id="structure-data"/, "hidden structure-data carrier");
 });
+
+// --- P1.3 (#68): live (dry-run) validation handler ----------------------------
+const VALID_CALC = JSON.stringify({
+  is_valid: true, errors: [],
+  switch_quantity: [{ class_id: "fe-leaf", quantity: 2 }],
+  server_quantity: [{ class_id: "compute", quantity: 8 }],
+  endpoints: [{}], transceiver_verdicts: [{}], managed_fabrics: ["frontend"],
+});
+
+test("P1.3 live validate: POSTs /api/validate and renders the Valid summary inline", async () => {
+  reset();
+  el("edit-yaml").value = "meta:\n  case_id: x\n";
+  setResponder((url) => (url === "/api/validate" ? VALID_CALC : ""));
+  app.validate_raw();
+  await flush();
+  assert.ok(
+    fetches.some((f) => f.url === "/api/validate" && f.method === "POST"),
+    `expected POST /api/validate; got ${JSON.stringify(fetches)}`,
+  );
+  const html = dom["live-validation"]?.innerHTML ?? "";
+  assert.match(html, /Valid/, "expected the inline Valid badge");
+  assert.match(html, /fe-leaf/, "expected computed quantities inline");
+});
+
+test("P1.3 live validate: a structural 4xx renders the distinct 'cannot compute' alert", async () => {
+  reset();
+  el("edit-yaml").value = "broken: : yaml";
+  setResponder(() => ({ status: 422, body: JSON.stringify({ error: "cannot resolve plan: parse" }) }));
+  app.validate_raw();
+  await flush();
+  const html = dom["live-validation"]?.innerHTML ?? "";
+  assert.match(html, /alert-danger/, "structural failure must be the error alert");
+  assert.doesNotMatch(html, /badge[^>]*text-bg-success/, "must not show a Valid badge for a structural failure");
+});

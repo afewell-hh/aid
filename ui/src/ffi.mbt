@@ -21,6 +21,19 @@ extern "js" fn on_click(id : String, cb : () -> Unit) -> Unit =
 extern "js" fn on_change(id : String, cb : () -> Unit) -> Unit =
   #|(id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("change", () => cb()); }
 
+// Register a delegated input+change handler on a CONTAINER: any field edit
+// bubbling up from inside it fires cb (P1.3 live validation — one binding covers
+// every structured-editor field; also used on the raw-YAML textarea).
+extern "js" fn on_change_within(id : String, cb : () -> Unit) -> Unit =
+  #|(id, cb) => { const e = document.getElementById(id); if (e) { e.addEventListener("input", () => cb()); e.addEventListener("change", () => cb()); } }
+
+// schedule debounces cb by key: a new call for the same key cancels the pending
+// one and restarts the ms timer (P1.3 — coalesce per-keystroke edits into one
+// validate). Uses globalThis so it works under both the browser and the Node
+// test harness.
+extern "js" fn schedule(key : String, ms : Int, cb : () -> Unit) -> Unit =
+  #|(key, ms, cb) => { const t = (globalThis.__aid_timers = globalThis.__aid_timers || {}); if (t[key]) clearTimeout(t[key]); t[key] = setTimeout(() => cb(), ms); }
+
 // Enable/disable a button (in-flight feedback; no-op if absent). A disabled
 // button cannot be re-clicked, so an async action does not double-fire.
 extern "js" fn set_disabled(id : String, disabled : Bool) -> Unit =

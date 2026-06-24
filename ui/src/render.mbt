@@ -180,6 +180,13 @@ fn esc(s : String) -> String {
   out
 }
 
+// validating_html is the subtle "validating…" state shown in the live-validation
+// region while a debounced dry-run is in flight (P1.3, #68).
+pub fn validating_html() -> String {
+  "<div class=\"text-muted small d-flex align-items-center\">" +
+  "<div class=\"spinner-border spinner-border-sm me-2\" role=\"status\"></div>validating…</div>"
+}
+
 fn warn_box(msg : String) -> String {
   "<div class=\"alert alert-warning\">\{esc(msg)}</div>"
 }
@@ -353,6 +360,7 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "</ol></nav>" +
   "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
   "<h2 class=\"h4 mb-0\">\{esc(name)}</h2>\{status_badge(status)}</div>" +
+  "<div id=\"live-validation\" class=\"mb-3\"></div>" +
   "<div class=\"row g-3\">" +
   "<div class=\"col-md-4\"><div class=\"card\">" +
   "<div class=\"card-header\">Plan</div><div class=\"card-body\">" +

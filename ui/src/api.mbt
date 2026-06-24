@@ -60,6 +60,10 @@ pub fn structure_path(id : String) -> String {
   "/plans/" + id + "/structure"
 }
 
+pub fn validate_path() -> String {
+  "/validate"
+}
+
 pub fn calc_path(id : String) -> String {
   "/plans/" + id + "/calc"
 }
