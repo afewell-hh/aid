@@ -323,7 +323,16 @@ func applyOne(root *yaml.Node, op Op) error {
 				return err
 			}
 			setScalar(conn, op.Field, op.Value)
-		case "nic", "connection_name", "hedgehog_conn_type", "distribution", "speed", "ports_per_connection", "rail":
+		case "nic":
+			scID := ""
+			if sc := mapValue(conn, "server_class"); sc != nil {
+				scID = sc.Value
+			}
+			if err := validateNic(root, scID, op.Value); err != nil {
+				return err
+			}
+			setScalar(conn, op.Field, op.Value)
+		case "connection_name", "hedgehog_conn_type", "distribution", "speed", "ports_per_connection", "rail":
 			setScalar(conn, op.Field, op.Value)
 		default:
 			return fmt.Errorf("unsupported connection field %q", op.Field)
@@ -517,6 +526,37 @@ func validateTargetZone(root *yaml.Node, value string) error {
 	return nil
 }
 
+// serverNicIDs collects the nic_id set declared for a server_class in server_nics
+// (a connection's nic must reference one of these).
+func serverNicIDs(root *yaml.Node, serverClass string) map[string]bool {
+	out := map[string]bool{}
+	seq := mapValue(root, "server_nics")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return out
+	}
+	for _, item := range seq.Content {
+		sc := mapValue(item, "server_class")
+		nid := mapValue(item, "nic_id")
+		if sc != nil && sc.Value == serverClass && nid != nil {
+			out[nid.Value] = true
+		}
+	}
+	return out
+}
+
+// validateNic rejects a blank or dangling connection nic — it must reference a
+// NIC the connection's server_class actually declares (devb #69 finding: the
+// ingest guard does not catch this; it is a calc-time check).
+func validateNic(root *yaml.Node, serverClass, value string) error {
+	if value == "" {
+		return fmt.Errorf("nic is required")
+	}
+	if !serverNicIDs(root, serverClass)[value] {
+		return fmt.Errorf("nic %q is not a NIC of server_class %q", value, serverClass)
+	}
+	return nil
+}
+
 // connectionAt returns the server_connections row at index idx (the stable key,
 // since connection_id is not unique).
 func connectionAt(root *yaml.Node, idx int) (*yaml.Node, error) {
@@ -547,6 +587,9 @@ func addConnection(root *yaml.Node, op Op) error {
 		f = map[string]string{}
 	}
 	if err := validateTargetZone(root, f["target_zone"]); err != nil {
+		return err
+	}
+	if err := validateNic(root, op.ServerClass, f["nic"]); err != nil {
 		return err
 	}
 	defaulted := func(k, dflt string) string {

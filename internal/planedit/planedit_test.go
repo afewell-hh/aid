@@ -345,6 +345,12 @@ func TestApply_ConnectionInvalidRejected(t *testing.T) {
 		{"add unknown target_zone", planedit.Op{Op: "add_connection", ServerClass: "hh_controller", ConnectionID: "x9", Fields: map[string]string{"target_zone": "bad/zone", "nic": "inb_mgmt"}}},
 		{"remove out of range", planedit.Op{Op: "remove_connection", ConnIndex: 9999}},
 		{"set out of range", planedit.Op{Op: "set_connection_field", ConnIndex: 9999, Field: "speed", Value: "100"}},
+		// devb #69: nic is a cross-reference and must be server-validated (the
+		// ingest guard does not catch a dangling nic — it is a calc-time check).
+		{"set blank nic", planedit.Op{Op: "set_connection_field", ConnIndex: idx, Field: "nic", Value: ""}},
+		{"set dangling nic", planedit.Op{Op: "set_connection_field", ConnIndex: idx, Field: "nic", Value: "no_such_nic"}},
+		{"add dangling nic", planedit.Op{Op: "add_connection", ServerClass: "hh_controller", ConnectionID: "x10", Fields: map[string]string{"target_zone": "inb_mgmt_leaf/inb_mgmt_server_25g", "nic": "no_such_nic"}}},
+		{"add blank nic", planedit.Op{Op: "add_connection", ServerClass: "hh_controller", ConnectionID: "x11", Fields: map[string]string{"target_zone": "inb_mgmt_leaf/inb_mgmt_server_25g", "nic": ""}}},
 	}
 	for _, c := range cases {
 		if _, err := planedit.Apply(src, []planedit.Op{c.op}); err == nil {
