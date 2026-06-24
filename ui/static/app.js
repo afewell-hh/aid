@@ -4879,13 +4879,13 @@ function _M0FP25aidui3src12select__html(id, options, selected, blank) {
   }
   return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS221(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS222(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
 function _M0FP25aidui3src12topo__select(id, current) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${blank}${_M0FP25aidui3src12topo__selectN3optS221(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS221(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${blank}${_M0FP25aidui3src12topo__selectN3optS222(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS222(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -4959,6 +4959,7 @@ function _M0FP25aidui3src23structure__editor__html(structure_json) {
       const id = _M0FP25aidui3src7str__at(sc, "id");
       const qty = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(sc, "quantity"), 10);
       const gpus = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(sc, "gpus_per_server"), 10);
+      const devtype = _M0FP25aidui3src7str__at(sc, "server_device_type");
       let nic_rows = "";
       const _bind$6 = _M0FP25aidui3src7arr__at(sc, "nics");
       const _bind$7 = _bind$6.length;
@@ -4976,7 +4977,7 @@ function _M0FP25aidui3src23structure__editor__html(structure_json) {
           break;
         }
       }
-      srv = `${srv}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2 mb-2\"><div class=\"col-6\"><label class=\"form-label mb-0 small\">Quantity</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${qty}\"></div><div class=\"col-6\"><label class=\"form-label mb-0 small\">GPUs/server</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${gpus}\"></div></div><div class=\"small text-muted\">NICs (module type)</div>${nic_rows}</div></div>`;
+      srv = `${srv}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2 mb-2\"><div class=\"col-6\"><label class=\"form-label mb-0 small\">Quantity</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${qty}\"></div><div class=\"col-6\"><label class=\"form-label mb-0 small\">GPUs/server</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${gpus}\"></div></div><div class=\"mb-2\"><label class=\"form-label mb-0 small\">Device type</label>${_M0FP25aidui3src12select__html(`srv-${id}-devtype`, device_types, devtype, false)}</div><div class=\"small text-muted\">NICs (module type)</div>${nic_rows}</div></div>`;
       _tmp = _ + 1 | 0;
       continue;
     } else {
@@ -5380,6 +5381,7 @@ function _M0FP25aidui3src21save__server__classes(id) {
       const scid = _M0FP25aidui3src7str__at(sc, "id");
       _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src15op__set__server(scid, "quantity", _M0FP25aidui3src10get__value(`srv-${scid}-qty`)));
       _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src15op__set__server(scid, "gpus_per_server", _M0FP25aidui3src10get__value(`srv-${scid}-gpus`)));
+      _M0MPC15array5Array4pushGsE(ops, _M0FP25aidui3src15op__set__server(scid, "server_device_type", _M0FP25aidui3src10get__value(`srv-${scid}-devtype`)));
       const _bind$3 = _M0FP25aidui3src7arr__at(sc, "nics");
       const _bind$4 = _bind$3.length;
       let _tmp$2 = 0;

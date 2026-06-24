@@ -614,6 +614,7 @@ pub fn structure_editor_html(structure_json : String) -> String {
     let id = str_at(sc, "id")
     let qty = int_at(sc, "quantity").to_string()
     let gpus = int_at(sc, "gpus_per_server").to_string()
+    let devtype = str_at(sc, "server_device_type")
     let mut nic_rows = ""
     for n in arr_at(sc, "nics") {
       let nicid = str_at(n, "nic_id")
@@ -631,6 +632,8 @@ pub fn structure_editor_html(structure_json : String) -> String {
       "<input id=\"srv-\{esc(id)}-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"\{qty}\"></div>" +
       "<div class=\"col-6\"><label class=\"form-label mb-0 small\">GPUs/server</label>" +
       "<input id=\"srv-\{esc(id)}-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"\{gpus}\"></div></div>" +
+      "<div class=\"mb-2\"><label class=\"form-label mb-0 small\">Device type</label>" +
+      "\{select_html("srv-" + id + "-devtype", device_types, devtype, false)}</div>" +
       "<div class=\"small text-muted\">NICs (module type)</div>\{nic_rows}" +
       "</div></div>"
   }

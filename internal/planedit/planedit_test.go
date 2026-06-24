@@ -153,6 +153,41 @@ func TestApply_AddServerClass(t *testing.T) {
 	}
 }
 
+func TestApply_SetServerDeviceType(t *testing.T) {
+	src := meshPlan(t)
+	out, err := planedit.Apply(src, []planedit.Op{
+		{Op: "set_server_field", ServerClass: "compute_xpu", Field: "server_device_type", Value: "srv_storage_generic_dt"},
+	})
+	if err != nil {
+		t.Fatalf("Apply(set device type): %v", err)
+	}
+	p, _ := planedit.Project(out)
+	if cx := serverClass(p, "compute_xpu"); cx == nil || cx.ServerDeviceType != "srv_storage_generic_dt" {
+		t.Errorf("server_device_type not applied: %+v", cx)
+	}
+}
+
+// TestApply_DeviceTypeRequired: a blank/unknown server_device_type must be
+// rejected — on both add and set — so a semantically incomplete class is never
+// stored (devb #67 finding 1/2).
+func TestApply_DeviceTypeRequired(t *testing.T) {
+	src := meshPlan(t)
+	cases := []struct {
+		name string
+		op   planedit.Op
+	}{
+		{"add blank", planedit.Op{Op: "add_server_class", ServerClass: "x1", Quantity: "1", ServerDeviceType: ""}},
+		{"add unknown", planedit.Op{Op: "add_server_class", ServerClass: "x2", Quantity: "1", ServerDeviceType: "no_such_dt"}},
+		{"set blank", planedit.Op{Op: "set_server_field", ServerClass: "compute_xpu", Field: "server_device_type", Value: ""}},
+		{"set unknown", planedit.Op{Op: "set_server_field", ServerClass: "compute_xpu", Field: "server_device_type", Value: "no_such_dt"}},
+	}
+	for _, c := range cases {
+		if _, err := planedit.Apply(src, []planedit.Op{c.op}); err == nil {
+			t.Errorf("%s: expected rejection of an invalid server_device_type", c.name)
+		}
+	}
+}
+
 // TestApply_InvalidEditRejected: an edit that makes the plan fail ingest must be
 // rejected (the D26 guard), not returned for persistence.
 func TestApply_InvalidEditRejected(t *testing.T) {

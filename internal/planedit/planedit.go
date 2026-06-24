@@ -211,6 +211,13 @@ func applyOne(root *yaml.Node, op Op) error {
 		switch op.Field {
 		case "quantity", "gpus_per_server":
 			setScalar(sc, op.Field, op.Value)
+		case "server_device_type":
+			// A structured edit must not leave a server class without a real
+			// device type (devb #67 finding: the ingest guard alone permits it).
+			if err := validateDeviceType(root, op.Value); err != nil {
+				return err
+			}
+			setScalar(sc, op.Field, op.Value)
 		default:
 			return fmt.Errorf("unsupported server field %q", op.Field)
 		}
@@ -287,6 +294,38 @@ func deleteKey(m *yaml.Node, key string) {
 	}
 }
 
+// deviceTypeIDs collects the reference_data.device_types ids (the server-device
+// dropdown source) from the plan node tree.
+func deviceTypeIDs(root *yaml.Node) map[string]bool {
+	out := map[string]bool{}
+	rd := mapValue(root, "reference_data")
+	if rd == nil {
+		return out
+	}
+	dts := mapValue(rd, "device_types")
+	if dts == nil || dts.Kind != yaml.SequenceNode {
+		return out
+	}
+	for _, item := range dts.Content {
+		if v := mapValue(item, "id"); v != nil {
+			out[v.Value] = true
+		}
+	}
+	return out
+}
+
+// validateDeviceType rejects a blank or unknown server_device_type so the
+// structured editor cannot store a semantically incomplete server class.
+func validateDeviceType(root *yaml.Node, value string) error {
+	if value == "" {
+		return fmt.Errorf("server_device_type is required")
+	}
+	if !deviceTypeIDs(root)[value] {
+		return fmt.Errorf("server_device_type %q is not a known device type", value)
+	}
+	return nil
+}
+
 // findInSeq finds the mapping item in root[seqKey] whose idKey == idVal.
 func findInSeq(root *yaml.Node, seqKey, idKey, idVal string) (*yaml.Node, error) {
 	seq := mapValue(root, seqKey)
@@ -325,6 +364,11 @@ func addServerClass(root *yaml.Node, op Op) error {
 	}
 	if op.ServerClass == "" {
 		return fmt.Errorf("add_server_class needs a server_class id")
+	}
+	// A new server class must carry a real device type — never store a
+	// semantically incomplete class (devb #67 finding).
+	if err := validateDeviceType(root, op.ServerDeviceType); err != nil {
+		return err
 	}
 	// reject a duplicate id up front (clearer than a downstream ingest error).
 	for _, item := range seq.Content {

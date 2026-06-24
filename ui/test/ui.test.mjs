@@ -623,6 +623,7 @@ test("P1.1 structured editor: data-derived forms for server + switch classes", (
   // server class: quantity + gpus inputs, NIC module-type select with options.
   assert.match(html, /id="srv-compute_xpu-qty"[^>]*value="8"/, "server quantity input");
   assert.match(html, /id="srv-compute_xpu-gpus"[^>]*value="8"/, "gpus input");
+  assert.match(html, /id="srv-compute_xpu-devtype"/, "server device-type select (editable on existing classes)");
   assert.match(html, /id="nic-compute_xpu-scale_out"/, "NIC module-type select");
   assert.match(html, /<option value="nic_dual_200g"/, "NIC dropdown is data-derived from the catalog");
   // switch class: explicit mesh|clos selector (the headline capability).

@@ -396,6 +396,9 @@ fn save_server_classes(id : String) -> Unit {
     let scid = str_at(sc, "id")
     ops.push(op_set_server(scid, "quantity", get_value("srv-" + scid + "-qty")))
     ops.push(op_set_server(scid, "gpus_per_server", get_value("srv-" + scid + "-gpus")))
+    ops.push(
+      op_set_server(scid, "server_device_type", get_value("srv-" + scid + "-devtype")),
+    )
     for n in arr_at(sc, "nics") {
       let nicid = str_at(n, "nic_id")
       ops.push(op_set_nic(scid, nicid, get_value("nic-" + scid + "-" + nicid)))

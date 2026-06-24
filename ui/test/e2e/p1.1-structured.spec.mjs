@@ -54,6 +54,17 @@ test.describe("P1.1 structured editor (#67)", () => {
     await expect(page.locator("#detail-result").getByText("Validation")).toBeVisible();
   });
 
+  test("edit an existing server class's device type via the dropdown -> save -> persists", async ({ page }) => {
+    await openMeshDetail(page);
+
+    const dt = page.locator("#srv-compute_xpu-devtype");
+    await expect(dt).toHaveValue("srv_xpu_generic_dt");
+    await dt.selectOption("srv_storage_generic_dt");
+    await page.locator("#save-srv-btn").click();
+
+    await expect(page.locator("#srv-compute_xpu-devtype")).toHaveValue("srv_storage_generic_dt");
+  });
+
   test("add a server class via the form -> it appears in the editor", async ({ page }) => {
     await openMeshDetail(page);
 
