@@ -480,7 +480,7 @@ test("delete confirmed: DELETE /api/plans/{id} then reloads the list", async () 
     fetches.some((f) => f.url === "/api/plans/clos-small" && f.method === "DELETE"),
     "expected DELETE /api/plans/clos-small",
   );
-  assert.match(dom["app"]?.innerHTML ?? "", /0 plan\(s\)/, "expected the list to refresh empty after delete");
+  assert.match(dom["app"]?.innerHTML ?? "", /id="empty-state"/, "expected the empty-state panel after deleting the last plan (P1.5)");
 });
 
 // Delete (cancelled): the confirm step returns false -> NO DELETE is issued.
