@@ -386,7 +386,29 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "<div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div>" +
   "</div></div></div></div>" +
   "<div id=\"structure-editor\" class=\"mt-3\"></div>" +
+  "<div id=\"overlay-section\" class=\"mt-3\"></div>" +
   "<div id=\"detail-result\" class=\"mt-3\"></div>"
+}
+
+// overlay_section_html: the optic/identity overlay editor (P1.4, #70). Presence
+// is always visible (BOM identity depends on it) — a present/none badge — with a
+// raw-YAML textarea (v1) + Save. present prefills the textarea with the current
+// overlay; absent shows an empty box to author one.
+pub fn overlay_section_html(present : Bool, overlay_yaml : String) -> String {
+  let badge = if present {
+    "<span class=\"badge text-bg-success\">present</span>"
+  } else {
+    "<span class=\"badge text-bg-secondary\">none</span>"
+  }
+  "<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\">" +
+  "<span>Optic / identity overlay \{badge}</span>" +
+  "<button id=\"overlay-save-btn\" class=\"btn btn-success btn-sm\">Save overlay</button></div>" +
+  "<div class=\"card-body\">" +
+  "<div id=\"overlay-error\" class=\"mb-2\"></div>" +
+  "<div class=\"form-text mb-2\">The overlay supplies optic SKUs/identity — without it the BOM's optic columns are blank.</div>" +
+  "<textarea id=\"overlay-yaml\" class=\"form-control font-monospace\" rows=\"14\" spellcheck=\"false\" " +
+  "placeholder=\"items:\n  - id: { name: my-optic, version: '1' }\n    ...\">\{esc(overlay_yaml)}</textarea>" +
+  "</div></div>"
 }
 
 // quantity_table renders a class_id→quantity table for a CalcOutput quantity
@@ -522,12 +544,15 @@ pub fn bom_html(bom_json : String) -> String {
       "<td>\{esc(str_at(r, "hedgehog_class"))}</td>" +
       "<td>\{esc(str_at(r, "manufacturer"))}</td>" +
       "<td class=\"text-end\">\{esc(str_at(r, "quantity"))}</td>" +
+      // optic identity (cols 7–19) — blank until the optic overlay is attached
+      // (P1.4, #70); surfaces whether the BOM carries real optical SKUs.
+      "<td>\{esc(str_at(r, "standard"))}</td>" +
       "</tr>"
   }
   let suppressed = int_at(root, "suppressed_cable_assembly_count").to_string()
   "<h3 class=\"h5\">Bill of Materials</h3>" +
   "<table class=\"table table-sm\">" +
-  "<thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th></tr></thead>" +
+  "<thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th><th>Optic standard</th></tr></thead>" +
   "<tbody>\{rows}</tbody></table>" +
   "<p class=\"text-muted small mb-0\">Suppressed cable assemblies: \{suppressed}</p>"
 }
