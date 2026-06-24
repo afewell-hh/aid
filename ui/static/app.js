@@ -4488,6 +4488,9 @@ function _M0FP25aidui3src13status__badge(status) {
   }
   return `<span class=\"badge ${cls}\">${_M0FP25aidui3src3esc(status)}</span>`;
 }
+function _M0FP25aidui3src13loading__html(label) {
+  return `<div class=\"text-center text-muted py-5\"><div class=\"spinner-border\" role=\"status\"><span class=\"visually-hidden\">Loading…</span></div><p class=\"mt-3 mb-0\">${_M0FP25aidui3src3esc(label)}</p></div>`;
+}
 function _M0FP25aidui3src16plan__list__html(plans_json) {
   let root;
   let _try_err;
@@ -4507,6 +4510,9 @@ function _M0FP25aidui3src16plan__list__html(plans_json) {
     return _M0FP25aidui3src9warn__box("Could not parse plan list.");
   }
   const plans = _M0FP25aidui3src7arr__at(root, "plans");
+  if (plans.length === 0) {
+    return "<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">Topology Plans</h2></div><div id=\"empty-state\" class=\"card text-center\"><div class=\"card-body py-5\"><h3 class=\"h5\">No topology plans yet</h3><p class=\"text-muted mx-auto\" style=\"max-width: 36rem;\">AID turns a DIET/training topology plan into computed switch &amp; server quantities, a bill of materials, and per-fabric hhfab wiring. Start from a vendored template or paste your own YAML.</p><button id=\"new-plan-btn\" class=\"btn btn-success\">+ New plan</button></div></div>";
+  }
   let rows = "";
   const _bind = plans.length;
   let _tmp = 0;
@@ -4588,7 +4594,7 @@ function _M0FP25aidui3src18plan__detail__html(detail_json) {
   const name = _M0FP25aidui3src7str__at(root, "name");
   const status = _M0FP25aidui3src7str__at(root, "status");
   const yaml = _M0FP25aidui3src7str__at(root, "yaml");
-  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
+  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
 }
 function _M0FP25aidui3src15quantity__table(root, key, title) {
   const items = _M0FP25aidui3src7arr__at(root, key);
@@ -4905,6 +4911,7 @@ function _M0FP25aidui3src13trigger__calc(target, plan_id) {
   });
 }
 function _M0FP25aidui3src11load__plans(target) {
+  _M0FP25aidui3src9set__html(target, _M0FP25aidui3src13loading__html("Loading plans…"));
   _M0FP25aidui3src8api__get("/plans", (ok, status, body) => {
     if (!ok || _M0FP25aidui3src16body__has__error(body)) {
       _M0FP25aidui3src9set__html(target, _M0FP25aidui3src11error__html(status, body));
@@ -5008,6 +5015,7 @@ function _M0FP25aidui3src25attach__template__overlay(template_id, plan_id) {
   });
 }
 function _M0FP25aidui3src12load__detail(id) {
+  _M0FP25aidui3src9set__html("app", _M0FP25aidui3src13loading__html("Loading plan…"));
   _M0FP25aidui3src8api__get(`/plans/${id}`, (ok, status, body) => {
     if (!ok || _M0FP25aidui3src16body__has__error(body)) {
       _M0FP25aidui3src9set__html("app", _M0FP25aidui3src11error__html(status, body));
@@ -5024,6 +5032,9 @@ function _M0FP25aidui3src12load__detail(id) {
       _M0FP25aidui3src10save__plan(id);
     });
     _M0FP25aidui3src9on__click("back-btn", () => {
+      _M0FP25aidui3src11load__plans("app");
+    });
+    _M0FP25aidui3src9on__click("crumb-plans", () => {
       _M0FP25aidui3src11load__plans("app");
     });
     _M0FP25aidui3src9on__click("detail-del-btn", () => {
@@ -5182,6 +5193,9 @@ function _M0FP25aidui3src28copy__overlay__then__refresh(src_id, new_id) {
 }
 function _M0FP25aidui3src11main__entry() {
   _M0FP25aidui3src12console__log("AID UI starting");
+  _M0FP25aidui3src9on__click("nav-home", () => {
+    _M0FP25aidui3src11load__plans("app");
+  });
   _M0FP25aidui3src11load__plans("app");
 }
 export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }

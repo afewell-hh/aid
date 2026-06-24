@@ -27,6 +27,7 @@ pub fn render_bom(target : String, bom_json : String) -> Unit {
 // or a network failure (status==0) renders the shared error alert instead of a
 // misleading empty table (P0.4).
 pub fn load_plans(target : String) -> Unit {
+  set_html(target, loading_html("Loading plans…")) // P1.5: nav not silent
   api_get(plans_path(), fn(ok, status, body) {
     if (!ok) || body_has_error(body) {
       set_html(target, error_html(status, body))
@@ -235,6 +236,7 @@ fn delete_plan(id : String, name : String) -> Unit {
 // A 404 (deleted/unknown plan) or network failure renders the error alert, not a
 // ghost detail card with live-but-broken buttons (P0.4).
 fn load_detail(id : String) -> Unit {
+  set_html("app", loading_html("Loading plan…")) // P1.5: nav not silent
   api_get(plan_path(id), fn(ok, status, body) {
     if (!ok) || body_has_error(body) {
       set_html("app", error_html(status, body))
@@ -245,6 +247,7 @@ fn load_detail(id : String) -> Unit {
     on_click("bom-btn", fn() { load_bom("detail-result", id) })
     on_click("save-btn", fn() { save_plan(id) })
     on_click("back-btn", fn() { load_plans("app") })
+    on_click("crumb-plans", fn() { load_plans("app") }) // P1.5 breadcrumb
     on_click("detail-del-btn", fn() {
       delete_plan_from_detail(id, str_at_body(body, "name"))
     })
@@ -365,8 +368,12 @@ fn set_inflight(id : String, busy : Bool, label : String) -> Unit {
   set_text(id, label)
 }
 
-// main_entry: bootstrap the app — load the plan list into #app.
+// main_entry: bootstrap the app — wire the SPA navbar brand (P1.5: returns to
+// the list without a full reload; the brand lives in the static shell, outside
+// #app, so this one-time binding survives every in-app re-render) and load the
+// plan list into #app.
 pub fn main_entry() -> Unit {
   console_log("AID UI starting")
+  on_click("nav-home", fn() { load_plans("app") })
   load_plans("app")
 }

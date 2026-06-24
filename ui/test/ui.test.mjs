@@ -480,7 +480,7 @@ test("delete confirmed: DELETE /api/plans/{id} then reloads the list", async () 
     fetches.some((f) => f.url === "/api/plans/clos-small" && f.method === "DELETE"),
     "expected DELETE /api/plans/clos-small",
   );
-  assert.match(dom["app"]?.innerHTML ?? "", /0 plan\(s\)/, "expected the list to refresh empty after delete");
+  assert.match(dom["app"]?.innerHTML ?? "", /id="empty-state"/, "expected the empty-state panel after deleting the last plan (P1.5)");
 });
 
 // Delete (cancelled): the confirm step returns false -> NO DELETE is issued.
@@ -553,4 +553,49 @@ test("api wrappers: PUT and DELETE issue the right method/url", async () => {
   dom["detail-del-btn"].click();
   await flush();
   assert.ok(fetches.some((f) => f.url === "/api/plans/p1" && f.method === "DELETE"), "expected a DELETE");
+});
+
+// --- P1.5 (Issue #66): navigation + loading/disabled + first-run empty state ---
+// RED: these pin the P1.5 behaviors the current app.js lacks (a bare table when
+// plans==0, no breadcrumb, no loading feedback on the list/detail navigation
+// transitions). GREEN implements them in render.mbt + app.mbt.
+
+const EMPTY = JSON.stringify({ plans: [] });
+
+test("P1.5 empty state: plans==0 renders a first-run guidance panel + CTA, not a bare table", () => {
+  reset();
+  app.render_plan_list("app", EMPTY);
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /id="empty-state"/, "expected a dedicated empty-state panel");
+  assert.match(html, /No topology plans yet|Design your first/i, "expected first-run guidance copy");
+  assert.match(html, /id="new-plan-btn"/, "empty state must offer the New-plan CTA");
+  assert.doesNotMatch(html, /<tbody>\s*<\/tbody>/, "empty state should replace the bare empty table");
+});
+
+test("P1.5 breadcrumb: plan detail shows a breadcrumb with a clickable Plans crumb", () => {
+  reset();
+  app.render_plan_detail("app", DETAIL);
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /aria-label="breadcrumb"/, "expected a breadcrumb nav");
+  assert.match(html, /id="crumb-plans"/, "expected a clickable Plans crumb");
+});
+
+test("P1.5 loading: load_plans shows a spinner before the response resolves", () => {
+  reset();
+  setResponder(() => PLANS);
+  app.load_plans("app"); // no await — inspect the synchronous pre-fetch state
+  const loading = dom["app"]?.innerHTML ?? "";
+  assert.match(loading, /spinner-border/, "expected a spinner while the list loads");
+  assert.match(loading, /Loading/i, "expected a loading label");
+});
+
+test("P1.5 loading: load_detail (View) shows a spinner before the detail resolves", async () => {
+  reset();
+  setResponder((url) => (url === "/api/plans" ? PLANS : DETAIL));
+  app.load_plans("app");
+  await flush();
+  dom["view-clos-small"].click(); // triggers load_detail
+  const loading = dom["app"]?.innerHTML ?? "";
+  assert.match(loading, /spinner-border/, "expected a spinner while the detail loads");
+  assert.match(loading, /Loading/i, "expected a loading label");
 });

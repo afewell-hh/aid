@@ -238,8 +238,29 @@ fn status_badge(status : String) -> String {
 
 // --- surfaces ---------------------------------------------------------------
 
+// loading_html: a centered spinner panel shown while a navigation request is in
+// flight (P1.5, #66), so the list/detail transitions are not silent latency.
+pub fn loading_html(label : String) -> String {
+  "<div class=\"text-center text-muted py-5\">" +
+  "<div class=\"spinner-border\" role=\"status\"><span class=\"visually-hidden\">Loading…</span></div>" +
+  "<p class=\"mt-3 mb-0\">\{esc(label)}</p></div>"
+}
+
+// empty_state_html: the first-run guidance panel shown when no plans exist
+// (P1.5, #66) — explains what AID does and offers the New-plan CTA (same
+// new-plan-btn id load_plans wires), instead of a bare "0 plan(s)" table.
+fn empty_state_html() -> String {
+  "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
+  "<h2 class=\"h4 mb-0\">Topology Plans</h2></div>" +
+  "<div id=\"empty-state\" class=\"card text-center\"><div class=\"card-body py-5\">" +
+  "<h3 class=\"h5\">No topology plans yet</h3>" +
+  "<p class=\"text-muted mx-auto\" style=\"max-width: 36rem;\">AID turns a DIET/training topology plan into computed switch &amp; server quantities, a bill of materials, and per-fabric hhfab wiring. Start from a vendored template or paste your own YAML.</p>" +
+  "<button id=\"new-plan-btn\" class=\"btn btn-success\">+ New plan</button>" +
+  "</div></div>"
+}
+
 // plan_list_html: a NetBox-style table of plan summaries with status badges and
-// a per-row View action.
+// a per-row View action; a first-run empty-state panel when there are no plans.
 pub fn plan_list_html(plans_json : String) -> String {
   let root = try {
     @json.parse(plans_json)
@@ -247,6 +268,9 @@ pub fn plan_list_html(plans_json : String) -> String {
     _ => return warn_box("Could not parse plan list.")
   }
   let plans = arr_at(root, "plans")
+  if plans.length() == 0 {
+    return empty_state_html()
+  }
   let mut rows = ""
   for p in plans {
     let id = str_at(p, "id")
@@ -323,6 +347,10 @@ pub fn plan_detail_html(detail_json : String) -> String {
   let name = str_at(root, "name")
   let status = str_at(root, "status")
   let yaml = str_at(root, "yaml")
+  "<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\">" +
+  "<li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li>" +
+  "<li class=\"breadcrumb-item active\" aria-current=\"page\">\{esc(name)}</li>" +
+  "</ol></nav>" +
   "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
   "<h2 class=\"h4 mb-0\">\{esc(name)}</h2>\{status_badge(status)}</div>" +
   "<div class=\"row g-3\">" +
