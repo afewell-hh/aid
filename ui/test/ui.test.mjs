@@ -671,3 +671,44 @@ test("P1.3 live validate: a structural 4xx renders the distinct 'cannot compute'
   assert.match(html, /alert-danger/, "structural failure must be the error alert");
   assert.doesNotMatch(html, /badge[^>]*text-bg-success/, "must not show a Valid badge for a structural failure");
 });
+
+// --- P1.3 (#68) devb review: stored-base + stale-response guard ---------------
+const STRUCT_PROJ = JSON.stringify({
+  server_classes: [{ id: "compute_xpu", quantity: 8, gpus_per_server: 8, server_device_type: "srv_xpu_generic_dt", nics: [] }],
+  switch_classes: [],
+  catalog: { module_types: [], device_types: ["srv_xpu_generic_dt"], device_type_extensions: [], breakout_options: [] },
+});
+
+test("P1.3 validate_structured uses the STORED plan YAML (not the editable textarea)", async () => {
+  reset();
+  el("stored-plan-yaml").value = "STORED_CANONICAL";
+  el("edit-yaml").value = "RAW_DIVERGENT_DRAFT"; // user's separate raw edits
+  el("structure-data").value = STRUCT_PROJ;
+  setResponder(() => VALID_CALC);
+  app.validate_structured();
+  await flush();
+  const sent = fetches.find((f) => f.url === "/api/validate");
+  assert.ok(sent, "expected POST /api/validate");
+  assert.match(sent.body, /STORED_CANONICAL/, "structured dry-run must use the stored plan as base");
+  assert.doesNotMatch(sent.body, /RAW_DIVERGENT_DRAFT/, "must NOT use the editable textarea as base");
+  assert.match(sent.body, /"ops":\[/, "must include the structured ops");
+});
+
+test("P1.3 stale-response guard: an older slower response never overwrites a newer one", async () => {
+  reset();
+  el("edit-yaml").value = "draft";
+  let n = 0;
+  setResponder(() => {
+    n += 1;
+    // 1st (older) response is SLOW + Invalid; 2nd (newer) is FAST + Valid.
+    return n === 1
+      ? { delay: 40, body: JSON.stringify({ is_valid: false, errors: [{ code: "STALE_BADGE" }], switch_quantity: [], server_quantity: [], endpoints: [], transceiver_verdicts: [] }) }
+      : { delay: 0, body: VALID_CALC };
+  });
+  app.validate_raw(); // seq 1 (slow)
+  app.validate_raw(); // seq 2 (fast)
+  await new Promise((r) => setTimeout(r, 80)); // let both resolve (fast then slow)
+  const html = dom["live-validation"]?.innerHTML ?? "";
+  assert.match(html, /Valid/, "newest (fast) result must stand");
+  assert.doesNotMatch(html, /STALE_BADGE/, "the older slow response must be dropped");
+});

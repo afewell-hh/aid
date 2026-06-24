@@ -34,6 +34,9 @@ function _M0TPC28internal7strconv9FloatInfo(param0, param1, param2) {
   this.exponent_bits = param1;
   this.bias = param2;
 }
+function _M0TP25aidui3src3Seq(param0) {
+  this.n = param0;
+}
 class $PanicError extends Error {}
 function $panic() {
   throw new $PanicError();
@@ -415,6 +418,7 @@ const _M0FPC14json17int__pow10__table = [1n, 10n, 100n, 1000n, 10000n, 100000n, 
 const _M0FPC14json12pow10__table = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000, 100000000000, 1e+12, 1e+13, 1e+14, 1e+15, 1e+16, 1e+17, 1e+18, 1e+19, 1e+20, 1e+21, 1e+22, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const _M0FPC14json12checked__mulN6constrS1766 = 0n;
 const _M0FP25aidui3src9api__base = "/api";
+const _M0FP25aidui3src9live__seq = new _M0TP25aidui3src3Seq(0);
 const _M0FPB4seed = _M0FPB12random__seed();
 function _M0FPC15abort5abortGRPB4JsonE(msg) {
   return $panic();
@@ -4596,7 +4600,7 @@ function _M0FP25aidui3src18plan__detail__html(detail_json) {
   const name = _M0FP25aidui3src7str__at(root, "name");
   const status = _M0FP25aidui3src7str__at(root, "status");
   const yaml = _M0FP25aidui3src7str__at(root, "yaml");
-  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div id=\"live-validation\" class=\"mb-3\"></div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"structure-editor\" class=\"mt-3\"></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
+  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div id=\"live-validation\" class=\"mb-3\"></div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"stored-plan-yaml\" class=\"d-none\">${_M0FP25aidui3src3esc(yaml)}</textarea><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"structure-editor\" class=\"mt-3\"></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
 }
 function _M0FP25aidui3src15quantity__table(root, key, title) {
   const items = _M0FP25aidui3src7arr__at(root, key);
@@ -4881,13 +4885,13 @@ function _M0FP25aidui3src12select__html(id, options, selected, blank) {
   }
   return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS247(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS241(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
 function _M0FP25aidui3src12topo__select(id, current) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${blank}${_M0FP25aidui3src12topo__selectN3optS247(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS247(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${blank}${_M0FP25aidui3src12topo__selectN3optS241(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS241(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -5199,14 +5203,22 @@ function _M0FP25aidui3src14join__op__list(ops) {
   }
   return out;
 }
-function _M0FP25aidui3src18render__validation(ok, status, body) {
-  if (!ok || _M0FP25aidui3src16body__has__error(body)) {
-    _M0FP25aidui3src9set__html("live-validation", _M0FP25aidui3src11error__html(status, body));
-    return;
-  } else {
-    _M0FP25aidui3src9set__html("live-validation", _M0FP25aidui3src19calc__summary__html(body));
-    return;
-  }
+function _M0FP25aidui3src13run__validate(body) {
+  _M0FP25aidui3src9live__seq.n = _M0FP25aidui3src9live__seq.n + 1 | 0;
+  const mine = _M0FP25aidui3src9live__seq.n;
+  _M0FP25aidui3src9set__html("live-validation", "<div class=\"text-muted small d-flex align-items-center\"><div class=\"spinner-border spinner-border-sm me-2\" role=\"status\"></div>validating…</div>");
+  _M0FP25aidui3src9api__post("/validate", body, (ok, status, b) => {
+    if (mine !== _M0FP25aidui3src9live__seq.n) {
+      return undefined;
+    }
+    if (!ok || _M0FP25aidui3src16body__has__error(b)) {
+      _M0FP25aidui3src9set__html("live-validation", _M0FP25aidui3src11error__html(status, b));
+      return;
+    } else {
+      _M0FP25aidui3src9set__html("live-validation", _M0FP25aidui3src19calc__summary__html(b));
+      return;
+    }
+  });
 }
 function _M0FP25aidui3src20validate__structured() {
   const _bind = _M0FP25aidui3src22parse__structure__data();
@@ -5215,7 +5227,6 @@ function _M0FP25aidui3src20validate__structured() {
   } else {
     const _Some = _bind;
     const _root = _Some;
-    _M0FP25aidui3src9set__html("live-validation", "<div class=\"text-muted small d-flex align-items-center\"><div class=\"spinner-border spinner-border-sm me-2\" role=\"status\"></div>validating…</div>");
     const ops = _M0FP25aidui3src20collect__server__ops(_root);
     const _bind$2 = _M0FP25aidui3src20collect__switch__ops(_root);
     const _bind$3 = _bind$2.length;
@@ -5231,10 +5242,7 @@ function _M0FP25aidui3src20validate__structured() {
         break;
       }
     }
-    const body = `{\"yaml\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("edit-yaml"))}\",\"ops\":[${_M0FP25aidui3src14join__op__list(ops)}]}`;
-    _M0FP25aidui3src9api__post("/validate", body, (ok, status, b) => {
-      _M0FP25aidui3src18render__validation(ok, status, b);
-    });
+    _M0FP25aidui3src13run__validate(`{\"yaml\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("stored-plan-yaml"))}\",\"ops\":[${_M0FP25aidui3src14join__op__list(ops)}]}`);
     return;
   }
 }
@@ -5301,11 +5309,7 @@ function _M0FP25aidui3src13trigger__calc(target, plan_id) {
   });
 }
 function _M0FP25aidui3src13validate__raw() {
-  _M0FP25aidui3src9set__html("live-validation", "<div class=\"text-muted small d-flex align-items-center\"><div class=\"spinner-border spinner-border-sm me-2\" role=\"status\"></div>validating…</div>");
-  const body = `{\"yaml\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("edit-yaml"))}\"}`;
-  _M0FP25aidui3src9api__post("/validate", body, (ok, status, b) => {
-    _M0FP25aidui3src18render__validation(ok, status, b);
-  });
+  _M0FP25aidui3src13run__validate(`{\"yaml\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("edit-yaml"))}\"}`);
 }
 function _M0FP25aidui3src11load__plans(target) {
   _M0FP25aidui3src9set__html(target, _M0FP25aidui3src13loading__html("Loading plans…"));
@@ -5669,4 +5673,4 @@ function _M0FP25aidui3src11main__entry() {
   });
   _M0FP25aidui3src11load__plans("app");
 }
-export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }
+export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }

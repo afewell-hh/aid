@@ -378,6 +378,10 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "<button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div>" +
   "<div class=\"card-body\">" +
   "<div id=\"edit-error\" class=\"mb-2\"></div>" +
+  // Canonical stored plan YAML (immutable carrier): the structured live-validate
+  // applies form ops to THIS base, never the editable textarea (which may hold
+  // independent raw edits) — devb #68 finding 1.
+  "<textarea id=\"stored-plan-yaml\" class=\"d-none\">\{esc(yaml)}</textarea>" +
   "<textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">\{esc(yaml)}</textarea>" +
   "<div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div>" +
   "</div></div></div></div>" +

@@ -450,44 +450,58 @@ fn save_switch_classes(id : String) -> Unit {
 
 // --- P1.3 (#68): debounced live validation ----------------------------------
 
-// render_validation renders a dry-run result into #live-validation: a structural
-// 4xx is the distinct "cannot compute" alert (error_html); a 200 is calc-as-data
-// (calc_summary_html — Valid badge + quantities, or red per-rule errors).
-fn render_validation(ok : Bool, status : Int, body : String) -> Unit {
-  if (!ok) || body_has_error(body) {
-    set_html("live-validation", error_html(status, body))
-  } else {
-    set_html("live-validation", calc_summary_html(body))
-  }
+// live_seq tags each dry-run so a slower, older /api/validate response cannot
+// overwrite a newer draft's result (devb #68 finding 2). A response renders only
+// if its seq is still the latest. (The struct's binding is immutable; its field
+// is mut — single-threaded JS, so no atomicity concern.)
+struct Seq {
+  mut n : Int
+}
+
+let live_seq : Seq = { n: 0 }
+
+// run_validate posts a dry-run body and renders the result into #live-validation,
+// dropping the response if a newer dry-run started meanwhile (stale guard).
+fn run_validate(body : String) -> Unit {
+  live_seq.n = live_seq.n + 1
+  let mine = live_seq.n
+  set_html("live-validation", validating_html())
+  api_post(validate_path(), body, fn(ok, status, b) {
+    if mine != live_seq.n {
+      return // a newer edit superseded this dry-run
+    }
+    if (!ok) || body_has_error(b) {
+      set_html("live-validation", error_html(status, b)) // structural "cannot compute"
+    } else {
+      set_html("live-validation", calc_summary_html(b)) // Valid badge / per-rule errors
+    }
+  })
 }
 
 // validate_raw dry-runs the raw-YAML textarea draft (no persistence).
 pub fn validate_raw() -> Unit {
-  set_html("live-validation", validating_html())
-  let body = "{\"yaml\":\"" + json_escape(get_value("edit-yaml")) + "\"}"
-  api_post(validate_path(), body, fn(ok, status, b) { render_validation(ok, status, b) })
+  run_validate("{\"yaml\":\"" + json_escape(get_value("edit-yaml")) + "\"}")
 }
 
-// validate_structured dry-runs the structured-editor draft: the stored plan YAML
-// (#edit-yaml) plus the current form field values as ops, applied + validated
-// server-side without persisting (D26: no client YAML lib).
-fn validate_structured() -> Unit {
+// validate_structured dry-runs the structured-editor draft: the CANONICAL stored
+// plan YAML (#stored-plan-yaml — never the editable textarea, finding 1) plus the
+// current form field values as ops, applied + validated server-side without
+// persisting (D26: no client YAML lib).
+pub fn validate_structured() -> Unit {
   match parse_structure_data() {
     None => ()
     Some(root) => {
-      set_html("live-validation", validating_html())
       let ops = collect_server_ops(root)
       for o in collect_switch_ops(root) {
         ops.push(o)
       }
-      let body = "{\"yaml\":\"" +
-        json_escape(get_value("edit-yaml")) +
+      run_validate(
+        "{\"yaml\":\"" +
+        json_escape(get_value("stored-plan-yaml")) +
         "\",\"ops\":[" +
         join_op_list(ops) +
-        "]}"
-      api_post(validate_path(), body, fn(ok, status, b) {
-        render_validation(ok, status, b)
-      })
+        "]}",
+      )
     }
   }
 }
