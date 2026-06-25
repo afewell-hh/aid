@@ -794,3 +794,57 @@ test("P1.4 BOM shows the optic-standard column (blank until overlay attached)", 
   assert.match(html, /Optic standard/, "BOM has an optic-standard column header");
   assert.match(html, /400GBASE-DR4/, "the optic standard renders when present");
 });
+
+// --- P2.1 (#71): derived facts + BOM CSV download -----------------------------
+const PLANS_FACTS = JSON.stringify({
+  plans: [{
+    id: "m64", name: "Mesh 64", status: "active",
+    facts: { topology: "mesh", gpu_count: 64, server_total: 17, switch_total: 4, is_valid: true, computable: true },
+  }],
+});
+const DETAIL_FACTS = JSON.stringify({
+  id: "m64", name: "Mesh 64", status: "active",
+  yaml: "meta:\n  case_id: m64\n",
+  facts: { topology: "Clos", gpu_count: 32, server_total: 32, switch_total: 9, is_valid: true, computable: true },
+});
+
+test("P2.1 list row shows derived facts (topology/gpu/servers/switches/validity)", () => {
+  reset();
+  app.render_plan_list("app", PLANS_FACTS);
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /mesh/, "topology");
+  assert.match(html, /64 GPU/, "gpu count");
+  assert.match(html, /17 servers/, "server total");
+  assert.match(html, /4 switches/, "switch total");
+  assert.match(html, /Valid/, "validity badge");
+});
+
+test("P2.1 detail header shows derived facts", () => {
+  reset();
+  app.render_plan_detail("app", DETAIL_FACTS);
+  const html = dom["detail-facts"]?.innerHTML ?? dom["app"]?.innerHTML ?? "";
+  const all = dom["app"]?.innerHTML ?? "";
+  assert.match(all, /Clos/, "topology in header");
+  assert.match(all, /9 switches/, "switch total in header");
+  assert.match(all, /Valid/, "validity badge in header");
+});
+
+test("P2.1 download_bom_csv: GET bom?format=csv -> saves the CSV (guarded)", async () => {
+  reset();
+  setResponder(() => "section,quantity\nswitch,4\n");
+  app.download_bom_csv("p");
+  await flush();
+  assert.ok(
+    fetches.some((f) => f.url === "/api/plans/p/bom?format=csv" && f.method === "GET"),
+    `expected GET bom?format=csv; got ${JSON.stringify(fetches)}`,
+  );
+  assert.ok(saved.some((s) => s.content.includes("section,quantity")), "the CSV body was saved to a file");
+});
+
+test("P2.1 download_bom_csv guard: an error response is NOT saved", async () => {
+  reset();
+  setResponder(() => ({ status: 422, body: JSON.stringify({ error: "cannot compute BOM" }) }));
+  app.download_bom_csv("p");
+  await flush();
+  assert.equal(saved.length, 0, "an error body must never be written to a .csv file");
+});
