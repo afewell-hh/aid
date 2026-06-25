@@ -952,3 +952,37 @@ test("P2.3 archived status badge is not low-contrast (bordered on the dark theme
   const html = dom["app"]?.innerHTML ?? "";
   assert.match(html, /text-bg-dark border border-secondary/, "archived badge gains a border for contrast");
 });
+
+// --- P2.4 (#73): cleanup — action toolbar + clickable rows --------------------
+
+test("P2.4 detail actions are grouped in one toolbar with a single primary (Calculate)", () => {
+  reset();
+  app.render_plan_detail("app", DETAIL);
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /role="toolbar"[^>]*aria-label="Plan actions"/, "actions live in a labelled toolbar");
+  // Calculate is the ONE primary button; View BOM / Delete are non-primary.
+  const primaries = (html.match(/btn btn-primary/g) || []).length;
+  assert.equal(primaries, 1, "exactly one primary action button");
+  assert.match(html, /id="calc-btn" class="btn btn-primary"/, "Calculate is the primary");
+  assert.match(html, /id="bom-btn"[^>]*btn-outline-secondary/, "View BOM is secondary");
+  assert.match(html, /id="detail-del-btn"[^>]*btn-outline-danger/, "Delete is a danger outline");
+  assert.match(html, /id="back-btn"/, "the back-to-plans link is preserved");
+});
+
+test("P2.4 list rows are clickable: a row-body click opens the plan detail", async () => {
+  reset();
+  setResponder((url) => (url === "/api/plans" ? PLANS : DETAIL));
+  app.load_plans("app");
+  await flush();
+  // the row carries a stable id + a pointer cursor (mouse affordance).
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /<tr id="row-clos-small"[^>]*cursor:pointer/, "row has an id + pointer cursor");
+  // a synthetic row click (no event target -> not a button) opens the detail.
+  el("row-clos-small").click();
+  await flush();
+  assert.ok(
+    fetches.some((f) => f.url === "/api/plans/clos-small" && f.method === "GET"),
+    `row click should GET the plan detail; got ${JSON.stringify(fetches)}`,
+  );
+  assert.match(dom["app"]?.innerHTML ?? "", /id="calc-btn"/, "the detail rendered after the row click");
+});

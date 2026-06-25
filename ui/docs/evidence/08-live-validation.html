@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AID — Live validation (as you design)</title>
+  <link rel="stylesheet" href="../../static/bootstrap.min.css">
+</head>
+<body class="bg-body">
+  <nav class="navbar navbar-expand bg-dark border-bottom border-secondary mb-3">
+    <div class="container"><span class="navbar-brand">AID — Live validation (as you design)</span></div>
+  </nav>
+  <main class="container">
+    <p class="text-muted small">Editing the plan fires a debounced dry-run (POST /api/validate) that validates WITHOUT persisting — the inline result shows the live Valid/Invalid verdict and computed quantities.</p>
+    <div class="card"><div class="card-header d-flex justify-content-between align-items-center"><span>Validation</span><span class="badge text-bg-success"><span aria-hidden="true">✓ </span><span>Valid</span></span></div><div class="card-body"><h4 class="h6">Switch quantities</h4><table class="table table-sm mb-3"><caption class="visually-hidden">Switch quantities per device class</caption><thead><tr><th scope="col">Class</th><th scope="col" class="text-end">Qty</th></tr></thead><tbody><tr><td>soc_storage_scale_out_leaf</td><td class="text-end">2</td></tr><tr><td>inb_mgmt_leaf</td><td class="text-end">1</td></tr><tr><td>oob_leaf</td><td class="text-end">1</td></tr></tbody></table><h4 class="h6">Server quantities</h4><table class="table table-sm mb-3"><caption class="visually-hidden">Server quantities per device class</caption><thead><tr><th scope="col">Class</th><th scope="col" class="text-end">Qty</th></tr></thead><tbody><tr><td>compute_xpu</td><td class="text-end">8</td></tr><tr><td>hh_controller</td><td class="text-end">1</td></tr><tr><td>hh_gateway</td><td class="text-end">2</td></tr><tr><td>metadata_srv</td><td class="text-end">3</td></tr><tr><td>storage_srv</td><td class="text-end">3</td></tr></tbody></table><p class="mb-0 text-muted small">126 endpoint(s) · 21 transceiver verdict(s)</p><hr><h4 class="h6">Validated wiring (hhfab)</h4><div class="d-flex flex-wrap"><button id="wiring-inb-mgmt" class="btn btn-outline-success btn-sm me-2 mb-2" data-fabric="inb-mgmt">Download wiring: inb-mgmt</button><button id="wiring-soc-storage-scale-out" class="btn btn-outline-success btn-sm me-2 mb-2" data-fabric="soc-storage-scale-out">Download wiring: soc-storage-scale-out</button></div></div></div>
+  </main>
+</body>
+</html>

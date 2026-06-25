@@ -321,6 +321,7 @@ function _M0TPB9ArrayViewGUsRPB4JsonEE(param0, param1, param2) {
 const _M0FP25aidui3src12console__log = (m) => console.log(m);
 const _M0FP25aidui3src9set__html = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
 const _M0FP25aidui3src9on__click = (id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("click", () => cb()); };
+const _M0FP25aidui3src14on__click__row = (id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("click", (ev) => { const t = ev && ev.target; if (t && t.closest && t.closest("button, a, input, select, textarea")) return; cb(); }); };
 const _M0FP25aidui3src10on__change = (id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("change", () => cb()); };
 const _M0FP25aidui3src18on__change__within = (id, cb) => { const e = document.getElementById(id); if (e) { e.addEventListener("input", () => cb()); e.addEventListener("change", () => cb()); } };
 const _M0FP25aidui3src8schedule = (key, ms, cb) => { const t = (globalThis.__aid_timers = globalThis.__aid_timers || {}); if (t[key]) clearTimeout(t[key]); t[key] = setTimeout(() => cb(), ms); };
@@ -4556,7 +4557,7 @@ function _M0FP25aidui3src16plan__list__html(plans_json) {
         const _f = _Some;
         summary = _M0FP25aidui3src14facts__summary(_f);
       }
-      rows = `${rows}<tr><td>${_M0FP25aidui3src3esc(name)}</td><td><code>${_M0FP25aidui3src3esc(id)}</code></td><td>${_M0FP25aidui3src13status__badge(status)}</td><td>${summary}</td><td class=\"text-end\"><button id=\"view-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-primary me-1\">View</button><button id=\"dup-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-secondary me-1\">Duplicate</button><button id=\"del-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-danger\">Delete</button></td></tr>`;
+      rows = `${rows}<tr id=\"row-${_M0FP25aidui3src3esc(id)}\" style=\"cursor:pointer\" title=\"Open ${_M0FP25aidui3src3esc(name)}\"><td>${_M0FP25aidui3src3esc(name)}</td><td><code>${_M0FP25aidui3src3esc(id)}</code></td><td>${_M0FP25aidui3src13status__badge(status)}</td><td>${summary}</td><td class=\"text-end\"><button id=\"view-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-primary me-1\">View</button><button id=\"dup-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-secondary me-1\">Duplicate</button><button id=\"del-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-outline-danger\">Delete</button></td></tr>`;
       _tmp = _ + 1 | 0;
       continue;
     } else {
@@ -4636,7 +4637,7 @@ function _M0FP25aidui3src18plan__detail__html(detail_json) {
     const _f = _Some;
     header_facts = `<div id=\"detail-facts\" class=\"mb-3\">${_M0FP25aidui3src14facts__summary(_f)}</div>`;
   }
-  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-2\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div>${header_facts}<div id=\"live-validation\" class=\"mb-3\" role=\"status\" aria-live=\"polite\"></div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><textarea id=\"stored-plan-yaml\" class=\"d-none\">${_M0FP25aidui3src3esc(yaml)}</textarea><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"structure-editor\" class=\"mt-3\"></div><div id=\"overlay-section\" class=\"mt-3\"></div><div id=\"detail-result\" class=\"mt-3\" role=\"status\" aria-live=\"polite\"></div>`;
+  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-2\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div>${header_facts}<div id=\"live-validation\" class=\"mb-3\" role=\"status\" aria-live=\"polite\"></div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><div class=\"btn-toolbar mb-2\" role=\"toolbar\" aria-label=\"Plan actions\"><div class=\"btn-group btn-group-sm me-2 mb-1\" role=\"group\" aria-label=\"Compute\"><button id=\"calc-btn\" class=\"btn btn-primary\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary\">View BOM</button></div><div class=\"btn-group btn-group-sm mb-1\" role=\"group\" aria-label=\"Manage\"><button id=\"detail-del-btn\" class=\"btn btn-outline-danger\">Delete</button></div></div><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0\">&larr; All plans</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><textarea id=\"stored-plan-yaml\" class=\"d-none\">${_M0FP25aidui3src3esc(yaml)}</textarea><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"structure-editor\" class=\"mt-3\"></div><div id=\"overlay-section\" class=\"mt-3\"></div><div id=\"detail-result\" class=\"mt-3\" role=\"status\" aria-live=\"polite\"></div>`;
 }
 function _M0FP25aidui3src22overlay__section__html(present, overlay_yaml) {
   const badge = present ? _M0FP25aidui3src11status__cue("text-bg-success", "✓", "present") : _M0FP25aidui3src11status__cue("text-bg-secondary", "○", "none");
@@ -4943,13 +4944,13 @@ function _M0FP25aidui3src15select__strings(id, options, selected, aria_label) {
   }
   return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS292(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS294(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
 function _M0FP25aidui3src12topo__select(id, current, aria_label) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS292(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS292(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS294(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS294(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -5845,6 +5846,9 @@ function _M0FP25aidui3src16wire__plan__rows(plans_json) {
       const id = _M0FP25aidui3src7str__at(p, "id");
       const name = _M0FP25aidui3src7str__at(p, "name");
       _M0FP25aidui3src9on__click(`view-${id}`, () => {
+        _M0FP25aidui3src12load__detail(id);
+      });
+      _M0FP25aidui3src14on__click__row(`row-${id}`, () => {
         _M0FP25aidui3src12load__detail(id);
       });
       _M0FP25aidui3src9on__click(`dup-${id}`, () => {

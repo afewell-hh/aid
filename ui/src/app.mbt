@@ -51,6 +51,9 @@ fn wire_plan_rows(plans_json : String) -> Unit {
     let id = str_at(p, "id")
     let name = str_at(p, "name")
     on_click("view-" + id, fn() { load_detail(id) })
+    // P2.4 clickable row: open the plan on a row-body click (the on_click_row
+    // guard ignores clicks on the View/Duplicate/Delete buttons below).
+    on_click_row("row-" + id, fn() { load_detail(id) })
     on_click("dup-" + id, fn() { duplicate_plan(id, name) })
     on_click("del-" + id, fn() { delete_plan(id, name) })
   }

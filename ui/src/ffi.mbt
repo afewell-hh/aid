@@ -16,6 +16,15 @@ extern "js" fn set_html(id : String, html : String) -> Unit =
 extern "js" fn on_click(id : String, cb : () -> Unit) -> Unit =
   #|(id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("click", () => cb()); }
 
+// Register a click handler on a ROW (or any container) that fires ONLY when the
+// click did not originate from an interactive control inside it (P2.4 clickable
+// rows): clicking the row body opens the plan, but clicking a View/Duplicate/
+// Delete button (or a link/input) still does just that — no double-navigation,
+// no behavior regression. The target guard tolerates a synthetic call with no
+// event (the Node mock harness fires listeners without one).
+extern "js" fn on_click_row(id : String, cb : () -> Unit) -> Unit =
+  #|(id, cb) => { const e = document.getElementById(id); if (e) e.addEventListener("click", (ev) => { const t = ev && ev.target; if (t && t.closest && t.closest("button, a, input, select, textarea")) return; cb(); }); }
+
 // Register a change handler (e.g. the New-plan template <select>); the MoonBit
 // callback runs when the control's value changes.
 extern "js" fn on_change(id : String, cb : () -> Unit) -> Unit =

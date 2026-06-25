@@ -15,7 +15,7 @@ UI_SRC := ui/src
 UI_STATIC := ui/static
 UI_BUNDLE := $(UI_STATIC)/app.js
 
-.PHONY: wasm kernel-wasm build test embed-check clean ui ui-check ui-test ui-e2e
+.PHONY: wasm kernel-wasm build test embed-check clean ui ui-check ui-test ui-e2e ui-evidence
 
 # Offline Playwright resolution (see ui/test/README.md). Override on the CLI for
 # CI. The aid repo vendors NO node_modules; the module is resolved from a
@@ -75,6 +75,17 @@ ui-e2e: ui
 	PLAYWRIGHT_NODE_MODULES="$(PLAYWRIGHT_NODE_MODULES)" \
 	PLAYWRIGHT_BROWSERS_PATH="$(PLAYWRIGHT_BROWSERS_PATH)" \
 	bash ui/test/run-e2e.sh
+
+# Regenerate the air-gapped GUI evidence (P2.5, #73) by driving the REAL REST API
+# + GUI in headless chromium against a live seeded `aid serve`: writes
+# self-contained HTML + PNG screenshots under ui/docs/ and fails on any non-same-
+# origin request (air-gapped proof). Same offline shims as ui-e2e. Re-runnable.
+ui-evidence: ui
+	go build -o ./bin/aid ./cmd/aid
+	AID_BIN="$(CURDIR)/bin/aid" \
+	PLAYWRIGHT_NODE_MODULES="$(PLAYWRIGHT_NODE_MODULES)" \
+	PLAYWRIGHT_BROWSERS_PATH="$(PLAYWRIGHT_BROWSERS_PATH)" \
+	bash ui/test/run-evidence.sh
 
 # Freshness guard (#33-style, the app.js analogue of embed-check): rebuild the
 # bundle to a temp file and fail if it differs from the committed ui/static/app.js
