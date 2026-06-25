@@ -4600,7 +4600,11 @@ function _M0FP25aidui3src18plan__detail__html(detail_json) {
   const name = _M0FP25aidui3src7str__at(root, "name");
   const status = _M0FP25aidui3src7str__at(root, "status");
   const yaml = _M0FP25aidui3src7str__at(root, "yaml");
-  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div id=\"live-validation\" class=\"mb-3\"></div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"stored-plan-yaml\" class=\"d-none\">${_M0FP25aidui3src3esc(yaml)}</textarea><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"structure-editor\" class=\"mt-3\"></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
+  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div><div id=\"live-validation\" class=\"mb-3\"></div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"stored-plan-yaml\" class=\"d-none\">${_M0FP25aidui3src3esc(yaml)}</textarea><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"structure-editor\" class=\"mt-3\"></div><div id=\"overlay-section\" class=\"mt-3\"></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
+}
+function _M0FP25aidui3src22overlay__section__html(present, overlay_yaml) {
+  const badge = present ? "<span class=\"badge text-bg-success\">present</span>" : "<span class=\"badge text-bg-secondary\">none</span>";
+  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Optic / identity overlay ${badge}</span><button id=\"overlay-save-btn\" class=\"btn btn-success btn-sm\">Save overlay</button></div><div class=\"card-body\"><div id=\"overlay-error\" class=\"mb-2\"></div><div class=\"form-text mb-2\">The overlay supplies optic SKUs/identity — without it the BOM's optic columns are blank.</div><textarea id=\"overlay-yaml\" class=\"form-control font-monospace\" rows=\"14\" spellcheck=\"false\" placeholder=\"items:\n  - id: { name: my-optic, version: '1' }\n    ...\">${_M0FP25aidui3src3esc(overlay_yaml)}</textarea></div></div>`;
 }
 function _M0FP25aidui3src15quantity__table(root, key, title) {
   const items = _M0FP25aidui3src7arr__at(root, key);
@@ -4778,7 +4782,7 @@ function _M0FP25aidui3src9bom__html(bom_json) {
     const _ = _tmp;
     if (_ < _bind) {
       const r = items[_];
-      rows = `${rows}<tr><td>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "section"))}</td><td>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "module_type_model"))}</td><td>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "hedgehog_class"))}</td><td>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "manufacturer"))}</td><td class=\"text-end\">${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "quantity"))}</td></tr>`;
+      rows = `${rows}<tr><td>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "section"))}</td><td>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "module_type_model"))}</td><td>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "hedgehog_class"))}</td><td>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "manufacturer"))}</td><td class=\"text-end\">${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "quantity"))}</td><td>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(r, "standard"))}</td></tr>`;
       _tmp = _ + 1 | 0;
       continue;
     } else {
@@ -4786,7 +4790,7 @@ function _M0FP25aidui3src9bom__html(bom_json) {
     }
   }
   const suppressed = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(root, "suppressed_cable_assembly_count"), 10);
-  return `<h3 class=\"h5\">Bill of Materials</h3><table class=\"table table-sm\"><thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th></tr></thead><tbody>${rows}</tbody></table><p class=\"text-muted small mb-0\">Suppressed cable assemblies: ${suppressed}</p>`;
+  return `<h3 class=\"h5\">Bill of Materials</h3><table class=\"table table-sm\"><thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th><th>Optic standard</th></tr></thead><tbody>${rows}</tbody></table><p class=\"text-muted small mb-0\">Suppressed cable assemblies: ${suppressed}</p>`;
 }
 function _M0FP25aidui3src4jval(j) {
   if (j.$tag === 4) {
@@ -4903,13 +4907,13 @@ function _M0FP25aidui3src15select__strings(id, options, selected) {
   }
   return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS278(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS286(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
 function _M0FP25aidui3src12topo__select(id, current) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${blank}${_M0FP25aidui3src12topo__selectN3optS278(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS278(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${blank}${_M0FP25aidui3src12topo__selectN3optS286(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS286(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -5123,6 +5127,39 @@ function _M0FP25aidui3src9load__bom(target, plan_id) {
       return undefined;
     }
     _M0FP25aidui3src9set__html(target, _M0FP25aidui3src9bom__html(body));
+  });
+}
+function _M0FP25aidui3src13load__overlay(id) {
+  _M0FP25aidui3src8api__get(`/plans/${id}/overlay`, (ok, status, body) => {
+    if (ok && !_M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("overlay-section", _M0FP25aidui3src22overlay__section__html(true, body));
+      _M0FP25aidui3src9on__click("overlay-save-btn", () => {
+        _M0FP25aidui3src13save__overlay(id);
+      });
+      return;
+    } else {
+      if (status === 404) {
+        _M0FP25aidui3src9set__html("overlay-section", _M0FP25aidui3src22overlay__section__html(false, ""));
+        _M0FP25aidui3src9on__click("overlay-save-btn", () => {
+          _M0FP25aidui3src13save__overlay(id);
+        });
+        return;
+      } else {
+        _M0FP25aidui3src9set__html("overlay-section", _M0FP25aidui3src11error__html(status, body));
+        return;
+      }
+    }
+  });
+}
+function _M0FP25aidui3src13save__overlay(id) {
+  _M0FP25aidui3src13set__inflight("overlay-save-btn", true, "Saving…");
+  _M0FP25aidui3src8api__put(`/plans/${id}/overlay`, _M0FP25aidui3src10get__value("overlay-yaml"), (ok, status, b) => {
+    _M0FP25aidui3src13set__inflight("overlay-save-btn", false, "Save overlay");
+    if (!ok || _M0FP25aidui3src16body__has__error(b)) {
+      _M0FP25aidui3src9set__html("overlay-error", _M0FP25aidui3src11error__html(status, b));
+      return undefined;
+    }
+    _M0FP25aidui3src13load__overlay(id);
   });
 }
 function _M0FP25aidui3src13op__add__conn(class_id, conn_id, tz, nic, speed) {
@@ -5548,6 +5585,7 @@ function _M0FP25aidui3src12load__detail(id) {
       });
     });
     _M0FP25aidui3src15load__structure(id);
+    _M0FP25aidui3src13load__overlay(id);
     _M0FP25aidui3src9on__click("detail-del-btn", () => {
       _M0FP25aidui3src26delete__plan__from__detail(id, _M0FP25aidui3src13str__at__body(body, "name"));
     });
@@ -5859,4 +5897,4 @@ function _M0FP25aidui3src11main__entry() {
   });
   _M0FP25aidui3src11load__plans("app");
 }
-export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }
+export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src22overlay__section__html as overlay_section_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src13load__overlay as load_overlay, _M0FP25aidui3src13save__overlay as save_overlay, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }

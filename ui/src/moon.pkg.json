@@ -16,7 +16,10 @@
         "clone_yaml_identity",
         "structure_editor_html",
         "validate_raw",
-        "validate_structured"
+        "validate_structured",
+        "overlay_section_html",
+        "load_overlay",
+        "save_overlay"
       ],
       "format": "esm"
     }

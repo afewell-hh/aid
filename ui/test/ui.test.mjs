@@ -738,3 +738,59 @@ test("P1.1b structured connections: target_zone dropdown + add/remove, data-deri
   assert.match(html, /id="addconn-compute_xpu-target_zone"/, "add-connection target_zone dropdown");
   assert.match(html, /id="save-conn-btn"/, "save connections button");
 });
+
+// --- P1.4 (#70): optic overlay tab ------------------------------------------
+test("P1.4 overlay section: present badge + prefilled textarea + save", () => {
+  reset();
+  const html = app.overlay_section_html(true, "items:\n  - id: { name: o }\n");
+  assert.match(html, /present/, "present badge");
+  assert.match(html, /id="overlay-yaml"/, "overlay textarea");
+  assert.match(html, /items:/, "textarea prefilled with the overlay");
+  assert.match(html, /id="overlay-save-btn"/, "save button");
+});
+
+test("P1.4 overlay section: none badge when absent", () => {
+  reset();
+  const html = app.overlay_section_html(false, "");
+  assert.match(html, /none/, "none badge when no overlay");
+});
+
+test("P1.4 load_overlay: 404 -> presence none; 200 -> present + content", async () => {
+  reset();
+  setResponder(() => ({ status: 404, body: JSON.stringify({ error: "not found" }) }));
+  app.load_overlay("p");
+  await flush();
+  assert.match(dom["overlay-section"]?.innerHTML ?? "", /none/, "404 -> presence none");
+
+  reset();
+  setResponder(() => "items:\n  - id: { name: present-optic }\n");
+  app.load_overlay("p");
+  await flush();
+  const html = dom["overlay-section"]?.innerHTML ?? "";
+  assert.match(html, /present/, "200 -> presence present");
+  assert.match(html, /present-optic/, "200 -> overlay content shown");
+});
+
+test("P1.4 save_overlay: PUT /api/plans/{id}/overlay", async () => {
+  reset();
+  el("overlay-yaml").value = "items:\n  - id: { name: o }\n";
+  setResponder(() => ({ status: 204, body: "" }));
+  app.save_overlay("p");
+  await flush();
+  await flush();
+  assert.ok(
+    fetches.some((f) => f.url === "/api/plans/p/overlay" && f.method === "PUT"),
+    `expected PUT .../overlay; got ${JSON.stringify(fetches)}`,
+  );
+});
+
+test("P1.4 BOM shows the optic-standard column (blank until overlay attached)", () => {
+  reset();
+  app.render_bom("app", JSON.stringify({
+    suppressed_cable_assembly_count: 0,
+    rows: [{ section: "switch_transceiver", module_type_model: "OSFP-400G-DR4", hedgehog_class: "", manufacturer: "Generic", quantity: "64", standard: "400GBASE-DR4" }],
+  }));
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /Optic standard/, "BOM has an optic-standard column header");
+  assert.match(html, /400GBASE-DR4/, "the optic standard renders when present");
+});

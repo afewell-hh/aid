@@ -253,6 +253,7 @@ fn load_detail(id : String) -> Unit {
       schedule("live-validate", 500, fn() { validate_raw() })
     })
     load_structure(id) // P1.1 structured editor (#67)
+    load_overlay(id) // P1.4 overlay tab (#70)
     on_click("detail-del-btn", fn() {
       delete_plan_from_detail(id, str_at_body(body, "name"))
     })
@@ -548,6 +549,41 @@ fn add_connection_submit(id : String, class_id : String) -> Unit {
 // remove_connection_submit removes the connection at the given index.
 fn remove_connection_submit(id : String, idx : String) -> Unit {
   patch_structure(id, [op_remove_conn(idx)], "conn-rm-" + idx)
+}
+
+// --- P1.4 (#70): optic/identity overlay tab ----------------------------------
+
+// load_overlay: GET /api/plans/{id}/overlay and render the overlay editor with a
+// presence badge. A 404 means no overlay yet (presence "none", empty box); a 200
+// is the current overlay (presence "present"); any other status is an error
+// (P0.4). The probe gives both presence AND the content in one call.
+pub fn load_overlay(id : String) -> Unit {
+  api_get(overlay_path(id), fn(ok, status, body) {
+    if ok && !body_has_error(body) {
+      set_html("overlay-section", overlay_section_html(true, body))
+      on_click("overlay-save-btn", fn() { save_overlay(id) })
+    } else if status == 404 {
+      set_html("overlay-section", overlay_section_html(false, ""))
+      on_click("overlay-save-btn", fn() { save_overlay(id) })
+    } else {
+      set_html("overlay-section", error_html(status, body))
+    }
+  })
+}
+
+// save_overlay: PUT the textarea overlay YAML; on success reload the section so
+// the presence badge flips to "present" and a subsequent View BOM carries the
+// optic SKUs. A bad body surfaces the error alert in-place (P0.4).
+pub fn save_overlay(id : String) -> Unit {
+  set_inflight("overlay-save-btn", true, "Saving…")
+  api_put(overlay_path(id), get_value("overlay-yaml"), fn(ok, status, b) {
+    set_inflight("overlay-save-btn", false, "Save overlay")
+    if (!ok) || body_has_error(b) {
+      set_html("overlay-error", error_html(status, b))
+      return
+    }
+    load_overlay(id)
+  })
 }
 
 // --- P1.3 (#68): debounced live validation ----------------------------------
