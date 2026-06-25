@@ -4433,6 +4433,9 @@ function _M0FP25aidui3src3esc(s) {
   }
   return out;
 }
+function _M0FP25aidui3src16validating__html() {
+  return "<div class=\"text-muted small d-flex align-items-center\" aria-busy=\"true\"><div class=\"spinner-border spinner-border-sm me-2\" aria-hidden=\"true\"></div>validating…</div>";
+}
 function _M0FP25aidui3src9warn__box(msg) {
   return `<div class=\"alert alert-warning\">${_M0FP25aidui3src3esc(msg)}</div>`;
 }
@@ -4485,7 +4488,7 @@ function _M0FP25aidui3src13status__badge(status) {
       break;
     }
     case "archived": {
-      cls = "text-bg-dark";
+      cls = "text-bg-dark border border-secondary";
       break;
     }
     default: {
@@ -4494,20 +4497,23 @@ function _M0FP25aidui3src13status__badge(status) {
   }
   return `<span class=\"badge ${cls}\">${_M0FP25aidui3src3esc(status)}</span>`;
 }
+function _M0FP25aidui3src11status__cue(cls, glyph, text) {
+  return `<span class=\"badge ${cls}\"><span aria-hidden=\"true\">${glyph} </span><span>${_M0FP25aidui3src3esc(text)}</span></span>`;
+}
 function _M0FP25aidui3src14facts__summary(f) {
   const computable = _M0FP25aidui3src8bool__at(f, "computable");
   if (!computable) {
-    return "<span class=\"text-muted small me-2\">— · — GPU · — servers · — switches</span><span class=\"badge text-bg-warning\">not computable</span>";
+    return `<span class=\"text-muted small me-2\">— · — GPU · — servers · — switches</span>${_M0FP25aidui3src11status__cue("text-bg-warning", "⚠", "not computable")}`;
   }
   const topo = _M0FP25aidui3src7str__at(f, "topology");
   const gpu = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(f, "gpu_count"), 10);
   const srv = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(f, "server_total"), 10);
   const sw = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(f, "switch_total"), 10);
-  const validity = _M0FP25aidui3src8bool__at(f, "is_valid") ? "<span class=\"badge text-bg-success\">Valid</span>" : "<span class=\"badge text-bg-danger\">Invalid</span>";
+  const validity = _M0FP25aidui3src8bool__at(f, "is_valid") ? _M0FP25aidui3src11status__cue("text-bg-success", "✓", "Valid") : _M0FP25aidui3src11status__cue("text-bg-danger", "✗", "Invalid");
   return `<span class=\"text-muted small me-2\">${_M0FP25aidui3src3esc(topo)} · ${gpu} GPU · ${srv} servers · ${sw} switches</span>${validity}`;
 }
 function _M0FP25aidui3src13loading__html(label) {
-  return `<div class=\"text-center text-muted py-5\"><div class=\"spinner-border\" role=\"status\"><span class=\"visually-hidden\">Loading…</span></div><p class=\"mt-3 mb-0\">${_M0FP25aidui3src3esc(label)}</p></div>`;
+  return `<div class=\"text-center text-muted py-5\" role=\"status\" aria-live=\"polite\" aria-busy=\"true\"><div class=\"spinner-border\" aria-hidden=\"true\"></div><p class=\"mt-3 mb-0\">${_M0FP25aidui3src3esc(label)}</p></div>`;
 }
 function _M0FP25aidui3src16plan__list__html(plans_json) {
   let root;
@@ -4558,7 +4564,7 @@ function _M0FP25aidui3src16plan__list__html(plans_json) {
     }
   }
   const count = _M0MPC13int3Int18to__string_2einner(plans.length, 10);
-  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">Topology Plans</h2><div><span class=\"badge text-bg-secondary me-2\">${count} plan(s)</span><button id=\"new-plan-btn\" class=\"btn btn-sm btn-success\">+ New plan</button></div></div><div id=\"list-error\" class=\"mb-2\"></div><table class=\"table table-hover align-middle\"><thead><tr><th>Name</th><th>ID</th><th>Status</th><th>Summary</th><th class=\"text-end\">Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">Topology Plans</h2><div><span class=\"badge text-bg-secondary me-2\">${count} plan(s)</span><button id=\"new-plan-btn\" class=\"btn btn-sm btn-success\">+ New plan</button></div></div><div id=\"list-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><table class=\"table table-hover align-middle\"><caption class=\"visually-hidden\">Topology plans — ${count} plan(s), with status, derived facts, and per-plan actions</caption><thead><tr><th scope=\"col\">Name</th><th scope=\"col\">ID</th><th scope=\"col\">Status</th><th scope=\"col\">Summary</th><th scope=\"col\" class=\"text-end\">Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 function _M0FP25aidui3src21new__plan__form__html(templates_json) {
   let tpls;
@@ -4597,7 +4603,7 @@ function _M0FP25aidui3src21new__plan__form__html(templates_json) {
       break;
     }
   }
-  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">New plan</h2><button id=\"new-cancel-btn\" class=\"btn btn-sm btn-outline-secondary\">Cancel</button></div><div id=\"new-error\" class=\"mb-2\"></div><div class=\"card\"><div class=\"card-body\"><div class=\"mb-3\"><label class=\"form-label\" for=\"new-name\">Name (optional — used as a label)</label><input id=\"new-name\" class=\"form-control\" type=\"text\" placeholder=\"My fabric plan\"></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-template\">Start from</label><select id=\"new-template\" class=\"form-select\">${opts}</select><div class=\"form-text\">Pick a starter to prefill the YAML, or leave Blank to paste your own.</div></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-yaml\">Plan YAML</label><textarea id=\"new-yaml\" class=\"form-control font-monospace\" rows=\"18\" spellcheck=\"false\" placeholder=\"meta:\n  case_id: my-plan\n  name: My Plan\n...\"></textarea></div><button id=\"new-submit-btn\" class=\"btn btn-primary\">Create plan</button></div></div>`;
+  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">New plan</h2><button id=\"new-cancel-btn\" class=\"btn btn-sm btn-outline-secondary\">Cancel</button></div><div id=\"new-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><div class=\"card\"><div class=\"card-body\"><div class=\"mb-3\"><label class=\"form-label\" for=\"new-name\">Name (optional — used as a label)</label><input id=\"new-name\" class=\"form-control\" type=\"text\" placeholder=\"My fabric plan\"></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-template\">Start from</label><select id=\"new-template\" class=\"form-select\">${opts}</select><div class=\"form-text\">Pick a starter to prefill the YAML, or leave Blank to paste your own.</div></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-yaml\">Plan YAML</label><textarea id=\"new-yaml\" class=\"form-control font-monospace\" rows=\"18\" spellcheck=\"false\" placeholder=\"meta:\n  case_id: my-plan\n  name: My Plan\n...\"></textarea></div><button id=\"new-submit-btn\" class=\"btn btn-primary\">Create plan</button></div></div>`;
 }
 function _M0FP25aidui3src18plan__detail__html(detail_json) {
   let root;
@@ -4630,11 +4636,11 @@ function _M0FP25aidui3src18plan__detail__html(detail_json) {
     const _f = _Some;
     header_facts = `<div id=\"detail-facts\" class=\"mb-3\">${_M0FP25aidui3src14facts__summary(_f)}</div>`;
   }
-  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-2\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div>${header_facts}<div id=\"live-validation\" class=\"mb-3\"></div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\"></div><textarea id=\"stored-plan-yaml\" class=\"d-none\">${_M0FP25aidui3src3esc(yaml)}</textarea><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"structure-editor\" class=\"mt-3\"></div><div id=\"overlay-section\" class=\"mt-3\"></div><div id=\"detail-result\" class=\"mt-3\"></div>`;
+  return `<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\"><li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li><li class=\"breadcrumb-item active\" aria-current=\"page\">${_M0FP25aidui3src3esc(name)}</li></ol></nav><div class=\"d-flex justify-content-between align-items-center mb-2\"><h2 class=\"h4 mb-0\">${_M0FP25aidui3src3esc(name)}</h2>${_M0FP25aidui3src13status__badge(status)}</div>${header_facts}<div id=\"live-validation\" class=\"mb-3\" role=\"status\" aria-live=\"polite\"></div><div class=\"row g-3\"><div class=\"col-md-4\"><div class=\"card\"><div class=\"card-header\">Plan</div><div class=\"card-body\"><dl class=\"row mb-3\"><dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>${_M0FP25aidui3src3esc(id)}</code></dd><dt class=\"col-5\">Status</dt><dd class=\"col-7\">${_M0FP25aidui3src13status__badge(status)}</dd></dl><button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button><button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button><hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button><button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button></div></div></div><div class=\"col-md-8\"><div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Plan YAML (editable)</span><button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div><div class=\"card-body\"><div id=\"edit-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><textarea id=\"stored-plan-yaml\" class=\"d-none\">${_M0FP25aidui3src3esc(yaml)}</textarea><textarea id=\"edit-yaml\" class=\"form-control font-monospace\" rows=\"22\" spellcheck=\"false\">${_M0FP25aidui3src3esc(yaml)}</textarea><div class=\"form-text\">Edit the raw plan YAML and Save, then Calculate to see the change reflected.</div></div></div></div></div><div id=\"structure-editor\" class=\"mt-3\"></div><div id=\"overlay-section\" class=\"mt-3\"></div><div id=\"detail-result\" class=\"mt-3\" role=\"status\" aria-live=\"polite\"></div>`;
 }
 function _M0FP25aidui3src22overlay__section__html(present, overlay_yaml) {
-  const badge = present ? "<span class=\"badge text-bg-success\">present</span>" : "<span class=\"badge text-bg-secondary\">none</span>";
-  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Optic / identity overlay ${badge}</span><button id=\"overlay-save-btn\" class=\"btn btn-success btn-sm\">Save overlay</button></div><div class=\"card-body\"><div id=\"overlay-error\" class=\"mb-2\"></div><div class=\"form-text mb-2\">The overlay supplies optic SKUs/identity — without it the BOM's optic columns are blank.</div><textarea id=\"overlay-yaml\" class=\"form-control font-monospace\" rows=\"14\" spellcheck=\"false\" placeholder=\"items:\n  - id: { name: my-optic, version: '1' }\n    ...\">${_M0FP25aidui3src3esc(overlay_yaml)}</textarea></div></div>`;
+  const badge = present ? _M0FP25aidui3src11status__cue("text-bg-success", "✓", "present") : _M0FP25aidui3src11status__cue("text-bg-secondary", "○", "none");
+  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Optic / identity overlay ${badge}</span><button id=\"overlay-save-btn\" class=\"btn btn-success btn-sm\">Save overlay</button></div><div class=\"card-body\"><div id=\"overlay-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><div class=\"form-text mb-2\">The overlay supplies optic SKUs/identity — without it the BOM's optic columns are blank.</div><textarea id=\"overlay-yaml\" class=\"form-control font-monospace\" rows=\"14\" spellcheck=\"false\" placeholder=\"items:\n  - id: { name: my-optic, version: '1' }\n    ...\">${_M0FP25aidui3src3esc(overlay_yaml)}</textarea></div></div>`;
 }
 function _M0FP25aidui3src15quantity__table(root, key, title) {
   const items = _M0FP25aidui3src7arr__at(root, key);
@@ -4655,7 +4661,7 @@ function _M0FP25aidui3src15quantity__table(root, key, title) {
       break;
     }
   }
-  return `<h4 class=\"h6\">${title}</h4><table class=\"table table-sm mb-3\"><thead><tr><th>Class</th><th class=\"text-end\">Qty</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<h4 class=\"h6\">${title}</h4><table class=\"table table-sm mb-3\"><caption class=\"visually-hidden\">${_M0FP25aidui3src3esc(title)} per device class</caption><thead><tr><th scope=\"col\">Class</th><th scope=\"col\" class=\"text-end\">Qty</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 function _M0FP25aidui3src22wiring__download__html(fabrics) {
   const names = [];
@@ -4725,7 +4731,7 @@ function _M0FP25aidui3src19calc__summary__html(calc_json) {
     }
   }
   const is_valid = _M0FP25aidui3src8bool__at(root, "is_valid");
-  const badge = is_valid ? "<span class=\"badge text-bg-success\">Valid</span>" : "<span class=\"badge text-bg-danger\">Invalid</span>";
+  const badge = is_valid ? _M0FP25aidui3src11status__cue("text-bg-success", "✓", "Valid") : _M0FP25aidui3src11status__cue("text-bg-danger", "✗", "Invalid");
   const endpoints = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7arr__at(root, "endpoints").length, 10);
   const verdicts = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7arr__at(root, "transceiver_verdicts").length, 10);
   const errors = _M0FP25aidui3src7arr__at(root, "errors");
@@ -4820,7 +4826,7 @@ function _M0FP25aidui3src9bom__html(bom_json) {
     }
   }
   const suppressed = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(root, "suppressed_cable_assembly_count"), 10);
-  return `<div class=\"d-flex justify-content-between align-items-center\"><h3 class=\"h5 mb-0\">Bill of Materials</h3><button id=\"bom-csv-btn\" class=\"btn btn-outline-secondary btn-sm\">Download BOM (CSV)</button></div><table class=\"table table-sm mt-2\"><thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th><th>Optic standard</th></tr></thead><tbody>${rows}</tbody></table><p class=\"text-muted small mb-0\">Suppressed cable assemblies: ${suppressed}</p>`;
+  return `<div class=\"d-flex justify-content-between align-items-center\"><h3 class=\"h5 mb-0\">Bill of Materials</h3><button id=\"bom-csv-btn\" class=\"btn btn-outline-secondary btn-sm\">Download BOM (CSV)</button></div><table class=\"table table-sm mt-2\"><caption class=\"visually-hidden\">Line items: one row per device and optic, with section, model, class, manufacturer, and quantity</caption><thead><tr><th scope=\"col\">Section</th><th scope=\"col\">Model</th><th scope=\"col\">Class</th><th scope=\"col\">Manufacturer</th><th scope=\"col\" class=\"text-end\">Qty</th><th scope=\"col\">Optic standard</th></tr></thead><tbody>${rows}</tbody></table><p class=\"text-muted small mb-0\">Suppressed cable assemblies: ${suppressed}</p>`;
 }
 function _M0FP25aidui3src4jval(j) {
   if (j.$tag === 4) {
@@ -4900,7 +4906,7 @@ function _M0FP25aidui3src12json__escape(s) {
   }
   return out;
 }
-function _M0FP25aidui3src12select__html(id, options, selected, blank) {
+function _M0FP25aidui3src12select__html(id, options, selected, blank, aria_label) {
   let opts = blank ? "<option value=\"\"></option>" : "";
   const _bind = options.length;
   let _tmp = 0;
@@ -4917,9 +4923,9 @@ function _M0FP25aidui3src12select__html(id, options, selected, blank) {
       break;
     }
   }
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${opts}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${opts}</select>`;
 }
-function _M0FP25aidui3src15select__strings(id, options, selected) {
+function _M0FP25aidui3src15select__strings(id, options, selected, aria_label) {
   let opts = "";
   const _bind = options.length;
   let _tmp = 0;
@@ -4935,15 +4941,15 @@ function _M0FP25aidui3src15select__strings(id, options, selected) {
       break;
     }
   }
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${opts}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS290(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS292(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
-function _M0FP25aidui3src12topo__select(id, current) {
+function _M0FP25aidui3src12topo__select(id, current, aria_label) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\">${blank}${_M0FP25aidui3src12topo__selectN3optS290(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS290(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS292(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS292(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -5039,7 +5045,7 @@ function _M0FP25aidui3src23structure__editor__html(structure_json) {
           const nicid = _M0FP25aidui3src7str__at(n, "nic_id");
           _M0MPC15array5Array4pushGsE(nic_ids, nicid);
           const mt = _M0FP25aidui3src7str__at(n, "module_type");
-          nic_rows = `${nic_rows}<div class=\"row g-2 align-items-center mb-1\"><div class=\"col-4\"><code>${_M0FP25aidui3src3esc(nicid)}</code></div><div class=\"col-8\">${_M0FP25aidui3src12select__html(`nic-${id}-${nicid}`, module_types, mt, false)}</div></div>`;
+          nic_rows = `${nic_rows}<div class=\"row g-2 align-items-center mb-1\"><div class=\"col-4\"><code>${_M0FP25aidui3src3esc(nicid)}</code></div><div class=\"col-8\">${_M0FP25aidui3src12select__html(`nic-${id}-${nicid}`, module_types, mt, false, `Module type for NIC ${nicid} on ${id}`)}</div></div>`;
           _tmp$2 = _$2 + 1 | 0;
           continue;
         } else {
@@ -5056,16 +5062,17 @@ function _M0FP25aidui3src23structure__editor__html(structure_json) {
         if (_$2 < _bind$10) {
           const cn = _bind$9[_$2];
           const ci = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(cn, "index"), 10);
-          conn_rows = `${conn_rows}<tr><td class=\"text-nowrap\"><code>${_M0FP25aidui3src3esc(_M0FP25aidui3src7str__at(cn, "connection_id"))}</code></td><td>${_M0FP25aidui3src12select__html(`conn-${ci}-target_zone`, target_zones, _M0FP25aidui3src7str__at(cn, "target_zone"), false)}</td><td>${_M0FP25aidui3src15select__strings(`conn-${ci}-nic`, nic_ids, _M0FP25aidui3src7str__at(cn, "nic"))}</td><td>${_M0FP25aidui3src15select__strings(`conn-${ci}-distribution`, dist_opts, _M0FP25aidui3src7str__at(cn, "distribution"))}</td><td><input id=\"conn-${ci}-speed\" class=\"form-control form-control-sm\" type=\"number\" value=\"${_M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(cn, "speed"), 10)}\"></td><td><input id=\"conn-${ci}-ports\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"${_M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(cn, "ports_per_connection"), 10)}\"></td><td><button id=\"conn-rm-${ci}\" class=\"btn btn-outline-danger btn-sm\">✕</button></td></tr>`;
+          const cid = _M0FP25aidui3src7str__at(cn, "connection_id");
+          conn_rows = `${conn_rows}<tr><td class=\"text-nowrap\"><code>${_M0FP25aidui3src3esc(cid)}</code></td><td>${_M0FP25aidui3src12select__html(`conn-${ci}-target_zone`, target_zones, _M0FP25aidui3src7str__at(cn, "target_zone"), false, `Target zone for connection ${cid}`)}</td><td>${_M0FP25aidui3src15select__strings(`conn-${ci}-nic`, nic_ids, _M0FP25aidui3src7str__at(cn, "nic"), `NIC for connection ${cid}`)}</td><td>${_M0FP25aidui3src15select__strings(`conn-${ci}-distribution`, dist_opts, _M0FP25aidui3src7str__at(cn, "distribution"), `Distribution for connection ${cid}`)}</td><td><input id=\"conn-${ci}-speed\" class=\"form-control form-control-sm\" type=\"number\" aria-label=\"Speed for connection ${_M0FP25aidui3src3esc(cid)}\" value=\"${_M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(cn, "speed"), 10)}\"></td><td><input id=\"conn-${ci}-ports\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" aria-label=\"Ports for connection ${_M0FP25aidui3src3esc(cid)}\" value=\"${_M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(cn, "ports_per_connection"), 10)}\"></td><td><button id=\"conn-rm-${ci}\" class=\"btn btn-outline-danger btn-sm\" aria-label=\"Remove connection ${_M0FP25aidui3src3esc(cid)}\"><span aria-hidden=\"true\">✕</span></button></td></tr>`;
           _tmp$3 = _$2 + 1 | 0;
           continue;
         } else {
           break;
         }
       }
-      const conn_table = _M0FP25aidui3src7arr__at(sc, "connections").length > 0 ? `<table class=\"table table-sm align-middle mb-2\"><thead><tr><th>ID</th><th>Target zone</th><th>NIC</th><th>Distribution</th><th>Speed</th><th>Ports</th><th></th></tr></thead><tbody>${conn_rows}</tbody></table>` : "<div class=\"small text-muted mb-2\">No connections.</div>";
-      const add_conn = `<div class=\"row g-2 mb-1 align-items-center\"><div class=\"col-3\"><input id=\"addconn-${_M0FP25aidui3src3esc(id)}-id\" class=\"form-control form-control-sm\" placeholder=\"connection_id\"></div><div class=\"col-4\">${_M0FP25aidui3src12select__html(`addconn-${id}-target_zone`, target_zones, "", true)}</div><div class=\"col-2\">${_M0FP25aidui3src15select__strings(`addconn-${id}-nic`, nic_ids, "")}</div><div class=\"col-2\"><input id=\"addconn-${_M0FP25aidui3src3esc(id)}-speed\" class=\"form-control form-control-sm\" type=\"number\" placeholder=\"speed\"></div><div class=\"col-1\"><button id=\"addconn-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-outline-success btn-sm\">+</button></div></div>`;
-      srv = `${srv}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2 mb-2\"><div class=\"col-6\"><label class=\"form-label mb-0 small\">Quantity</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${qty}\"></div><div class=\"col-6\"><label class=\"form-label mb-0 small\">GPUs/server</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${gpus}\"></div></div><div class=\"mb-2\"><label class=\"form-label mb-0 small\">Device type</label>${_M0FP25aidui3src12select__html(`srv-${id}-devtype`, device_types, devtype, false)}</div><div class=\"small text-muted\">NICs (module type)</div>${nic_rows}<hr class=\"my-2\"><div class=\"small text-muted\">Connections</div>${conn_table}${add_conn}</div></div>`;
+      const conn_table = _M0FP25aidui3src7arr__at(sc, "connections").length > 0 ? `<table class=\"table table-sm align-middle mb-2\"><caption class=\"visually-hidden\">Server connections</caption><thead><tr><th scope=\"col\">ID</th><th scope=\"col\">Target zone</th><th scope=\"col\">NIC</th><th scope=\"col\">Distribution</th><th scope=\"col\">Speed</th><th scope=\"col\">Ports</th><th scope=\"col\"><span class=\"visually-hidden\">Actions</span></th></tr></thead><tbody>${conn_rows}</tbody></table>` : "<div class=\"small text-muted mb-2\">No connections.</div>";
+      const add_conn = `<div class=\"row g-2 mb-1 align-items-center\"><div class=\"col-3\"><input id=\"addconn-${_M0FP25aidui3src3esc(id)}-id\" class=\"form-control form-control-sm\" placeholder=\"connection_id\" aria-label=\"New connection id for ${_M0FP25aidui3src3esc(id)}\"></div><div class=\"col-4\">${_M0FP25aidui3src12select__html(`addconn-${id}-target_zone`, target_zones, "", true, `Target zone for new connection on ${id}`)}</div><div class=\"col-2\">${_M0FP25aidui3src15select__strings(`addconn-${id}-nic`, nic_ids, "", `NIC for new connection on ${id}`)}</div><div class=\"col-2\"><input id=\"addconn-${_M0FP25aidui3src3esc(id)}-speed\" class=\"form-control form-control-sm\" type=\"number\" placeholder=\"speed\" aria-label=\"Speed for new connection on ${_M0FP25aidui3src3esc(id)}\"></div><div class=\"col-1\"><button id=\"addconn-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-outline-success btn-sm\" aria-label=\"Add connection to ${_M0FP25aidui3src3esc(id)}\"><span aria-hidden=\"true\">+</span></button></div></div>`;
+      srv = `${srv}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2 mb-2\"><div class=\"col-6\"><label class=\"form-label mb-0 small\" for=\"srv-${_M0FP25aidui3src3esc(id)}-qty\">Quantity</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${qty}\"></div><div class=\"col-6\"><label class=\"form-label mb-0 small\" for=\"srv-${_M0FP25aidui3src3esc(id)}-gpus\">GPUs/server</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${gpus}\"></div></div><div class=\"mb-2\"><label class=\"form-label mb-0 small\" for=\"srv-${_M0FP25aidui3src3esc(id)}-devtype\">Device type</label>${_M0FP25aidui3src12select__html(`srv-${id}-devtype`, device_types, devtype, false, `Device type for ${id}`)}</div><div class=\"small text-muted\">NICs (module type)</div>${nic_rows}<hr class=\"my-2\"><div class=\"small text-muted\">Connections</div>${conn_table}${add_conn}</div></div>`;
       _tmp = _ + 1 | 0;
       continue;
     } else {
@@ -5084,14 +5091,14 @@ function _M0FP25aidui3src23structure__editor__html(structure_json) {
       const topo = _M0FP25aidui3src7str__at(s, "topology_mode");
       const devext = _M0FP25aidui3src7str__at(s, "device_type_extension");
       const ov = _M0FP25aidui3src15override__value(s);
-      sw = `${sw}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2\"><div class=\"col-4\"><label class=\"form-label mb-0 small\">Topology</label>${_M0FP25aidui3src12topo__select(`sw-${id}-topo`, topo)}</div><div class=\"col-5\"><label class=\"form-label mb-0 small\">Device type</label>${_M0FP25aidui3src12select__html(`sw-${id}-devext`, device_type_extensions, devext, false)}</div><div class=\"col-3\"><label class=\"form-label mb-0 small\">Override qty</label><input id=\"sw-${_M0FP25aidui3src3esc(id)}-override\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" placeholder=\"(derived)\" value=\"${_M0FP25aidui3src3esc(ov)}\"></div></div></div></div>`;
+      sw = `${sw}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2\"><div class=\"col-4\"><label class=\"form-label mb-0 small\" for=\"sw-${_M0FP25aidui3src3esc(id)}-topo\">Topology</label>${_M0FP25aidui3src12topo__select(`sw-${id}-topo`, topo, `Topology mode for ${id}`)}</div><div class=\"col-5\"><label class=\"form-label mb-0 small\" for=\"sw-${_M0FP25aidui3src3esc(id)}-devext\">Device type</label>${_M0FP25aidui3src12select__html(`sw-${id}-devext`, device_type_extensions, devext, false, `Device type for ${id}`)}</div><div class=\"col-3\"><label class=\"form-label mb-0 small\" for=\"sw-${_M0FP25aidui3src3esc(id)}-override\">Override qty</label><input id=\"sw-${_M0FP25aidui3src3esc(id)}-override\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" placeholder=\"(derived)\" value=\"${_M0FP25aidui3src3esc(ov)}\"></div></div></div></div>`;
       _tmp$2 = _ + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Structured editor</span></div><div class=\"card-body\"><input type=\"hidden\" id=\"structure-data\" value=\"${_M0FP25aidui3src3esc(structure_json)}\"><div id=\"structure-error\" class=\"mb-2\"></div><h3 class=\"h6\">Server classes</h3>${srv}<div class=\"card mb-3\"><div class=\"card-body\"><div class=\"small text-muted mb-2\">Add server class</div><div class=\"row g-2\"><div class=\"col-3\"><input id=\"add-srv-id\" class=\"form-control form-control-sm\" placeholder=\"new_class_id\"></div><div class=\"col-2\"><input id=\"add-srv-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"1\"></div><div class=\"col-2\"><input id=\"add-srv-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"0\"></div><div class=\"col-3\">${_M0FP25aidui3src12select__html("add-srv-devtype", device_types, "", true)}</div><div class=\"col-2\"><button id=\"add-srv-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div></div></div></div><button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm me-2 mb-3\">Save server classes</button><button id=\"save-conn-btn\" class=\"btn btn-primary btn-sm mb-3\">Save connections</button><h3 class=\"h6\">Switch classes</h3>${sw}<button id=\"save-sw-btn\" class=\"btn btn-primary btn-sm\">Save switch classes</button></div></div>`;
+  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Structured editor</span></div><div class=\"card-body\"><input type=\"hidden\" id=\"structure-data\" value=\"${_M0FP25aidui3src3esc(structure_json)}\"><div id=\"structure-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><h3 class=\"h6\">Server classes</h3>${srv}<div class=\"card mb-3\"><div class=\"card-body\"><div class=\"small text-muted mb-2\" id=\"add-srv-label\">Add server class</div><div class=\"row g-2\"><div class=\"col-3\"><input id=\"add-srv-id\" class=\"form-control form-control-sm\" placeholder=\"new_class_id\" aria-label=\"New server class id\"></div><div class=\"col-2\"><input id=\"add-srv-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"1\" aria-label=\"New server class quantity\"></div><div class=\"col-2\"><input id=\"add-srv-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"0\" aria-label=\"New server class GPUs per server\"></div><div class=\"col-3\">${_M0FP25aidui3src12select__html("add-srv-devtype", device_types, "", true, "New server class device type")}</div><div class=\"col-2\"><button id=\"add-srv-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div></div></div></div><button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm me-2 mb-3\">Save server classes</button><button id=\"save-conn-btn\" class=\"btn btn-primary btn-sm mb-3\">Save connections</button><h3 class=\"h6\">Switch classes</h3>${sw}<button id=\"save-sw-btn\" class=\"btn btn-primary btn-sm\">Save switch classes</button></div></div>`;
 }
 function _M0FP25aidui3src18render__plan__list(target, plans_json) {
   _M0FP25aidui3src9set__html(target, _M0FP25aidui3src16plan__list__html(plans_json));
@@ -5377,7 +5384,7 @@ function _M0FP25aidui3src14join__op__list(ops) {
 function _M0FP25aidui3src13run__validate(body) {
   _M0FP25aidui3src9live__seq.n = _M0FP25aidui3src9live__seq.n + 1 | 0;
   const mine = _M0FP25aidui3src9live__seq.n;
-  _M0FP25aidui3src9set__html("live-validation", "<div class=\"text-muted small d-flex align-items-center\"><div class=\"spinner-border spinner-border-sm me-2\" role=\"status\"></div>validating…</div>");
+  _M0FP25aidui3src9set__html("live-validation", "<div class=\"text-muted small d-flex align-items-center\" aria-busy=\"true\"><div class=\"spinner-border spinner-border-sm me-2\" aria-hidden=\"true\"></div>validating…</div>");
   _M0FP25aidui3src9api__post("/validate", body, (ok, status, b) => {
     if (mine !== _M0FP25aidui3src9live__seq.n) {
       return undefined;
@@ -5941,4 +5948,4 @@ function _M0FP25aidui3src11main__entry() {
   });
   _M0FP25aidui3src11load__plans("app");
 }
-export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src22overlay__section__html as overlay_section_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src18download__bom__csv as download_bom_csv, _M0FP25aidui3src13load__overlay as load_overlay, _M0FP25aidui3src13save__overlay as save_overlay, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }
+export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src16validating__html as validating_html, _M0FP25aidui3src13loading__html as loading_html, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src22overlay__section__html as overlay_section_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src18download__bom__csv as download_bom_csv, _M0FP25aidui3src13load__overlay as load_overlay, _M0FP25aidui3src13save__overlay as save_overlay, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src11main__entry as main_entry }

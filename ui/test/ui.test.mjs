@@ -870,3 +870,85 @@ test("P2.1 download_bom_csv guard: an error response is NOT saved", async () => 
   await flush();
   assert.equal(saved.length, 0, "an error body must never be written to a .csv file");
 });
+
+// --- P2.3 (#72): accessibility — scope/caption, live regions, non-color cues,
+// labelled controls ----------------------------------------------------------
+
+test("P2.3 plan-list table: scope=col headers + a visually-hidden caption", () => {
+  reset();
+  app.render_plan_list("app", PLANS_FACTS);
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /<caption class="visually-hidden">Topology plans/, "list table has a visually-hidden caption");
+  assert.match(html, /<th scope="col">Name<\/th>/, "Name header has scope=col");
+  assert.match(html, /<th scope="col">Status<\/th>/, "Status header has scope=col");
+  assert.match(html, /<th scope="col"[^>]*>Actions<\/th>/, "Actions header has scope=col");
+  // the list-error region is an assertive live region so a failed action announces.
+  assert.match(html, /id="list-error"[^>]*role="alert"[^>]*aria-live="assertive"/, "list-error is an assertive live region");
+});
+
+test("P2.3 BOM table: scope=col headers + a visually-hidden caption", () => {
+  reset();
+  app.render_bom("app", JSON.stringify({
+    rows: [{ section: "switch", module_type_model: "DS5000", hedgehog_class: "leaf", manufacturer: "HH", quantity: "4", standard: "" }],
+    suppressed_cable_assembly_count: 0,
+  }));
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /<caption class="visually-hidden">Line items:/, "BOM table has a visually-hidden caption");
+  assert.match(html, /<th scope="col">Section<\/th>/, "Section header has scope=col");
+  assert.match(html, /<th scope="col"[^>]*>Qty<\/th>/, "Qty header has scope=col");
+});
+
+test("P2.3 detail: async regions are polite live regions; errors are assertive", () => {
+  reset();
+  app.render_plan_detail("app", DETAIL);
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /id="live-validation"[^>]*role="status"[^>]*aria-live="polite"/, "live-validation is a polite live region");
+  assert.match(html, /id="detail-result"[^>]*role="status"[^>]*aria-live="polite"/, "detail-result is a polite live region");
+  assert.match(html, /id="edit-error"[^>]*role="alert"[^>]*aria-live="assertive"/, "edit-error is an assertive live region");
+});
+
+test("P2.3 loading + validating indicators expose aria-busy", () => {
+  assert.match(app.loading_html("Loading plans…"), /aria-busy="true"/, "loading panel is aria-busy");
+  assert.match(app.loading_html("x"), /role="status"[^>]*aria-live="polite"/, "loading panel is a polite live region");
+  assert.match(app.validating_html(), /aria-busy="true"/, "validating indicator is aria-busy");
+  // the spinner glyph is decorative — hidden from assistive tech.
+  assert.match(app.loading_html("x"), /spinner-border"[^>]*aria-hidden="true"/, "spinner is aria-hidden (decorative)");
+});
+
+test("P2.3 status badges pair an icon with text, never color alone", () => {
+  // valid facts -> ✓ + "Valid"; the spoken text is the cue, the glyph is aria-hidden.
+  const validRow = JSON.stringify({ plans: [{ id: "v", name: "V", status: "active",
+    facts: { topology: "mesh", gpu_count: 8, server_total: 1, switch_total: 1, is_valid: true, computable: true } }] });
+  reset();
+  app.render_plan_list("app", validRow);
+  let html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /<span aria-hidden="true">✓ <\/span><span>Valid<\/span>/, "Valid badge pairs ✓ glyph (hidden) with the word Valid in its own text node");
+
+  // overlay present/none carry text cues too, not just green/grey.
+  assert.match(app.overlay_section_html(true, ""), /<span aria-hidden="true">✓ <\/span><span>present<\/span>/, "overlay present cue");
+  assert.match(app.overlay_section_html(false, ""), /<span aria-hidden="true">○ <\/span><span>none<\/span>/, "overlay none cue");
+});
+
+test("P2.3 structured controls are programmatically labelled", () => {
+  reset();
+  const html = app.structure_editor_html(CONN_STRUCT);
+  // table-embedded selects get an aria-label (a column <th> does not name a control).
+  assert.match(html, /id="conn-0-target_zone"[^>]*aria-label="Target zone for connection scale-out-rail-0"/, "target_zone select aria-label");
+  assert.match(html, /id="conn-0-nic"[^>]*aria-label="NIC for connection scale-out-rail-0"/, "connection NIC select aria-label");
+  assert.match(html, /id="conn-0-speed"[^>]*aria-label="Speed for connection scale-out-rail-0"/, "speed input aria-label");
+  // the remove button has an accessible name (the ✕ glyph alone is not one).
+  assert.match(html, /id="conn-rm-0"[^>]*aria-label="Remove connection scale-out-rail-0"/, "remove button aria-label");
+  // server-class numeric fields use real <label for=…> association.
+  assert.match(html, /<label[^>]*for="srv-compute_xpu-qty"/, "quantity label is associated");
+  assert.match(html, /<label[^>]*for="srv-compute_xpu-gpus"/, "gpus label is associated");
+  // the connection table itself is captioned + scoped.
+  assert.match(html, /<caption class="visually-hidden">Server connections<\/caption>/, "connection table caption");
+  assert.match(html, /<th scope="col">Target zone<\/th>/, "connection table scope=col");
+});
+
+test("P2.3 archived status badge is not low-contrast (bordered on the dark theme)", () => {
+  reset();
+  app.render_plan_list("app", JSON.stringify({ plans: [{ id: "a", name: "A", status: "archived" }] }));
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /text-bg-dark border border-secondary/, "archived badge gains a border for contrast");
+});

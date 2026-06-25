@@ -183,8 +183,8 @@ fn esc(s : String) -> String {
 // validating_html is the subtle "validating…" state shown in the live-validation
 // region while a debounced dry-run is in flight (P1.3, #68).
 pub fn validating_html() -> String {
-  "<div class=\"text-muted small d-flex align-items-center\">" +
-  "<div class=\"spinner-border spinner-border-sm me-2\" role=\"status\"></div>validating…</div>"
+  "<div class=\"text-muted small d-flex align-items-center\" aria-busy=\"true\">" +
+  "<div class=\"spinner-border spinner-border-sm me-2\" aria-hidden=\"true\"></div>validating…</div>"
 }
 
 fn warn_box(msg : String) -> String {
@@ -232,15 +232,30 @@ pub fn body_has_error(body : String) -> Bool {
   error_message(body) != ""
 }
 
-// status_badge maps a plan status to a Bootstrap badge.
+// status_badge maps a plan status to a Bootstrap badge. The badge text always
+// carries the literal status, so the cue never relies on color alone (P2.3, #72).
+// `archived` (text-bg-dark) gains a border so it is not low-contrast against the
+// dark page background.
 fn status_badge(status : String) -> String {
   let cls = match status {
     "active" => "text-bg-success"
     "draft" => "text-bg-secondary"
-    "archived" => "text-bg-dark"
+    "archived" => "text-bg-dark border border-secondary"
     _ => "text-bg-info"
   }
   "<span class=\"badge \{cls}\">\{esc(status)}</span>"
+}
+
+// status_cue renders a Bootstrap badge that does NOT rely on color alone (P2.3,
+// #72): an icon glyph (aria-hidden — decorative) paired with the literal text, so
+// the Valid/Invalid/present/none state is legible to colorblind users and to
+// screen readers (which read the text, not the color). `cls` is the bg class,
+// `glyph` the leading symbol, `text` the spoken label.
+fn status_cue(cls : String, glyph : String, text : String) -> String {
+  // The label lives in its own span so its text node is EXACTLY `text` (the glyph
+  // is a separate aria-hidden span) — exact-text matchers / screen readers see the
+  // word, not "✓ Valid".
+  "<span class=\"badge \{cls}\"><span aria-hidden=\"true\">\{glyph} </span><span>\{esc(text)}</span></span>"
 }
 
 // facts_summary renders the at-a-glance derived facts (P2.1, #71) — topology /
@@ -253,16 +268,16 @@ fn facts_summary(f : Json) -> String {
   let computable = bool_at(f, "computable")
   if !computable {
     return "<span class=\"text-muted small me-2\">— · — GPU · — servers · — switches</span>" +
-      "<span class=\"badge text-bg-warning\">not computable</span>"
+      status_cue("text-bg-warning", "⚠", "not computable")
   }
   let topo = str_at(f, "topology")
   let gpu = int_at(f, "gpu_count").to_string()
   let srv = int_at(f, "server_total").to_string()
   let sw = int_at(f, "switch_total").to_string()
   let validity = if bool_at(f, "is_valid") {
-    "<span class=\"badge text-bg-success\">Valid</span>"
+    status_cue("text-bg-success", "✓", "Valid")
   } else {
-    "<span class=\"badge text-bg-danger\">Invalid</span>"
+    status_cue("text-bg-danger", "✗", "Invalid")
   }
   "<span class=\"text-muted small me-2\">\{esc(topo)} · \{gpu} GPU · \{srv} servers · \{sw} switches</span>\{validity}"
 }
@@ -272,8 +287,8 @@ fn facts_summary(f : Json) -> String {
 // loading_html: a centered spinner panel shown while a navigation request is in
 // flight (P1.5, #66), so the list/detail transitions are not silent latency.
 pub fn loading_html(label : String) -> String {
-  "<div class=\"text-center text-muted py-5\">" +
-  "<div class=\"spinner-border\" role=\"status\"><span class=\"visually-hidden\">Loading…</span></div>" +
+  "<div class=\"text-center text-muted py-5\" role=\"status\" aria-live=\"polite\" aria-busy=\"true\">" +
+  "<div class=\"spinner-border\" aria-hidden=\"true\"></div>" +
   "<p class=\"mt-3 mb-0\">\{esc(label)}</p></div>"
 }
 
@@ -329,9 +344,10 @@ pub fn plan_list_html(plans_json : String) -> String {
   "<h2 class=\"h4 mb-0\">Topology Plans</h2>" +
   "<div><span class=\"badge text-bg-secondary me-2\">\{count} plan(s)</span>" +
   "<button id=\"new-plan-btn\" class=\"btn btn-sm btn-success\">+ New plan</button></div></div>" +
-  "<div id=\"list-error\" class=\"mb-2\"></div>" +
+  "<div id=\"list-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div>" +
   "<table class=\"table table-hover align-middle\">" +
-  "<thead><tr><th>Name</th><th>ID</th><th>Status</th><th>Summary</th><th class=\"text-end\">Actions</th></tr></thead>" +
+  "<caption class=\"visually-hidden\">Topology plans — \{count} plan(s), with status, derived facts, and per-plan actions</caption>" +
+  "<thead><tr><th scope=\"col\">Name</th><th scope=\"col\">ID</th><th scope=\"col\">Status</th><th scope=\"col\">Summary</th><th scope=\"col\" class=\"text-end\">Actions</th></tr></thead>" +
   "<tbody>\{rows}</tbody></table>"
 }
 
@@ -356,7 +372,7 @@ pub fn new_plan_form_html(templates_json : String) -> String {
   "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
   "<h2 class=\"h4 mb-0\">New plan</h2>" +
   "<button id=\"new-cancel-btn\" class=\"btn btn-sm btn-outline-secondary\">Cancel</button></div>" +
-  "<div id=\"new-error\" class=\"mb-2\"></div>" +
+  "<div id=\"new-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div>" +
   "<div class=\"card\"><div class=\"card-body\">" +
   "<div class=\"mb-3\"><label class=\"form-label\" for=\"new-name\">Name (optional — used as a label)</label>" +
   "<input id=\"new-name\" class=\"form-control\" type=\"text\" placeholder=\"My fabric plan\"></div>" +
@@ -394,7 +410,7 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "<div class=\"d-flex justify-content-between align-items-center mb-2\">" +
   "<h2 class=\"h4 mb-0\">\{esc(name)}</h2>\{status_badge(status)}</div>" +
   header_facts +
-  "<div id=\"live-validation\" class=\"mb-3\"></div>" +
+  "<div id=\"live-validation\" class=\"mb-3\" role=\"status\" aria-live=\"polite\"></div>" +
   "<div class=\"row g-3\">" +
   "<div class=\"col-md-4\"><div class=\"card\">" +
   "<div class=\"card-header\">Plan</div><div class=\"card-body\">" +
@@ -411,7 +427,7 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "<span>Plan YAML (editable)</span>" +
   "<button id=\"save-btn\" class=\"btn btn-success btn-sm\">Save</button></div>" +
   "<div class=\"card-body\">" +
-  "<div id=\"edit-error\" class=\"mb-2\"></div>" +
+  "<div id=\"edit-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div>" +
   // Canonical stored plan YAML (immutable carrier): the structured live-validate
   // applies form ops to THIS base, never the editable textarea (which may hold
   // independent raw edits) — devb #68 finding 1.
@@ -421,7 +437,7 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "</div></div></div></div>" +
   "<div id=\"structure-editor\" class=\"mt-3\"></div>" +
   "<div id=\"overlay-section\" class=\"mt-3\"></div>" +
-  "<div id=\"detail-result\" class=\"mt-3\"></div>"
+  "<div id=\"detail-result\" class=\"mt-3\" role=\"status\" aria-live=\"polite\"></div>"
 }
 
 // overlay_section_html: the optic/identity overlay editor (P1.4, #70). Presence
@@ -430,15 +446,15 @@ pub fn plan_detail_html(detail_json : String) -> String {
 // overlay; absent shows an empty box to author one.
 pub fn overlay_section_html(present : Bool, overlay_yaml : String) -> String {
   let badge = if present {
-    "<span class=\"badge text-bg-success\">present</span>"
+    status_cue("text-bg-success", "✓", "present")
   } else {
-    "<span class=\"badge text-bg-secondary\">none</span>"
+    status_cue("text-bg-secondary", "○", "none")
   }
   "<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\">" +
   "<span>Optic / identity overlay \{badge}</span>" +
   "<button id=\"overlay-save-btn\" class=\"btn btn-success btn-sm\">Save overlay</button></div>" +
   "<div class=\"card-body\">" +
-  "<div id=\"overlay-error\" class=\"mb-2\"></div>" +
+  "<div id=\"overlay-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div>" +
   "<div class=\"form-text mb-2\">The overlay supplies optic SKUs/identity — without it the BOM's optic columns are blank.</div>" +
   "<textarea id=\"overlay-yaml\" class=\"form-control font-monospace\" rows=\"14\" spellcheck=\"false\" " +
   "placeholder=\"items:\n  - id: { name: my-optic, version: '1' }\n    ...\">\{esc(overlay_yaml)}</textarea>" +
@@ -458,7 +474,9 @@ fn quantity_table(root : Json, key : String, title : String) -> String {
       "<tr><td>\{esc(str_at(q, "class_id"))}</td><td class=\"text-end\">\{int_at(q, "quantity").to_string()}</td></tr>"
   }
   "<h4 class=\"h6\">\{title}</h4>" +
-  "<table class=\"table table-sm mb-3\"><thead><tr><th>Class</th><th class=\"text-end\">Qty</th></tr></thead>" +
+  "<table class=\"table table-sm mb-3\">" +
+  "<caption class=\"visually-hidden\">\{esc(title)} per device class</caption>" +
+  "<thead><tr><th scope=\"col\">Class</th><th scope=\"col\" class=\"text-end\">Qty</th></tr></thead>" +
   "<tbody>\{rows}</tbody></table>"
 }
 
@@ -481,9 +499,9 @@ pub fn calc_summary_html(calc_json : String) -> String {
   }
   let is_valid = bool_at(root, "is_valid")
   let badge = if is_valid {
-    "<span class=\"badge text-bg-success\">Valid</span>"
+    status_cue("text-bg-success", "✓", "Valid")
   } else {
-    "<span class=\"badge text-bg-danger\">Invalid</span>"
+    status_cue("text-bg-danger", "✗", "Invalid")
   }
   let endpoints = arr_at(root, "endpoints").length().to_string()
   let verdicts = arr_at(root, "transceiver_verdicts").length().to_string()
@@ -588,7 +606,8 @@ pub fn bom_html(bom_json : String) -> String {
   "<h3 class=\"h5 mb-0\">Bill of Materials</h3>" +
   "<button id=\"bom-csv-btn\" class=\"btn btn-outline-secondary btn-sm\">Download BOM (CSV)</button></div>" +
   "<table class=\"table table-sm mt-2\">" +
-  "<thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th><th>Optic standard</th></tr></thead>" +
+  "<caption class=\"visually-hidden\">Line items: one row per device and optic, with section, model, class, manufacturer, and quantity</caption>" +
+  "<thead><tr><th scope=\"col\">Section</th><th scope=\"col\">Model</th><th scope=\"col\">Class</th><th scope=\"col\">Manufacturer</th><th scope=\"col\" class=\"text-end\">Qty</th><th scope=\"col\">Optic standard</th></tr></thead>" +
   "<tbody>\{rows}</tbody></table>" +
   "<p class=\"text-muted small mb-0\">Suppressed cable assemblies: \{suppressed}</p>"
 }
@@ -624,12 +643,15 @@ pub fn json_escape(s : String) -> String {
   out
 }
 
-// select_html renders a <select> over option id strings, marking `selected`.
+// select_html renders a <select> over option id strings, marking `selected`. The
+// aria_label gives the control a programmatic name (P2.3, #72) — table-embedded
+// selects have no associated <label>, so a column header is not enough.
 fn select_html(
   id : String,
   options : Array[Json],
   selected : String,
-  blank : Bool
+  blank : Bool,
+  aria_label : String
 ) -> String {
   let mut opts = if blank { "<option value=\"\"></option>" } else { "" }
   for o in options {
@@ -637,26 +659,27 @@ fn select_html(
     let sel = if v == selected { " selected" } else { "" }
     opts = opts + "<option value=\"\{esc(v)}\"\{sel}>\{esc(v)}</option>"
   }
-  "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\">\{opts}</select>"
+  "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"\{esc(aria_label)}\">\{opts}</select>"
 }
 
 // select_strings renders a <select> over plain string options, marking selected.
 fn select_strings(
   id : String,
   options : Array[String],
-  selected : String
+  selected : String,
+  aria_label : String
 ) -> String {
   let mut opts = ""
   for v in options {
     let sel = if v == selected { " selected" } else { "" }
     opts = opts + "<option value=\"\{esc(v)}\"\{sel}>\{esc(v)}</option>"
   }
-  "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\">\{opts}</select>"
+  "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"\{esc(aria_label)}\">\{opts}</select>"
 }
 
 // topo_select renders the explicit mesh|clos selector (the headline P1.1/P1.2
 // capability), preserving the current value.
-fn topo_select(id : String, current : String) -> String {
+fn topo_select(id : String, current : String, aria_label : String) -> String {
   let opt = fn(v : String) -> String {
     let sel = if v == current { " selected" } else { "" }
     "<option value=\"\{v}\"\{sel}>\{v}</option>"
@@ -664,7 +687,7 @@ fn topo_select(id : String, current : String) -> String {
   let blank = if current == "" { "<option value=\"\" selected></option>" } else {
       ""
     }
-  "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\">\{blank}\{opt("mesh")}\{opt("clos")}</select>"
+  "<select id=\"\{esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"\{esc(aria_label)}\">\{blank}\{opt("mesh")}\{opt("clos")}</select>"
 }
 
 fn override_value(sw : Json) -> String {
@@ -715,7 +738,7 @@ pub fn structure_editor_html(structure_json : String) -> String {
       nic_rows = nic_rows +
         "<div class=\"row g-2 align-items-center mb-1\">" +
         "<div class=\"col-4\"><code>\{esc(nicid)}</code></div>" +
-        "<div class=\"col-8\">\{select_html("nic-" + id + "-" + nicid, module_types, mt, false)}</div></div>"
+        "<div class=\"col-8\">\{select_html("nic-" + id + "-" + nicid, module_types, mt, false, "Module type for NIC " + nicid + " on " + id)}</div></div>"
     }
     // connections (P1.1b, #69): each row keyed by its server_connections index;
     // target_zone + nic + distribution are data-derived dropdowns.
@@ -723,41 +746,43 @@ pub fn structure_editor_html(structure_json : String) -> String {
     let mut conn_rows = ""
     for cn in arr_at(sc, "connections") {
       let ci = int_at(cn, "index").to_string()
+      let cid = str_at(cn, "connection_id")
       conn_rows = conn_rows +
         "<tr>" +
-        "<td class=\"text-nowrap\"><code>\{esc(str_at(cn, "connection_id"))}</code></td>" +
-        "<td>\{select_html("conn-" + ci + "-target_zone", target_zones, str_at(cn, "target_zone"), false)}</td>" +
-        "<td>\{select_strings("conn-" + ci + "-nic", nic_ids, str_at(cn, "nic"))}</td>" +
-        "<td>\{select_strings("conn-" + ci + "-distribution", dist_opts, str_at(cn, "distribution"))}</td>" +
-        "<td><input id=\"conn-\{ci}-speed\" class=\"form-control form-control-sm\" type=\"number\" value=\"\{int_at(cn, "speed").to_string()}\"></td>" +
-        "<td><input id=\"conn-\{ci}-ports\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"\{int_at(cn, "ports_per_connection").to_string()}\"></td>" +
-        "<td><button id=\"conn-rm-\{ci}\" class=\"btn btn-outline-danger btn-sm\">✕</button></td>" +
+        "<td class=\"text-nowrap\"><code>\{esc(cid)}</code></td>" +
+        "<td>\{select_html("conn-" + ci + "-target_zone", target_zones, str_at(cn, "target_zone"), false, "Target zone for connection " + cid)}</td>" +
+        "<td>\{select_strings("conn-" + ci + "-nic", nic_ids, str_at(cn, "nic"), "NIC for connection " + cid)}</td>" +
+        "<td>\{select_strings("conn-" + ci + "-distribution", dist_opts, str_at(cn, "distribution"), "Distribution for connection " + cid)}</td>" +
+        "<td><input id=\"conn-\{ci}-speed\" class=\"form-control form-control-sm\" type=\"number\" aria-label=\"Speed for connection \{esc(cid)}\" value=\"\{int_at(cn, "speed").to_string()}\"></td>" +
+        "<td><input id=\"conn-\{ci}-ports\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" aria-label=\"Ports for connection \{esc(cid)}\" value=\"\{int_at(cn, "ports_per_connection").to_string()}\"></td>" +
+        "<td><button id=\"conn-rm-\{ci}\" class=\"btn btn-outline-danger btn-sm\" aria-label=\"Remove connection \{esc(cid)}\"><span aria-hidden=\"true\">✕</span></button></td>" +
         "</tr>"
     }
     let conn_table = if arr_at(sc, "connections").length() > 0 {
-      "<table class=\"table table-sm align-middle mb-2\"><thead><tr>" +
-      "<th>ID</th><th>Target zone</th><th>NIC</th><th>Distribution</th><th>Speed</th><th>Ports</th><th></th>" +
+      "<table class=\"table table-sm align-middle mb-2\">" +
+      "<caption class=\"visually-hidden\">Server connections</caption><thead><tr>" +
+      "<th scope=\"col\">ID</th><th scope=\"col\">Target zone</th><th scope=\"col\">NIC</th><th scope=\"col\">Distribution</th><th scope=\"col\">Speed</th><th scope=\"col\">Ports</th><th scope=\"col\"><span class=\"visually-hidden\">Actions</span></th>" +
       "</tr></thead><tbody>\{conn_rows}</tbody></table>"
     } else {
       "<div class=\"small text-muted mb-2\">No connections.</div>"
     }
     let add_conn = "<div class=\"row g-2 mb-1 align-items-center\">" +
-      "<div class=\"col-3\"><input id=\"addconn-\{esc(id)}-id\" class=\"form-control form-control-sm\" placeholder=\"connection_id\"></div>" +
-      "<div class=\"col-4\">\{select_html("addconn-" + id + "-target_zone", target_zones, "", true)}</div>" +
-      "<div class=\"col-2\">\{select_strings("addconn-" + id + "-nic", nic_ids, "")}</div>" +
-      "<div class=\"col-2\"><input id=\"addconn-\{esc(id)}-speed\" class=\"form-control form-control-sm\" type=\"number\" placeholder=\"speed\"></div>" +
-      "<div class=\"col-1\"><button id=\"addconn-\{esc(id)}\" class=\"btn btn-outline-success btn-sm\">+</button></div>" +
+      "<div class=\"col-3\"><input id=\"addconn-\{esc(id)}-id\" class=\"form-control form-control-sm\" placeholder=\"connection_id\" aria-label=\"New connection id for \{esc(id)}\"></div>" +
+      "<div class=\"col-4\">\{select_html("addconn-" + id + "-target_zone", target_zones, "", true, "Target zone for new connection on " + id)}</div>" +
+      "<div class=\"col-2\">\{select_strings("addconn-" + id + "-nic", nic_ids, "", "NIC for new connection on " + id)}</div>" +
+      "<div class=\"col-2\"><input id=\"addconn-\{esc(id)}-speed\" class=\"form-control form-control-sm\" type=\"number\" placeholder=\"speed\" aria-label=\"Speed for new connection on \{esc(id)}\"></div>" +
+      "<div class=\"col-1\"><button id=\"addconn-\{esc(id)}\" class=\"btn btn-outline-success btn-sm\" aria-label=\"Add connection to \{esc(id)}\"><span aria-hidden=\"true\">+</span></button></div>" +
       "</div>"
     srv = srv +
       "<div class=\"card mb-2\"><div class=\"card-body\">" +
       "<div class=\"fw-semibold mb-2\">\{esc(id)}</div>" +
       "<div class=\"row g-2 mb-2\">" +
-      "<div class=\"col-6\"><label class=\"form-label mb-0 small\">Quantity</label>" +
+      "<div class=\"col-6\"><label class=\"form-label mb-0 small\" for=\"srv-\{esc(id)}-qty\">Quantity</label>" +
       "<input id=\"srv-\{esc(id)}-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"\{qty}\"></div>" +
-      "<div class=\"col-6\"><label class=\"form-label mb-0 small\">GPUs/server</label>" +
+      "<div class=\"col-6\"><label class=\"form-label mb-0 small\" for=\"srv-\{esc(id)}-gpus\">GPUs/server</label>" +
       "<input id=\"srv-\{esc(id)}-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"\{gpus}\"></div></div>" +
-      "<div class=\"mb-2\"><label class=\"form-label mb-0 small\">Device type</label>" +
-      "\{select_html("srv-" + id + "-devtype", device_types, devtype, false)}</div>" +
+      "<div class=\"mb-2\"><label class=\"form-label mb-0 small\" for=\"srv-\{esc(id)}-devtype\">Device type</label>" +
+      "\{select_html("srv-" + id + "-devtype", device_types, devtype, false, "Device type for " + id)}</div>" +
       "<div class=\"small text-muted\">NICs (module type)</div>\{nic_rows}" +
       "<hr class=\"my-2\"><div class=\"small text-muted\">Connections</div>\{conn_table}\{add_conn}" +
       "</div></div>"
@@ -774,9 +799,9 @@ pub fn structure_editor_html(structure_json : String) -> String {
       "<div class=\"card mb-2\"><div class=\"card-body\">" +
       "<div class=\"fw-semibold mb-2\">\{esc(id)}</div>" +
       "<div class=\"row g-2\">" +
-      "<div class=\"col-4\"><label class=\"form-label mb-0 small\">Topology</label>\{topo_select("sw-" + id + "-topo", topo)}</div>" +
-      "<div class=\"col-5\"><label class=\"form-label mb-0 small\">Device type</label>\{select_html("sw-" + id + "-devext", device_type_extensions, devext, false)}</div>" +
-      "<div class=\"col-3\"><label class=\"form-label mb-0 small\">Override qty</label>" +
+      "<div class=\"col-4\"><label class=\"form-label mb-0 small\" for=\"sw-\{esc(id)}-topo\">Topology</label>\{topo_select("sw-" + id + "-topo", topo, "Topology mode for " + id)}</div>" +
+      "<div class=\"col-5\"><label class=\"form-label mb-0 small\" for=\"sw-\{esc(id)}-devext\">Device type</label>\{select_html("sw-" + id + "-devext", device_type_extensions, devext, false, "Device type for " + id)}</div>" +
+      "<div class=\"col-3\"><label class=\"form-label mb-0 small\" for=\"sw-\{esc(id)}-override\">Override qty</label>" +
       "<input id=\"sw-\{esc(id)}-override\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" placeholder=\"(derived)\" value=\"\{esc(ov)}\"></div>" +
       "</div></div></div>"
   }
@@ -784,15 +809,15 @@ pub fn structure_editor_html(structure_json : String) -> String {
   "<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\">" +
   "<span>Structured editor</span></div><div class=\"card-body\">" +
   "<input type=\"hidden\" id=\"structure-data\" value=\"\{esc(structure_json)}\">" +
-  "<div id=\"structure-error\" class=\"mb-2\"></div>" +
+  "<div id=\"structure-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div>" +
   "<h3 class=\"h6\">Server classes</h3>\{srv}" +
   "<div class=\"card mb-3\"><div class=\"card-body\">" +
-  "<div class=\"small text-muted mb-2\">Add server class</div>" +
+  "<div class=\"small text-muted mb-2\" id=\"add-srv-label\">Add server class</div>" +
   "<div class=\"row g-2\">" +
-  "<div class=\"col-3\"><input id=\"add-srv-id\" class=\"form-control form-control-sm\" placeholder=\"new_class_id\"></div>" +
-  "<div class=\"col-2\"><input id=\"add-srv-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"1\"></div>" +
-  "<div class=\"col-2\"><input id=\"add-srv-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"0\"></div>" +
-  "<div class=\"col-3\">\{select_html("add-srv-devtype", device_types, "", true)}</div>" +
+  "<div class=\"col-3\"><input id=\"add-srv-id\" class=\"form-control form-control-sm\" placeholder=\"new_class_id\" aria-label=\"New server class id\"></div>" +
+  "<div class=\"col-2\"><input id=\"add-srv-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"1\" aria-label=\"New server class quantity\"></div>" +
+  "<div class=\"col-2\"><input id=\"add-srv-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"0\" aria-label=\"New server class GPUs per server\"></div>" +
+  "<div class=\"col-3\">\{select_html("add-srv-devtype", device_types, "", true, "New server class device type")}</div>" +
   "<div class=\"col-2\"><button id=\"add-srv-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div>" +
   "</div></div></div>" +
   "<button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm me-2 mb-3\">Save server classes</button>" +
