@@ -188,6 +188,14 @@ func (c *Catalog) ByName(name string) (Item, bool) {
 // Len reports the item count.
 func (c *Catalog) Len() int { return len(c.items) }
 
+// Items returns all catalog items in a deterministic order (sorted by pinned
+// ID). The read-only Library browse surface (internal/library, GET /api/catalog,
+// #80) enumerates the catalog through this — the items map alone has no stable
+// order.
+func (c *Catalog) Items() []Item {
+	return nil // RED stub (#80 GREEN): return c.items sorted by ID.String()
+}
+
 // SetExtracted attaches the reference_data block and server_nics extracted from a
 // bundled plan so they can be re-embedded losslessly (deliverable 6). Called by
 // topology.IngestBundled; a no-op carrier for hand-authored catalogs.

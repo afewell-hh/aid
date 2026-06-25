@@ -388,6 +388,24 @@ pub fn new_plan_form_html(templates_json : String) -> String {
   "</div></div>"
 }
 
+// library_html: render the read-only Library browse table from the
+// GET /api/catalog JSON ({"items":[{id:{name,version},kind,layer,...}]}). The
+// built-in Library is the deduped union of the shipped reference templates'
+// catalogs (#80). RED stub — #80 GREEN renders the item table.
+pub fn library_html(catalog_json : String) -> String {
+  ignore(catalog_json)
+  "<!-- library_html: not implemented (#80 GREEN) -->"
+}
+
+// reference_gallery_html: render the reference-topology gallery from the
+// GET /api/templates JSON. Each card carries a "Use as starting point" control
+// (id "use-template-<id>") that reuses the existing template clone chain. RED
+// stub — #80 GREEN renders the gallery cards.
+pub fn reference_gallery_html(templates_json : String) -> String {
+  ignore(templates_json)
+  "<!-- reference_gallery_html: not implemented (#80 GREEN) -->"
+}
+
 // plan_detail_html: cards for the plan summary and its topology (fabrics +
 // device classes, from the canonical YAML), with calc/BOM actions and a result
 // region the calc/BOM views render into.

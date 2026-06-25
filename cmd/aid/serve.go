@@ -32,6 +32,8 @@ var serveRoutes = []string{
 	"GET /api/plans/{id}/wiring/{fabric}",
 	"GET /api/templates",
 	"GET /api/templates/{id}",
+	"GET /api/catalog",
+	"GET /api/catalog/{id}",
 }
 
 // api holds the handler dependencies (the plan store). Handlers reuse
@@ -77,6 +79,8 @@ func newServeMux(store *planstore.Store) http.Handler {
 	mux.HandleFunc("/api/templates", a.listTemplates) // starter-template catalog (P0.2)
 	mux.HandleFunc("/api/templates/", a.getTemplate)  // one starter's training + overlay YAML
 	mux.HandleFunc("/api/validate", a.validate)       // stateless dry-run validate (P1.3)
+	mux.HandleFunc("/api/catalog", a.listCatalog)     // read-only Library browse (#80)
+	mux.HandleFunc("/api/catalog/", a.getCatalogItem) // one Library item by pinned id
 	mux.Handle("/", ui.Handler())                     // embedded frontend (Bootstrap 5 + app.js)
 	return mux
 }
@@ -197,6 +201,29 @@ func (a *api) getTemplate(w http.ResponseWriter, r *http.Request) {
 		"training": string(training),
 		"overlay":  string(overlay),
 	})
+}
+
+// --- catalog / Library browse (#80, read-only) ------------------------------
+
+// listCatalog: GET /api/catalog → {"items":[summary,...]} — the read-only
+// built-in Library, the deduped union of the shipped reference templates'
+// catalogs (internal/library). Deterministic order. RED stub until #80 GREEN.
+func (a *api) listCatalog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSONError(w, http.StatusNotImplemented, "library browse not implemented (#80 GREEN)")
+}
+
+// getCatalogItem: GET /api/catalog/{id} → the full catalog item for the pinned
+// name, or 404. RED stub until #80 GREEN.
+func (a *api) getCatalogItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSONError(w, http.StatusNotImplemented, "library item not implemented (#80 GREEN)")
 }
 
 // --- handlers ---------------------------------------------------------------

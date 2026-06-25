@@ -75,3 +75,12 @@ pub fn bom_path(id : String) -> String {
 pub fn wiring_path(id : String, fabric : String) -> String {
   "/plans/" + id + "/wiring/" + fabric
 }
+
+// Read-only Library browse (#80): the built-in catalog union.
+pub fn catalog_path() -> String {
+  "/catalog"
+}
+
+pub fn catalog_item_path(id : String) -> String {
+  "/catalog/" + id
+}

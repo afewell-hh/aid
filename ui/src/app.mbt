@@ -775,5 +775,24 @@ fn set_inflight(id : String, busy : Bool, label : String) -> Unit {
 pub fn main_entry() -> Unit {
   console_log("AID UI starting")
   on_click("nav-home", fn() { load_plans("app") })
+  on_click("nav-reference", fn() { load_reference_gallery() })
+  on_click("nav-library", fn() { load_library() })
   load_plans("app")
+}
+
+// --- #80: Library browse + Reference-topology gallery (read-only surfaces) ---
+
+// load_library: GET /api/catalog and render the read-only Library browse (the
+// built-in catalog union). RED stub (#80 GREEN): issues no request and renders a
+// placeholder, so the mock test's "GET /api/catalog" + rendered-table assertions
+// fail at the intended seam.
+pub fn load_library() -> Unit {
+  set_html("app", library_html("{}"))
+}
+
+// load_reference_gallery: GET /api/templates and render the reference-topology
+// gallery, reusing the existing template clone chain for "Use as starting
+// point". RED stub (#80 GREEN).
+pub fn load_reference_gallery() -> Unit {
+  set_html("app", reference_gallery_html("{}"))
 }
