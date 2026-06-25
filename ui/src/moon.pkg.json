@@ -20,7 +20,9 @@
         "overlay_section_html",
         "load_overlay",
         "save_overlay",
-        "download_bom_csv"
+        "download_bom_csv",
+        "loading_html",
+        "validating_html"
       ],
       "format": "esm"
     }
