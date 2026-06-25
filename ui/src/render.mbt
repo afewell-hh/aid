@@ -243,6 +243,30 @@ fn status_badge(status : String) -> String {
   "<span class=\"badge \{cls}\">\{esc(status)}</span>"
 }
 
+// facts_summary renders the at-a-glance derived facts (P2.1, #71) — topology /
+// GPU count / server total / switch total + a validity badge — from the facts
+// object on a list row or the detail. When the plan can't be computed
+// (structural ingest failure) NONE of the facts are trustworthy, so every field
+// shows "—" and the badge reads "not computable" — we never present a partial,
+// misleading "mesh · 0 GPU · 0 servers" surface for an uncomputable plan (#71).
+fn facts_summary(f : Json) -> String {
+  let computable = bool_at(f, "computable")
+  if !computable {
+    return "<span class=\"text-muted small me-2\">— · — GPU · — servers · — switches</span>" +
+      "<span class=\"badge text-bg-warning\">not computable</span>"
+  }
+  let topo = str_at(f, "topology")
+  let gpu = int_at(f, "gpu_count").to_string()
+  let srv = int_at(f, "server_total").to_string()
+  let sw = int_at(f, "switch_total").to_string()
+  let validity = if bool_at(f, "is_valid") {
+    "<span class=\"badge text-bg-success\">Valid</span>"
+  } else {
+    "<span class=\"badge text-bg-danger\">Invalid</span>"
+  }
+  "<span class=\"text-muted small me-2\">\{esc(topo)} · \{gpu} GPU · \{srv} servers · \{sw} switches</span>\{validity}"
+}
+
 // --- surfaces ---------------------------------------------------------------
 
 // loading_html: a centered spinner panel shown while a navigation request is in
@@ -283,11 +307,16 @@ pub fn plan_list_html(plans_json : String) -> String {
     let id = str_at(p, "id")
     let name = str_at(p, "name")
     let status = str_at(p, "status")
+    let summary = match get(p, "facts") {
+      Some(f) => facts_summary(f)
+      None => ""
+    }
     rows = rows +
       "<tr>" +
       "<td>\{esc(name)}</td>" +
       "<td><code>\{esc(id)}</code></td>" +
       "<td>\{status_badge(status)}</td>" +
+      "<td>\{summary}</td>" +
       "<td class=\"text-end\">" +
       "<button id=\"view-\{esc(id)}\" class=\"btn btn-sm btn-outline-primary me-1\">View</button>" +
       "<button id=\"dup-\{esc(id)}\" class=\"btn btn-sm btn-outline-secondary me-1\">Duplicate</button>" +
@@ -302,7 +331,7 @@ pub fn plan_list_html(plans_json : String) -> String {
   "<button id=\"new-plan-btn\" class=\"btn btn-sm btn-success\">+ New plan</button></div></div>" +
   "<div id=\"list-error\" class=\"mb-2\"></div>" +
   "<table class=\"table table-hover align-middle\">" +
-  "<thead><tr><th>Name</th><th>ID</th><th>Status</th><th class=\"text-end\">Actions</th></tr></thead>" +
+  "<thead><tr><th>Name</th><th>ID</th><th>Status</th><th>Summary</th><th class=\"text-end\">Actions</th></tr></thead>" +
   "<tbody>\{rows}</tbody></table>"
 }
 
@@ -354,12 +383,17 @@ pub fn plan_detail_html(detail_json : String) -> String {
   let name = str_at(root, "name")
   let status = str_at(root, "status")
   let yaml = str_at(root, "yaml")
+  let header_facts = match get(root, "facts") {
+    Some(f) => "<div id=\"detail-facts\" class=\"mb-3\">\{facts_summary(f)}</div>"
+    None => ""
+  }
   "<nav aria-label=\"breadcrumb\"><ol class=\"breadcrumb\">" +
   "<li class=\"breadcrumb-item\"><button id=\"crumb-plans\" class=\"btn btn-link p-0 align-baseline\">Plans</button></li>" +
   "<li class=\"breadcrumb-item active\" aria-current=\"page\">\{esc(name)}</li>" +
   "</ol></nav>" +
-  "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
+  "<div class=\"d-flex justify-content-between align-items-center mb-2\">" +
   "<h2 class=\"h4 mb-0\">\{esc(name)}</h2>\{status_badge(status)}</div>" +
+  header_facts +
   "<div id=\"live-validation\" class=\"mb-3\"></div>" +
   "<div class=\"row g-3\">" +
   "<div class=\"col-md-4\"><div class=\"card\">" +
@@ -550,8 +584,10 @@ pub fn bom_html(bom_json : String) -> String {
       "</tr>"
   }
   let suppressed = int_at(root, "suppressed_cable_assembly_count").to_string()
-  "<h3 class=\"h5\">Bill of Materials</h3>" +
-  "<table class=\"table table-sm\">" +
+  "<div class=\"d-flex justify-content-between align-items-center\">" +
+  "<h3 class=\"h5 mb-0\">Bill of Materials</h3>" +
+  "<button id=\"bom-csv-btn\" class=\"btn btn-outline-secondary btn-sm\">Download BOM (CSV)</button></div>" +
+  "<table class=\"table table-sm mt-2\">" +
   "<thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class=\"text-end\">Qty</th><th>Optic standard</th></tr></thead>" +
   "<tbody>\{rows}</tbody></table>" +
   "<p class=\"text-muted small mb-0\">Suppressed cable assemblies: \{suppressed}</p>"

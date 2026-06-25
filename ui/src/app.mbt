@@ -721,6 +721,22 @@ fn load_bom(target : String, plan_id : String) -> Unit {
       return
     }
     set_html(target, bom_html(body))
+    on_click("bom-csv-btn", fn() { download_bom_csv(plan_id) })
+  })
+}
+
+// download_bom_csv: GET /api/plans/{id}/bom?format=csv and save it as a file
+// (P2.1, #71). Same download-guard as wiring (P0.3): a non-OK response / error
+// body is NEVER written to disk — it surfaces the error alert instead.
+pub fn download_bom_csv(plan_id : String) -> Unit {
+  set_inflight("bom-csv-btn", true, "Downloading…")
+  api_get(bom_path(plan_id) + "?format=csv", fn(ok, status, body) {
+    set_inflight("bom-csv-btn", false, "Download BOM (CSV)")
+    if (!ok) || body_has_error(body) {
+      set_html("detail-result", error_html(status, body))
+      return
+    }
+    save_file(plan_id + "-bom.csv", body)
   })
 }
 

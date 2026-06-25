@@ -135,3 +135,53 @@ func TestAPI_Structure_Connections(t *testing.T) {
 	rec2 := do(t, mux, http.MethodPut, "/api/plans/p/structure", []byte(bad))
 	assertJSONError(t, rec2, http.StatusUnprocessableEntity)
 }
+
+// P2.1 (#71): the list + detail responses carry derived facts (topology / gpu /
+// totals / validity), engine-derived for both a mesh and a Clos plan.
+func TestAPI_DerivedFacts(t *testing.T) {
+	mesh, _, _ := oracleArtifacts(t, "xoc-64-mesh-conv-ro")
+	clos, _, _ := oracleArtifacts(t, "xoc-256-2xopg128-clos-ro")
+	mux, dir := newTestAPI(t)
+	seedDIET(t, dir, "mesh64", mesh)
+	seedDIET(t, dir, "clos256", clos)
+
+	rec := do(t, mux, http.MethodGet, "/api/plans", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list: %d", rec.Code)
+	}
+	var out struct {
+		Plans []struct {
+			ID    string    `json:"id"`
+			Facts planFacts `json:"facts"`
+		} `json:"plans"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v; %s", err, rec.Body.String())
+	}
+	byID := map[string]planFacts{}
+	for _, p := range out.Plans {
+		byID[p.ID] = p.Facts
+	}
+	// mesh xoc-64: topology mesh, compute 8 servers × 8 gpus = 64 gpus, valid.
+	m := byID["mesh64"]
+	if m.Topology != "mesh" || !m.IsValid || !m.Computable {
+		t.Errorf("mesh facts off: %+v", m)
+	}
+	if m.GpuCount != 64 || m.SwitchTotal == 0 {
+		t.Errorf("mesh gpu/switch off: %+v", m)
+	}
+	// Clos xoc-256: topology Clos (spine tier), derived switch total 9, valid.
+	c := byID["clos256"]
+	if c.Topology != "Clos" || !c.IsValid {
+		t.Errorf("clos facts off: %+v", c)
+	}
+	if c.SwitchTotal != 9 { // be-rail-leaf 4 + be-spine 2 + fe-leaf 2 + fe-spine 1
+		t.Errorf("clos switch total: got %d want 9", c.SwitchTotal)
+	}
+
+	// detail carries facts too.
+	det := do(t, mux, http.MethodGet, "/api/plans/mesh64", nil)
+	if !strings.Contains(det.Body.String(), "\"facts\"") || !strings.Contains(det.Body.String(), "\"topology\": \"mesh\"") {
+		t.Errorf("detail missing facts: %s", det.Body.String())
+	}
+}

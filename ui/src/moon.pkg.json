@@ -19,7 +19,8 @@
         "validate_structured",
         "overlay_section_html",
         "load_overlay",
-        "save_overlay"
+        "save_overlay",
+        "download_bom_csv"
       ],
       "format": "esm"
     }

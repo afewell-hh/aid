@@ -202,13 +202,27 @@ func (a *api) getTemplate(w http.ResponseWriter, r *http.Request) {
 // --- handlers ---------------------------------------------------------------
 
 // listPlans: GET /api/plans → {"plans": [summaries]}.
+// planView is a plan summary/detail plus its derived at-a-glance facts (P2.1).
+type planView struct {
+	planstore.Plan
+	Facts planFacts `json:"facts"`
+}
+
 func (a *api) listPlans(w http.ResponseWriter, _ *http.Request) {
 	plans, err := a.store.List()
 	if err != nil {
 		a.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"plans": plans})
+	out := make([]planView, 0, len(plans))
+	for _, p := range plans {
+		f := planFacts{}
+		if y, gerr := a.store.GetYAML(p.ID); gerr == nil {
+			f = computeFacts(y)
+		}
+		out = append(out, planView{Plan: p, Facts: f})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"plans": out})
 }
 
 // createPlan: POST /api/plans (body = plan YAML) → 201 summary + Location.
@@ -234,7 +248,7 @@ func (a *api) getPlan(w http.ResponseWriter, _ *http.Request, id string) {
 		a.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	writeJSON(w, http.StatusOK, planView{Plan: *p, Facts: computeFacts([]byte(p.YAML))})
 }
 
 // updatePlan: PUT /api/plans/{id} (body = plan YAML) → 200 summary.
