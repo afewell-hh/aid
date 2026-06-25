@@ -10,7 +10,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dom, fetches, setResponder, reset, flush } from "./harness.mjs";
+import { dom, el, fetches, setResponder, reset, flush } from "./harness.mjs";
 import * as app from "../static/app.js";
 
 // GET /api/catalog shape: the built-in Library union (deduped catalog items).
@@ -72,4 +72,57 @@ test("reference_gallery_html renders a card + start control per template", () =>
   const html = app.reference_gallery_html(TEMPLATES);
   assert.match(html, /XOC-256 Clos/, "expected the clos reference card");
   assert.match(html, /use-template-xoc-256-clos/, "expected the start-control id");
+});
+
+// Pins the clone chain at the UNIT seam (#79 spec requirement): clicking
+// "Use as starting point" on a reference must reuse the existing template clone
+// path — GET /api/templates/{id} then POST /api/plans (the detached copy) — not
+// merely render the gallery. RED: the gallery stub renders no control and wires
+// no handler, so the click fires nothing and neither request is issued.
+test("gallery 'Use as starting point' clones: click -> GET /api/templates/{id} -> POST /api/plans", async () => {
+  reset();
+  const TRAINING = "meta:\n  case_id: training_xoc64_1xopg64_mesh_conv_ro\n  name: XOC-64\n";
+  setResponder((url, opts) => {
+    const method = opts.method || "GET";
+    if (url === "/api/templates" && method === "GET") return TEMPLATES;
+    if (url === "/api/templates/xoc-64-mesh") {
+      return JSON.stringify({
+        id: "xoc-64-mesh",
+        name: "XOC-64 Mesh",
+        topology: "mesh",
+        training: TRAINING,
+        overlay: "",
+      });
+    }
+    if (url === "/api/plans" && method === "POST") {
+      return JSON.stringify({ id: "training_xoc64_1xopg64_mesh_conv_ro", name: "XOC-64 Mesh" });
+    }
+    if (url.startsWith("/api/plans/")) {
+      return JSON.stringify({
+        id: "training_xoc64_1xopg64_mesh_conv_ro",
+        name: "XOC-64 Mesh",
+        status: "draft",
+        yaml: TRAINING,
+      });
+    }
+    return "{}";
+  });
+
+  app.load_reference_gallery();
+  await flush();
+  // Click the per-reference "Use as starting point" control (#80 GREEN contract).
+  el("use-template-xoc-64-mesh").click();
+  // Drain the GET-template -> POST-plans -> (navigate) chain.
+  await flush();
+  await flush();
+  await flush();
+
+  const seen = fetches.map((f) => `${f.method} ${f.url}`);
+  assert.ok(
+    fetches.some((f) => f.url === "/api/templates/xoc-64-mesh" && f.method === "GET"),
+    `expected GET /api/templates/xoc-64-mesh; got ${JSON.stringify(seen)}`,
+  );
+  const post = fetches.find((f) => f.url === "/api/plans" && f.method === "POST");
+  assert.ok(post, `expected POST /api/plans (detached clone); got ${JSON.stringify(seen)}`);
+  assert.match(post.body ?? "", /case_id:\s*training_xoc64/, "expected the template training POSTed as the new plan body");
 });
