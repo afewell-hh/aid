@@ -819,6 +819,28 @@ test("P2.1 list row shows derived facts (topology/gpu/servers/switches/validity)
   assert.match(html, /Valid/, "validity badge");
 });
 
+test("P2.1 uncomputable plan shows fully-unknown facts (no misleading mesh/0/0)", () => {
+  reset();
+  // A plan that fails structural ingest: server class quantity is still set, but
+  // computable:false means NONE of the facts are trustworthy. The row must not
+  // present "mesh · 0 GPU · 0 servers" — every field is "—" + a "not computable" badge.
+  const plans = JSON.stringify({
+    plans: [{
+      id: "broke", name: "Broken Plan", status: "active",
+      facts: { topology: "mesh", gpu_count: 0, server_total: 0, switch_total: 0, is_valid: false, computable: false },
+    }],
+  });
+  app.render_plan_list("app", plans);
+  const html = dom["app"]?.innerHTML ?? "";
+  assert.match(html, /not computable/, "shows the not-computable badge");
+  assert.match(html, /— GPU/, "GPU is unknown, not 0");
+  assert.match(html, /— servers/, "servers is unknown, not 0");
+  assert.match(html, /— switches/, "switches is unknown");
+  assert.doesNotMatch(html, /0 GPU/, "must not render a misleading 0 GPU");
+  assert.doesNotMatch(html, /0 servers/, "must not render a misleading 0 servers");
+  assert.doesNotMatch(html, /mesh ·/, "must not render a guessed topology for an uncomputable plan");
+});
+
 test("P2.1 detail header shows derived facts", () => {
   reset();
   app.render_plan_detail("app", DETAIL_FACTS);

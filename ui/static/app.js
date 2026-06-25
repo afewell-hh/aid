@@ -4495,12 +4495,15 @@ function _M0FP25aidui3src13status__badge(status) {
   return `<span class=\"badge ${cls}\">${_M0FP25aidui3src3esc(status)}</span>`;
 }
 function _M0FP25aidui3src14facts__summary(f) {
+  const computable = _M0FP25aidui3src8bool__at(f, "computable");
+  if (!computable) {
+    return "<span class=\"text-muted small me-2\">— · — GPU · — servers · — switches</span><span class=\"badge text-bg-warning\">not computable</span>";
+  }
   const topo = _M0FP25aidui3src7str__at(f, "topology");
   const gpu = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(f, "gpu_count"), 10);
   const srv = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(f, "server_total"), 10);
-  const computable = _M0FP25aidui3src8bool__at(f, "computable");
-  const sw = computable ? _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(f, "switch_total"), 10) : "—";
-  const validity = !computable ? "<span class=\"badge text-bg-warning\">not computable</span>" : _M0FP25aidui3src8bool__at(f, "is_valid") ? "<span class=\"badge text-bg-success\">Valid</span>" : "<span class=\"badge text-bg-danger\">Invalid</span>";
+  const sw = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(f, "switch_total"), 10);
+  const validity = _M0FP25aidui3src8bool__at(f, "is_valid") ? "<span class=\"badge text-bg-success\">Valid</span>" : "<span class=\"badge text-bg-danger\">Invalid</span>";
   return `<span class=\"text-muted small me-2\">${_M0FP25aidui3src3esc(topo)} · ${gpu} GPU · ${srv} servers · ${sw} switches</span>${validity}`;
 }
 function _M0FP25aidui3src13loading__html(label) {

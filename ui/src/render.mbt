@@ -246,16 +246,20 @@ fn status_badge(status : String) -> String {
 // facts_summary renders the at-a-glance derived facts (P2.1, #71) — topology /
 // GPU count / server total / switch total + a validity badge — from the facts
 // object on a list row or the detail. When the plan can't be computed
-// (structural failure) the calc-derived facts show "—" and validity is unknown.
+// (structural ingest failure) NONE of the facts are trustworthy, so every field
+// shows "—" and the badge reads "not computable" — we never present a partial,
+// misleading "mesh · 0 GPU · 0 servers" surface for an uncomputable plan (#71).
 fn facts_summary(f : Json) -> String {
+  let computable = bool_at(f, "computable")
+  if !computable {
+    return "<span class=\"text-muted small me-2\">— · — GPU · — servers · — switches</span>" +
+      "<span class=\"badge text-bg-warning\">not computable</span>"
+  }
   let topo = str_at(f, "topology")
   let gpu = int_at(f, "gpu_count").to_string()
   let srv = int_at(f, "server_total").to_string()
-  let computable = bool_at(f, "computable")
-  let sw = if computable { int_at(f, "switch_total").to_string() } else { "—" }
-  let validity = if !computable {
-    "<span class=\"badge text-bg-warning\">not computable</span>"
-  } else if bool_at(f, "is_valid") {
+  let sw = int_at(f, "switch_total").to_string()
+  let validity = if bool_at(f, "is_valid") {
     "<span class=\"badge text-bg-success\">Valid</span>"
   } else {
     "<span class=\"badge text-bg-danger\">Invalid</span>"
