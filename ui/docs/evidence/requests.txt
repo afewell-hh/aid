@@ -1,0 +1,22 @@
+# Requests issued by the GUI during evidence capture (driven against http://127.0.0.1:42569).
+# external (non-same-origin) requests: 0
+
+/
+/api/plans
+/api/plans/invalid_zone_overflow
+/api/plans/invalid_zone_overflow/calc
+/api/plans/invalid_zone_overflow/overlay
+/api/plans/invalid_zone_overflow/structure
+/api/plans/training_xoc256_2xopg128_clos_ro
+/api/plans/training_xoc256_2xopg128_clos_ro/bom
+/api/plans/training_xoc256_2xopg128_clos_ro/overlay
+/api/plans/training_xoc256_2xopg128_clos_ro/structure
+/api/plans/training_xoc64_1xopg64_mesh_conv_ro
+/api/plans/training_xoc64_1xopg64_mesh_conv_ro/calc
+/api/plans/training_xoc64_1xopg64_mesh_conv_ro/overlay
+/api/plans/training_xoc64_1xopg64_mesh_conv_ro/structure
+/api/templates
+/api/validate
+/static/app.js
+/static/bootstrap.bundle.min.js
+/static/bootstrap.min.css

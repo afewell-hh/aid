@@ -327,7 +327,9 @@ pub fn plan_list_html(plans_json : String) -> String {
       None => ""
     }
     rows = rows +
-      "<tr>" +
+      // P2.4 clickable row: the row body opens the plan (the View button remains
+      // the keyboard-accessible control; on_click_row ignores button clicks).
+      "<tr id=\"row-\{esc(id)}\" style=\"cursor:pointer\" title=\"Open \{esc(name)}\">" +
       "<td>\{esc(name)}</td>" +
       "<td><code>\{esc(id)}</code></td>" +
       "<td>\{status_badge(status)}</td>" +
@@ -417,10 +419,17 @@ pub fn plan_detail_html(detail_json : String) -> String {
   "<dl class=\"row mb-3\">" +
   "<dt class=\"col-5\">ID</dt><dd class=\"col-7\"><code>\{esc(id)}</code></dd>" +
   "<dt class=\"col-5\">Status</dt><dd class=\"col-7\">\{status_badge(status)}</dd></dl>" +
-  "<button id=\"calc-btn\" class=\"btn btn-primary btn-sm me-2\">Calculate</button>" +
-  "<button id=\"bom-btn\" class=\"btn btn-outline-secondary btn-sm\">View BOM</button>" +
-  "<hr><button id=\"back-btn\" class=\"btn btn-link btn-sm p-0 me-3\">&larr; All plans</button>" +
-  "<button id=\"detail-del-btn\" class=\"btn btn-outline-danger btn-sm\">Delete</button>" +
+  // P2.4: the plan actions grouped in one toolbar with a single clear primary
+  // (Calculate). Calculate + View BOM read the plan; Delete is separated.
+  "<div class=\"btn-toolbar mb-2\" role=\"toolbar\" aria-label=\"Plan actions\">" +
+  "<div class=\"btn-group btn-group-sm me-2 mb-1\" role=\"group\" aria-label=\"Compute\">" +
+  "<button id=\"calc-btn\" class=\"btn btn-primary\">Calculate</button>" +
+  "<button id=\"bom-btn\" class=\"btn btn-outline-secondary\">View BOM</button>" +
+  "</div>" +
+  "<div class=\"btn-group btn-group-sm mb-1\" role=\"group\" aria-label=\"Manage\">" +
+  "<button id=\"detail-del-btn\" class=\"btn btn-outline-danger\">Delete</button>" +
+  "</div></div>" +
+  "<button id=\"back-btn\" class=\"btn btn-link btn-sm p-0\">&larr; All plans</button>" +
   "</div></div></div>" +
   "<div class=\"col-md-8\"><div class=\"card\">" +
   "<div class=\"card-header d-flex justify-content-between align-items-center\">" +

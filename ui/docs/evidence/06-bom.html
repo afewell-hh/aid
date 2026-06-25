@@ -3,13 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AID — BOM</title>
+  <title>AID — Bill of materials</title>
   <link rel="stylesheet" href="../../static/bootstrap.min.css">
 </head>
 <body class="bg-body">
   <nav class="navbar navbar-expand bg-dark border-bottom border-secondary mb-3">
-    <div class="container"><span class="navbar-brand">AID — BOM</span></div>
+    <div class="container"><span class="navbar-brand">AID — Bill of materials</span></div>
   </nav>
-  <main class="container"><h3 class="h5">Bill of Materials</h3><table class="table table-sm"><thead><tr><th>Section</th><th>Model</th><th>Class</th><th>Manufacturer</th><th class="text-end">Qty</th></tr></thead><tbody><tr><td>server</td><td>OPG-256 Compute Server FE-BE</td><td>compute</td><td>Generic</td><td class="text-end">32</td></tr><tr><td>switch</td><td>celestica-ds5000</td><td>be-rail-leaf</td><td>Celestica</td><td class="text-end">4</td></tr><tr><td>switch</td><td>celestica-ds5000</td><td>fe-spine</td><td>Celestica</td><td class="text-end">1</td></tr><tr><td>switch_transceiver</td><td>QSFP112-200GBASE-SR2</td><td></td><td>Generic</td><td class="text-end">528</td></tr></tbody></table><p class="text-muted small mb-0">Suppressed cable assemblies: 0</p></main>
+  <main class="container">
+    <p class="text-muted small">GET /api/plans/{id}/bom: a flat line-item table (section / model / class / manufacturer / quantity + optic standard) with a Download BOM (CSV) export. Optic columns are populated because the Clos plan carries an optic overlay.</p>
+    <div class="d-flex justify-content-between align-items-center"><h3 class="h5 mb-0">Bill of Materials</h3><button id="bom-csv-btn" class="btn btn-outline-secondary btn-sm">Download BOM (CSV)</button></div><table class="table table-sm mt-2"><caption class="visually-hidden">Line items: one row per device and optic, with section, model, class, manufacturer, and quantity</caption><thead><tr><th scope="col">Section</th><th scope="col">Model</th><th scope="col">Class</th><th scope="col">Manufacturer</th><th scope="col" class="text-end">Qty</th><th scope="col">Optic standard</th></tr></thead><tbody><tr><td>server</td><td>OPG-256 Compute Server FE-BE</td><td>compute</td><td>Generic</td><td class="text-end">32</td><td></td></tr><tr><td>switch</td><td>celestica-ds5000</td><td>be-rail-leaf</td><td>Celestica</td><td class="text-end">4</td><td></td></tr><tr><td>switch</td><td>celestica-ds5000</td><td>be-spine</td><td>Celestica</td><td class="text-end">2</td><td></td></tr><tr><td>switch</td><td>celestica-ds5000</td><td>fe-leaf</td><td>Celestica</td><td class="text-end">2</td><td></td></tr><tr><td>switch</td><td>celestica-ds5000</td><td>fe-spine</td><td>Celestica</td><td class="text-end">1</td><td></td></tr><tr><td>nic</td><td>BlueField-3 2x200G</td><td></td><td>NVIDIA</td><td class="text-end">32</td><td></td></tr><tr><td>nic</td><td>ConnectX-7 Single-Port 400G</td><td></td><td>NVIDIA</td><td class="text-end">256</td><td></td></tr><tr><td>server_transceiver</td><td>QSFP112-200GBASE-SR2</td><td></td><td>Generic</td><td class="text-end">320</td><td>200GBASE-SR2</td></tr><tr><td>switch_transceiver</td><td>QSFP112-200GBASE-SR2</td><td></td><td>Generic</td><td class="text-end">528</td><td>200GBASE-SR2</td></tr></tbody></table><p class="text-muted small mb-0">Suppressed cable assemblies: 0</p>
+  </main>
 </body>
 </html>
