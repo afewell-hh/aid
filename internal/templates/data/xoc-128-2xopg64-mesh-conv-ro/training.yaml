@@ -29,7 +29,7 @@ reference_data:
   device_types:
   - id: sw_ds5000_leaf_dt
     manufacturer: celestica
-    model: Celestica DS5000
+    model: celestica-ds5000
     slug: celestica-ds5000
   - id: sw_ds2000_inb_dt
     manufacturer: celestica
@@ -1136,6 +1136,7 @@ server_connections:
   target_zone: inb_mgmt_leaf/inb_mgmt_server_25g
   speed: 25
   port_type: data
+  transceiver_module_type: sfp28_25gbase_sr
 - server_class: hh_gateway
   connection_id: oob-mgmt
   connection_name: oob-mgmt
@@ -1147,6 +1148,7 @@ server_connections:
   target_zone: oob_leaf/oob_server_1g
   speed: 1
   port_type: ipmi
+  transceiver_module_type: rj45_1000base_t
 - server_class: hh_controller
   connection_id: inb-mgmt
   connection_name: inb-mgmt
@@ -1158,6 +1160,7 @@ server_connections:
   target_zone: inb_mgmt_leaf/inb_mgmt_server_25g
   speed: 25
   port_type: data
+  transceiver_module_type: sfp28_25gbase_sr
 - server_class: hh_controller
   connection_id: oob-mgmt
   connection_name: oob-mgmt
@@ -1169,6 +1172,7 @@ server_connections:
   target_zone: oob_leaf/oob_server_1g
   speed: 1
   port_type: ipmi
+  transceiver_module_type: rj45_1000base_t
 expected:
   counts:
     server_classes: 8

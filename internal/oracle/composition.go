@@ -52,7 +52,7 @@ func Compositions() []Composition {
 			Name:          "xoc-128-2xopg64-mesh-conv-ro",
 			Overlay:       filepath.Join("tests", "oracle", "xoc-128-2xopg64-mesh-conv-ro", "optic-overlay.yaml"),
 			ServerClasses: 8, SwitchClasses: 6, Connections: 38,
-			TotalServers: 34, BOMRows: 23,
+			TotalServers: 34, BOMRows: 25,
 			Managed: []string{"inb-mgmt", "scale-out-a", "scale-out-b", "soc-storage-a", "soc-storage-b"},
 		},
 		{
