@@ -9,18 +9,18 @@
 // therefore by construction: the Library is exactly the union of what the shipped
 // references contain — both mesh (xoc-64) and Clos (xoc-256) classes — so it can
 // never be narrower than the reference set (the lead's #79 blocking point).
-//
-// #80 builds the seam + RED stubs; the union/derivation lands in #80 GREEN.
 package library
 
 import (
 	"errors"
+	"fmt"
+	"reflect"
 
 	"github.com/afewell-hh/aid/internal/catalog"
+	"github.com/afewell-hh/aid/internal/objectmodel"
+	"github.com/afewell-hh/aid/internal/templates"
+	"github.com/afewell-hh/aid/internal/topology"
 )
-
-// ErrNotImplemented marks an #80 RED stub whose behavior arrives in #80 GREEN.
-var ErrNotImplemented = errors.New("library: not implemented (#80 GREEN)")
 
 // ErrConflict is returned when two source catalogs define the SAME pinned id with
 // DIFFERENT content. Pinned identity must be reproducible (D21 guardrail 1), so a
@@ -31,11 +31,52 @@ var ErrConflict = errors.New("library: conflicting definitions for same pinned i
 // share an id with identical content collapse to one; the same id with differing
 // content is ErrConflict.
 func Union(cats ...*catalog.Catalog) (*catalog.Catalog, error) {
-	return nil, ErrNotImplemented // RED stub (#80 GREEN)
+	seen := make(map[objectmodel.ID]catalog.Item)
+	for _, c := range cats {
+		if c == nil {
+			continue
+		}
+		for _, it := range c.Items() {
+			if prev, dup := seen[it.ID]; dup {
+				if !reflect.DeepEqual(prev, it) {
+					return nil, fmt.Errorf("%w: %s", ErrConflict, it.ID)
+				}
+				continue
+			}
+			seen[it.ID] = it
+		}
+	}
+	items := make([]catalog.Item, 0, len(seen))
+	for _, it := range seen {
+		items = append(items, it)
+	}
+	return catalog.New(items...)
 }
 
 // BuiltinCatalog returns the built-in Library: the deduped union of the catalogs
-// derived from every shipped reference template (templates.IDs()). Built once.
+// derived from every shipped reference template (templates.IDs()). Each template's
+// bundled training.yaml is ingested with the real engine ingest
+// (topology.IngestBundled) and enriched with its optic/identity overlay (the same
+// catalog.Merge design.Resolve uses) so Library rows carry real SKU identity.
 func BuiltinCatalog() (*catalog.Catalog, error) {
-	return nil, ErrNotImplemented // RED stub (#80 GREEN)
+	var cats []*catalog.Catalog
+	for _, id := range templates.IDs() {
+		training, ok := templates.Training(id)
+		if !ok {
+			return nil, fmt.Errorf("library: template %q has no training.yaml", id)
+		}
+		_, cat, err := topology.IngestBundled(training)
+		if err != nil {
+			return nil, fmt.Errorf("library: ingest template %q: %w", id, err)
+		}
+		if overlay, ok := templates.Overlay(id); ok && len(overlay) > 0 {
+			ov, err := catalog.LoadBytes(overlay)
+			if err != nil {
+				return nil, fmt.Errorf("library: load overlay for %q: %w", id, err)
+			}
+			cat.Merge(ov)
+		}
+		cats = append(cats, cat)
+	}
+	return Union(cats...)
 }

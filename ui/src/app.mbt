@@ -787,12 +787,106 @@ pub fn main_entry() -> Unit {
 // placeholder, so the mock test's "GET /api/catalog" + rendered-table assertions
 // fail at the intended seam.
 pub fn load_library() -> Unit {
-  set_html("app", library_html("{}"))
+  set_html("app", loading_html("Loading library…"))
+  api_get(catalog_path(), fn(ok, status, body) {
+    if (!ok) || body_has_error(body) {
+      set_html("app", error_html(status, body))
+      return
+    }
+    set_html("app", library_html(body))
+    wire_library_rows(body)
+  })
+}
+
+// wire_library_rows attaches each catalog row's click → show the item detail.
+fn wire_library_rows(catalog_json : String) -> Unit {
+  let root = try {
+    @json.parse(catalog_json)
+  } catch {
+    _ => return
+  }
+  for it in arr_at(root, "items") {
+    let name = match get(it, "id") {
+      Some(idobj) => str_at(idobj, "name")
+      None => ""
+    }
+    on_click_row("catalog-item-" + name, fn() { load_catalog_item(name) })
+  }
+}
+
+// load_catalog_item: GET /api/catalog/{name} and render its read-only detail
+// panel into #library-detail (with a Close button that clears it).
+fn load_catalog_item(name : String) -> Unit {
+  api_get(catalog_item_path(name), fn(ok, status, body) {
+    if (!ok) || body_has_error(body) {
+      set_html("library-detail", error_html(status, body))
+      return
+    }
+    set_html("library-detail", library_item_html(body))
+    on_click("library-detail-close", fn() { set_html("library-detail", "") })
+  })
 }
 
 // load_reference_gallery: GET /api/templates and render the reference-topology
-// gallery, reusing the existing template clone chain for "Use as starting
-// point". RED stub (#80 GREEN).
+// gallery, reusing the existing template clone chain for "Use as starting point".
 pub fn load_reference_gallery() -> Unit {
-  set_html("app", reference_gallery_html("{}"))
+  set_html("app", loading_html("Loading reference topologies…"))
+  api_get(templates_path(), fn(ok, status, body) {
+    if (!ok) || body_has_error(body) {
+      set_html("app", error_html(status, body))
+      return
+    }
+    set_html("app", reference_gallery_html(body))
+    wire_reference_cards(body)
+  })
+}
+
+// wire_reference_cards attaches each reference card's "Use as starting point"
+// button → clone that reference into a new user plan (the existing clone chain).
+fn wire_reference_cards(templates_json : String) -> Unit {
+  let root = try {
+    @json.parse(templates_json)
+  } catch {
+    _ => return
+  }
+  for t in arr_at(root, "templates") {
+    let id = str_at(t, "id")
+    on_click("use-template-" + id, fn() { use_template(id) })
+  }
+}
+
+// use_template: create a new user plan from a reference topology — GET the
+// template's training YAML, POST it to /api/plans (a detached copy), attach the
+// template's optic overlay, then route to the new plan's detail. Reuses the same
+// clone chain as the New-plan "from template" flow (attach_template_overlay).
+fn use_template(template_id : String) -> Unit {
+  api_get(template_path(template_id), fn(ok, status, body) {
+    if (!ok) || body_has_error(body) {
+      set_html("reference-error", error_html(status, body))
+      return
+    }
+    let root = try {
+      @json.parse(body)
+    } catch {
+      _ => return
+    }
+    let training = str_at(root, "training")
+    api_post(plans_path(), training, fn(ok2, status2, body2) {
+      if (!ok2) || body_has_error(body2) {
+        set_html("reference-error", error_html(status2, body2))
+        return
+      }
+      let r2 = try {
+        @json.parse(body2)
+      } catch {
+        _ => return
+      }
+      let new_id = str_at(r2, "id")
+      if new_id == "" {
+        set_html("reference-error", error_html(0, body2))
+        return
+      }
+      attach_template_overlay(template_id, new_id)
+    })
+  })
 }

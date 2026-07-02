@@ -10,8 +10,12 @@
 
 import { test, expect } from "@playwright/test";
 
+// Wait until the initial load_plans has SETTLED (the plan-list heading rendered),
+// not merely until #app is non-empty (true at the loading spinner). Otherwise a
+// navbar click races the in-flight load_plans fetch, whose late callback would
+// clobber #app.
 async function waitForApp(page) {
-  await expect(page.locator("#app")).not.toBeEmpty();
+  await expect(page.getByRole("heading", { name: "Topology Plans" })).toBeVisible();
 }
 
 test.describe("AID GUI #80 — Library browse (read-only)", () => {
@@ -46,7 +50,10 @@ test.describe("AID GUI #80 — Library browse (read-only)", () => {
 
     // Stable per-item control id the renderer emits (#80 GREEN contract).
     await page.locator("#catalog-item-fe-leaf").click();
-    await expect(page.getByText(/fe-leaf/)).toBeVisible();
-    await expect(page.getByText(/class/i)).toBeVisible();
+    // Assert within the detail panel (the table also contains these strings).
+    const detail = page.locator("#library-detail");
+    await expect(detail.getByRole("heading")).toContainText("fe-leaf");
+    await expect(detail).toContainText("class");
+    await expect(detail).toContainText("celestica-ds5000");
   });
 });

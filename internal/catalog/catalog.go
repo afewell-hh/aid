@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 
@@ -193,7 +194,14 @@ func (c *Catalog) Len() int { return len(c.items) }
 // #80) enumerates the catalog through this — the items map alone has no stable
 // order.
 func (c *Catalog) Items() []Item {
-	return nil // RED stub (#80 GREEN): return c.items sorted by ID.String()
+	out := make([]Item, 0, len(c.items))
+	for _, it := range c.items {
+		out = append(out, it)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID.String() < out[j].ID.String()
+	})
+	return out
 }
 
 // SetExtracted attaches the reference_data block and server_nics extracted from a

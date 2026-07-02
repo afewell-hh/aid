@@ -13,8 +13,12 @@ import { test, expect } from "@playwright/test";
 // Template-created plan ids derive from meta.case_id (stable).
 const MESH_64_NAME = "Training XOC-64 1x OPG-64 Mesh Converged RO";
 
+// Wait until the initial load_plans has SETTLED (the plan-list heading rendered),
+// not merely until #app is non-empty (true at the loading spinner). Otherwise a
+// navbar click races the in-flight load_plans fetch, whose late callback would
+// clobber #app.
 async function waitForApp(page) {
-  await expect(page.locator("#app")).not.toBeEmpty();
+  await expect(page.getByRole("heading", { name: "Topology Plans" })).toBeVisible();
 }
 
 test.describe("AID GUI #80 — Reference-topology gallery", () => {

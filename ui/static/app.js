@@ -4607,10 +4607,137 @@ function _M0FP25aidui3src21new__plan__form__html(templates_json) {
   return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">New plan</h2><button id=\"new-cancel-btn\" class=\"btn btn-sm btn-outline-secondary\">Cancel</button></div><div id=\"new-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><div class=\"card\"><div class=\"card-body\"><div class=\"mb-3\"><label class=\"form-label\" for=\"new-name\">Name (optional — used as a label)</label><input id=\"new-name\" class=\"form-control\" type=\"text\" placeholder=\"My fabric plan\"></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-template\">Start from</label><select id=\"new-template\" class=\"form-select\">${opts}</select><div class=\"form-text\">Pick a starter to prefill the YAML, or leave Blank to paste your own.</div></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-yaml\">Plan YAML</label><textarea id=\"new-yaml\" class=\"form-control font-monospace\" rows=\"18\" spellcheck=\"false\" placeholder=\"meta:\n  case_id: my-plan\n  name: My Plan\n...\"></textarea></div><button id=\"new-submit-btn\" class=\"btn btn-primary\">Create plan</button></div></div>`;
 }
 function _M0FP25aidui3src13library__html(catalog_json) {
-  return "<!-- library_html: not implemented (#80 GREEN) -->";
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(catalog_json, 0, catalog_json.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return _M0FP25aidui3src9warn__box("Could not parse the library.");
+  }
+  const items = _M0FP25aidui3src7arr__at(root, "items");
+  let rows = "";
+  const _bind = items.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind) {
+      const it = items[_];
+      const _bind$2 = _M0FP25aidui3src3get(it, "id");
+      let name;
+      if (_bind$2 === undefined) {
+        name = "";
+      } else {
+        const _Some = _bind$2;
+        const _idobj = _Some;
+        name = _M0FP25aidui3src7str__at(_idobj, "name");
+      }
+      const kind = _M0FP25aidui3src7str__at(it, "kind");
+      const layer = _M0FP25aidui3src7str__at(it, "layer");
+      const manufacturer = _M0FP25aidui3src7str__at(it, "manufacturer");
+      const model = _M0FP25aidui3src7str__at(it, "model");
+      const part = _M0FP25aidui3src7str__at(it, "part_number");
+      rows = `${rows}<tr id=\"catalog-item-${_M0FP25aidui3src3esc(name)}\" style=\"cursor:pointer\" title=\"Show ${_M0FP25aidui3src3esc(name)}\"><td><code>${_M0FP25aidui3src3esc(name)}</code></td><td>${_M0FP25aidui3src3esc(kind)}</td><td>${_M0FP25aidui3src3esc(layer)}</td><td>${_M0FP25aidui3src3esc(manufacturer)}</td><td>${_M0FP25aidui3src3esc(model)}</td><td>${_M0FP25aidui3src3esc(part)}</td></tr>`;
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  const count = _M0MPC13int3Int18to__string_2einner(items.length, 10);
+  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">Library</h2><span class=\"badge text-bg-secondary\">${count} item(s)</span></div><p class=\"text-secondary\">Reusable inventory — the built-in component catalog shared across the reference topologies. Read-only.</p><div id=\"library-detail\" class=\"mb-3\"></div><table class=\"table table-hover align-middle\"><caption class=\"visually-hidden\">Built-in library — ${count} catalog item(s) with kind, layer, and identity</caption><thead><tr><th scope=\"col\">ID</th><th scope=\"col\">Kind</th><th scope=\"col\">Layer</th><th scope=\"col\">Manufacturer</th><th scope=\"col\">Model</th><th scope=\"col\">Part #</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function _M0FP25aidui3src19library__item__html(item_json) {
+  let it;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(item_json, 0, item_json.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        it = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return _M0FP25aidui3src9warn__box("Could not parse the library item.");
+  }
+  const _bind = _M0FP25aidui3src3get(it, "id");
+  let name;
+  if (_bind === undefined) {
+    name = "";
+  } else {
+    const _Some = _bind;
+    const _idobj = _Some;
+    name = _M0FP25aidui3src7str__at(_idobj, "name");
+  }
+  const _bind$2 = _M0FP25aidui3src3get(it, "id");
+  let version;
+  if (_bind$2 === undefined) {
+    version = "";
+  } else {
+    const _Some = _bind$2;
+    const _idobj = _Some;
+    version = _M0FP25aidui3src7str__at(_idobj, "version");
+  }
+  const kind = _M0FP25aidui3src7str__at(it, "kind");
+  const layer = _M0FP25aidui3src7str__at(it, "layer");
+  const manufacturer = _M0FP25aidui3src7str__at(it, "manufacturer");
+  const model = _M0FP25aidui3src7str__at(it, "model");
+  const part = _M0FP25aidui3src7str__at(it, "part_number");
+  const desc = _M0FP25aidui3src7str__at(it, "description");
+  return `<div class=\"card\"><div class=\"card-body\"><div class=\"d-flex justify-content-between align-items-center mb-2\"><h3 class=\"h5 mb-0\"><code>${_M0FP25aidui3src3esc(name)}</code> <span class=\"text-secondary\">@${_M0FP25aidui3src3esc(version)}</span></h3><button id=\"library-detail-close\" class=\"btn btn-sm btn-outline-secondary\">Close</button></div><dl class=\"row mb-0\"><dt class=\"col-sm-3\">Kind</dt><dd class=\"col-sm-9\">${_M0FP25aidui3src3esc(kind)}</dd><dt class=\"col-sm-3\">Layer</dt><dd class=\"col-sm-9\">${_M0FP25aidui3src3esc(layer)}</dd><dt class=\"col-sm-3\">Manufacturer</dt><dd class=\"col-sm-9\">${_M0FP25aidui3src3esc(manufacturer)}</dd><dt class=\"col-sm-3\">Model</dt><dd class=\"col-sm-9\">${_M0FP25aidui3src3esc(model)}</dd><dt class=\"col-sm-3\">Part #</dt><dd class=\"col-sm-9\">${_M0FP25aidui3src3esc(part)}</dd><dt class=\"col-sm-3\">Description</dt><dd class=\"col-sm-9\">${_M0FP25aidui3src3esc(desc)}</dd></dl></div></div>`;
 }
 function _M0FP25aidui3src24reference__gallery__html(templates_json) {
-  return "<!-- reference_gallery_html: not implemented (#80 GREEN) -->";
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(templates_json, 0, templates_json.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return _M0FP25aidui3src9warn__box("Could not parse reference topologies.");
+  }
+  const tpls = _M0FP25aidui3src7arr__at(root, "templates");
+  let cards = "";
+  const _bind = tpls.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind) {
+      const t = tpls[_];
+      const id = _M0FP25aidui3src7str__at(t, "id");
+      const name = _M0FP25aidui3src7str__at(t, "name");
+      const topo = _M0FP25aidui3src7str__at(t, "topology");
+      const desc = _M0FP25aidui3src7str__at(t, "description");
+      cards = `${cards}<div class=\"col-md-6 col-lg-4 mb-3\"><div class=\"card h-100\"><div class=\"card-body d-flex flex-column\"><h3 class=\"h6 card-title\">${_M0FP25aidui3src3esc(name)}</h3><span class=\"badge text-bg-info align-self-start mb-2\">${_M0FP25aidui3src3esc(topo)}</span><p class=\"card-text small text-secondary flex-grow-1\">${_M0FP25aidui3src3esc(desc)}</p><button id=\"use-template-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-sm btn-primary mt-2\">Use as starting point</button></div></div></div>`;
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">Reference topologies</h2></div><p class=\"text-secondary\">Built-in reference designs. \"Use as starting point\" creates your own editable plan (a detached copy — no link back).</p><div id=\"reference-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><div class=\"row\">${cards}</div>`;
 }
 function _M0FP25aidui3src18plan__detail__html(detail_json) {
   let root;
@@ -4950,13 +5077,13 @@ function _M0FP25aidui3src15select__strings(id, options, selected, aria_label) {
   }
   return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS295(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS325(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
 function _M0FP25aidui3src12topo__select(id, current, aria_label) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS295(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS295(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS325(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS325(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -5951,11 +6078,174 @@ function _M0FP25aidui3src28copy__overlay__then__refresh(src_id, new_id) {
     });
   });
 }
+function _M0FP25aidui3src19load__catalog__item(name) {
+  _M0FP25aidui3src8api__get(`/catalog/${name}`, (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("library-detail", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src9set__html("library-detail", _M0FP25aidui3src19library__item__html(body));
+    _M0FP25aidui3src9on__click("library-detail-close", () => {
+      _M0FP25aidui3src9set__html("library-detail", "");
+    });
+  });
+}
+function _M0FP25aidui3src19wire__library__rows(catalog_json) {
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(catalog_json, 0, catalog_json.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return undefined;
+  }
+  const _bind = _M0FP25aidui3src7arr__at(root, "items");
+  const _bind$2 = _bind.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind$2) {
+      const it = _bind[_];
+      const _bind$3 = _M0FP25aidui3src3get(it, "id");
+      let name;
+      if (_bind$3 === undefined) {
+        name = "";
+      } else {
+        const _Some = _bind$3;
+        const _idobj = _Some;
+        name = _M0FP25aidui3src7str__at(_idobj, "name");
+      }
+      _M0FP25aidui3src14on__click__row(`catalog-item-${name}`, () => {
+        _M0FP25aidui3src19load__catalog__item(name);
+      });
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      return;
+    }
+  }
+}
 function _M0FP25aidui3src13load__library() {
-  _M0FP25aidui3src9set__html("app", _M0FP25aidui3src13library__html("{}"));
+  _M0FP25aidui3src9set__html("app", _M0FP25aidui3src13loading__html("Loading library…"));
+  _M0FP25aidui3src8api__get("/catalog", (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("app", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src9set__html("app", _M0FP25aidui3src13library__html(body));
+    _M0FP25aidui3src19wire__library__rows(body);
+  });
+}
+function _M0FP25aidui3src13use__template(template_id) {
+  _M0FP25aidui3src8api__get(`/templates/${template_id}`, (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    let root;
+    let _try_err;
+    _L: {
+      _L$2: {
+        const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
+        if (_bind.$tag === 1) {
+          const _ok = _bind;
+          root = _ok._0;
+        } else {
+          const _err = _bind;
+          _try_err = _err._0;
+          break _L$2;
+        }
+        break _L;
+      }
+      return undefined;
+    }
+    const training = _M0FP25aidui3src7str__at(root, "training");
+    _M0FP25aidui3src9api__post("/plans", training, (ok2, status2, body2) => {
+      if (!ok2 || _M0FP25aidui3src16body__has__error(body2)) {
+        _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(status2, body2));
+        return undefined;
+      }
+      let r2;
+      let _try_err$2;
+      _L$2: {
+        _L$3: {
+          const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body2, 0, body2.length), 1024);
+          if (_bind.$tag === 1) {
+            const _ok = _bind;
+            r2 = _ok._0;
+          } else {
+            const _err = _bind;
+            _try_err$2 = _err._0;
+            break _L$3;
+          }
+          break _L$2;
+        }
+        return undefined;
+      }
+      const new_id = _M0FP25aidui3src7str__at(r2, "id");
+      if (new_id === "") {
+        _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(0, body2));
+        return undefined;
+      }
+      _M0FP25aidui3src25attach__template__overlay(template_id, new_id);
+    });
+  });
+}
+function _M0FP25aidui3src22wire__reference__cards(templates_json) {
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(templates_json, 0, templates_json.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return undefined;
+  }
+  const _bind = _M0FP25aidui3src7arr__at(root, "templates");
+  const _bind$2 = _bind.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind$2) {
+      const t = _bind[_];
+      const id = _M0FP25aidui3src7str__at(t, "id");
+      _M0FP25aidui3src9on__click(`use-template-${id}`, () => {
+        _M0FP25aidui3src13use__template(id);
+      });
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      return;
+    }
+  }
 }
 function _M0FP25aidui3src24load__reference__gallery() {
-  _M0FP25aidui3src9set__html("app", _M0FP25aidui3src24reference__gallery__html("{}"));
+  _M0FP25aidui3src9set__html("app", _M0FP25aidui3src13loading__html("Loading reference topologies…"));
+  _M0FP25aidui3src8api__get("/templates", (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("app", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src9set__html("app", _M0FP25aidui3src24reference__gallery__html(body));
+    _M0FP25aidui3src22wire__reference__cards(body);
+  });
 }
 function _M0FP25aidui3src11main__entry() {
   _M0FP25aidui3src12console__log("AID UI starting");
