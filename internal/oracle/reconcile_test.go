@@ -140,13 +140,15 @@ func TestSwDs5000LeafDt_ModelCanonical(t *testing.T) {
 	}
 }
 
-// TestXoc128_ProjectionIncludesManagementTransceivers makes the BOM rebaseline
-// EXPLICIT (oracle-awareness): once xoc-128 binds the management transceivers, its
-// projection BOM gains one aggregate row — server_transceiver, qty 12 (6 mgmt
-// servers × 2 optics) — taking the projection from 23 to 24 rows. RED: fails now
-// (row absent, 23 rows). GREEN adds the data, rebaselines tests/oracle/xoc-128
-// bom.csv (+1 row) and the composition BOMRows tripwire (23→24).
-func TestXoc128_ProjectionIncludesManagementTransceivers(t *testing.T) {
+// TestXoc128_ProjectionNamesManagementTransceivers makes the BOM rebaseline
+// EXPLICIT (oracle-awareness): once xoc-128 binds the management transceivers AND
+// its overlay carries their optic identity (copied byte-for-byte from xoc-64),
+// the projection renders them as TWO NAMED rows — SFP28-25GBASE-SR qty 6 and
+// RJ45-1000BASE-T qty 6 (6 mgmt servers each) — exactly as xoc-64 does, NOT an
+// anonymous aggregate. The projection goes from 23 (main) to 25 rows. GREEN adds
+// the data + overlay identities, rebaselines tests/oracle/xoc-128 bom.csv and the
+// composition BOMRows tripwire (23→25).
+func TestXoc128_ProjectionNamesManagementTransceivers(t *testing.T) {
 	var comp Composition
 	found := false
 	for _, c := range Compositions() {
@@ -171,17 +173,33 @@ func TestXoc128_ProjectionIncludesManagementTransceivers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderProjection: %v", err)
 	}
-	if len(rows) != 24 {
-		t.Errorf("xoc-128 projection rows = %d, want 24 (adds the management server_transceiver row)", len(rows))
+	if len(rows) != 25 {
+		t.Errorf("xoc-128 projection rows = %d, want 25 (two NAMED management transceiver rows)", len(rows))
 	}
-	found = false
+	// The management optics must render as NAMED rows (identity, not blank), each
+	// qty 6 — matching how xoc-64 renders the same pinned ids.
+	want := map[string]bool{"SFP28-25GBASE-SR": false, "RJ45-1000BASE-T": false}
+	blankAggregate := false
 	for _, r := range rows {
-		if len(r) >= 6 && r[0] == "server_transceiver" && r[5] == "12" {
-			found = true
-			break
+		if len(r) < 6 || r[0] != "server_transceiver" {
+			continue
+		}
+		if r[1] == "" && r[5] == "12" {
+			blankAggregate = true
+		}
+		if _, ok := want[r[1]]; ok {
+			if r[5] != "6" {
+				t.Errorf("management transceiver %q qty = %q, want 6", r[1], r[5])
+			}
+			want[r[1]] = true
 		}
 	}
-	if !found {
-		t.Errorf("xoc-128 projection missing the management server_transceiver row (qty 12 = 6 servers × 2 optics)")
+	if blankAggregate {
+		t.Errorf("xoc-128 still renders the anonymous server_transceiver aggregate (qty 12) — overlay identity missing")
+	}
+	for model, seen := range want {
+		if !seen {
+			t.Errorf("xoc-128 projection missing named management transceiver row %q (qty 6)", model)
+		}
 	}
 }

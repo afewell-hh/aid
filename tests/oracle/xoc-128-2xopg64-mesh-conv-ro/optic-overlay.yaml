@@ -62,6 +62,48 @@ items:
       breakout_topology: 1x
       is_cable_assembly: "false"
 
+  - id: { name: rj45_1000base_t, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Generic
+    model: RJ45-1000BASE-T
+    description: "1G copper RJ45 transceiver/PHY placeholder"
+    calc_profile:
+      cage_type: RJ45
+      medium: Copper
+      connector: RJ45
+      standard: 1000BASE-T
+      reach_class: Copper
+      wavelength_nm: ""
+      host_lane_count: "1"
+      host_serdes_gbps_per_lane: "1"
+      optical_lane_pattern: ""
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 1x
+      is_cable_assembly: "false"
+
+  - id: { name: sfp28_25gbase_sr, version: "1" }
+    kind: transceiver
+    layer: hardware_type
+    manufacturer: Generic
+    model: SFP28-25GBASE-SR
+    description: "25G SFP28 SR optic (LC)"
+    calc_profile:
+      cage_type: SFP28
+      medium: MMF
+      connector: LC
+      standard: 25GBASE-SR
+      reach_class: SR
+      wavelength_nm: "850"
+      host_lane_count: "1"
+      host_serdes_gbps_per_lane: "25"
+      optical_lane_pattern: SR
+      gearbox_present: "false"
+      cable_assembly_type: none
+      breakout_topology: 1x
+      is_cable_assembly: "false"
+
   # --- NIC modules: cols 7–19 mostly empty; optical_lane_pattern "Unknown" ----
   - id: { name: bmc_module, version: "1" }
     kind: nic

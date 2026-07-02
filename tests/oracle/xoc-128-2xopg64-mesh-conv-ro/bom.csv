@@ -18,7 +18,8 @@ nic,Generic Dual-Port 200G NIC,,,Generic,12,,,,,,,,,,Unknown,,,false
 nic,Generic Dual-Port 25GbE NIC,,,Generic,34,,,,,,,,,,Unknown,,,false
 nic,Generic xPU Scale-Out 8x400G NIC,,,NVIDIA,16,,,,,,,,,,Unknown,,,false
 nic,Generic xPU SoC/Storage 2x200G NIC,,,NVIDIA,16,,,,,,,,,,Unknown,,,false
-server_transceiver,,,,,12,,,,,,,,,,,,,
 server_transceiver,OSFP-200G-DR4,,,Generic,56,OSFP,SMF,MPO-12,200GBASE-DR4,DR,1310,4,50,DR4,false,none,1x,false
 server_transceiver,OSFP-400G-DR4,,,Generic,128,OSFP,SMF,MPO-12,400GBASE-DR4,DR,1310,4,100,DR4,false,none,1x,false
+server_transceiver,RJ45-1000BASE-T,1G copper RJ45 transceiver/PHY placeholder,,Generic,6,RJ45,Copper,RJ45,1000BASE-T,Copper,,1,1,,false,none,1x,false
+server_transceiver,SFP28-25GBASE-SR,25G SFP28 SR optic (LC),,Generic,6,SFP28,MMF,LC,25GBASE-SR,SR,850,1,25,SR,false,none,1x,false
 # suppressed_switch_cable_assembly_count,0
