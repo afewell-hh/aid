@@ -388,6 +388,118 @@ pub fn new_plan_form_html(templates_json : String) -> String {
   "</div></div>"
 }
 
+// library_html: render the read-only Library browse table from the
+// GET /api/catalog JSON ({"items":[{id:{name,version},kind,layer,...}]}). The
+// built-in Library is the deduped union of the shipped reference templates'
+// catalogs (#80). RED stub — #80 GREEN renders the item table.
+pub fn library_html(catalog_json : String) -> String {
+  let root = try {
+    @json.parse(catalog_json)
+  } catch {
+    _ => return warn_box("Could not parse the library.")
+  }
+  let items = arr_at(root, "items")
+  let mut rows = ""
+  for it in items {
+    let name = match get(it, "id") {
+      Some(idobj) => str_at(idobj, "name")
+      None => ""
+    }
+    let kind = str_at(it, "kind")
+    let layer = str_at(it, "layer")
+    let manufacturer = str_at(it, "manufacturer")
+    let model = str_at(it, "model")
+    let part = str_at(it, "part_number")
+    rows = rows +
+      "<tr id=\"catalog-item-\{esc(name)}\" style=\"cursor:pointer\" title=\"Show \{esc(name)}\">" +
+      "<td><code>\{esc(name)}</code></td>" +
+      "<td>\{esc(kind)}</td>" +
+      "<td>\{esc(layer)}</td>" +
+      "<td>\{esc(manufacturer)}</td>" +
+      "<td>\{esc(model)}</td>" +
+      "<td>\{esc(part)}</td>" +
+      "</tr>"
+  }
+  let count = items.length().to_string()
+  "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
+  "<h2 class=\"h4 mb-0\">Library</h2>" +
+  "<span class=\"badge text-bg-secondary\">\{count} item(s)</span></div>" +
+  "<p class=\"text-secondary\">Reusable inventory — the built-in component catalog shared across the reference topologies. Read-only.</p>" +
+  "<div id=\"library-detail\" class=\"mb-3\"></div>" +
+  "<table class=\"table table-hover align-middle\">" +
+  "<caption class=\"visually-hidden\">Built-in library — \{count} catalog item(s) with kind, layer, and identity</caption>" +
+  "<thead><tr><th scope=\"col\">ID</th><th scope=\"col\">Kind</th><th scope=\"col\">Layer</th><th scope=\"col\">Manufacturer</th><th scope=\"col\">Model</th><th scope=\"col\">Part #</th></tr></thead>" +
+  "<tbody>\{rows}</tbody></table>"
+}
+
+// library_item_html: the detail panel for one catalog item (GET /api/catalog/
+// {name}). Shows identity + kind/layer + the descriptive/optic fields. Read-only.
+pub fn library_item_html(item_json : String) -> String {
+  let it = try {
+    @json.parse(item_json)
+  } catch {
+    _ => return warn_box("Could not parse the library item.")
+  }
+  let name = match get(it, "id") {
+    Some(idobj) => str_at(idobj, "name")
+    None => ""
+  }
+  let version = match get(it, "id") {
+    Some(idobj) => str_at(idobj, "version")
+    None => ""
+  }
+  let kind = str_at(it, "kind")
+  let layer = str_at(it, "layer")
+  let manufacturer = str_at(it, "manufacturer")
+  let model = str_at(it, "model")
+  let part = str_at(it, "part_number")
+  let desc = str_at(it, "description")
+  "<div class=\"card\"><div class=\"card-body\">" +
+  "<div class=\"d-flex justify-content-between align-items-center mb-2\">" +
+  "<h3 class=\"h5 mb-0\"><code>\{esc(name)}</code> <span class=\"text-secondary\">@\{esc(version)}</span></h3>" +
+  "<button id=\"library-detail-close\" class=\"btn btn-sm btn-outline-secondary\">Close</button></div>" +
+  "<dl class=\"row mb-0\">" +
+  "<dt class=\"col-sm-3\">Kind</dt><dd class=\"col-sm-9\">\{esc(kind)}</dd>" +
+  "<dt class=\"col-sm-3\">Layer</dt><dd class=\"col-sm-9\">\{esc(layer)}</dd>" +
+  "<dt class=\"col-sm-3\">Manufacturer</dt><dd class=\"col-sm-9\">\{esc(manufacturer)}</dd>" +
+  "<dt class=\"col-sm-3\">Model</dt><dd class=\"col-sm-9\">\{esc(model)}</dd>" +
+  "<dt class=\"col-sm-3\">Part #</dt><dd class=\"col-sm-9\">\{esc(part)}</dd>" +
+  "<dt class=\"col-sm-3\">Description</dt><dd class=\"col-sm-9\">\{esc(desc)}</dd>" +
+  "</dl></div></div>"
+}
+
+// reference_gallery_html: render the reference-topology gallery from the
+// GET /api/templates JSON. Each card carries a "Use as starting point" control
+// (id "use-template-<id>") that reuses the existing template clone chain. RED
+// stub — #80 GREEN renders the gallery cards.
+pub fn reference_gallery_html(templates_json : String) -> String {
+  let root = try {
+    @json.parse(templates_json)
+  } catch {
+    _ => return warn_box("Could not parse reference topologies.")
+  }
+  let tpls = arr_at(root, "templates")
+  let mut cards = ""
+  for t in tpls {
+    let id = str_at(t, "id")
+    let name = str_at(t, "name")
+    let topo = str_at(t, "topology")
+    let desc = str_at(t, "description")
+    cards = cards +
+      "<div class=\"col-md-6 col-lg-4 mb-3\"><div class=\"card h-100\"><div class=\"card-body d-flex flex-column\">" +
+      "<h3 class=\"h6 card-title\">\{esc(name)}</h3>" +
+      "<span class=\"badge text-bg-info align-self-start mb-2\">\{esc(topo)}</span>" +
+      "<p class=\"card-text small text-secondary flex-grow-1\">\{esc(desc)}</p>" +
+      "<button id=\"use-template-\{esc(id)}\" class=\"btn btn-sm btn-primary mt-2\">Use as starting point</button>" +
+      "</div></div></div>"
+  }
+  "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
+  "<h2 class=\"h4 mb-0\">Reference topologies</h2></div>" +
+  "<p class=\"text-secondary\">Built-in reference designs. \"Use as starting point\" creates your own editable plan (a detached copy — no link back).</p>" +
+  "<div id=\"reference-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div>" +
+  "<div class=\"row\">\{cards}</div>"
+}
+
 // plan_detail_html: cards for the plan summary and its topology (fabrics +
 // device classes, from the canonical YAML), with calc/BOM actions and a result
 // region the calc/BOM views render into.

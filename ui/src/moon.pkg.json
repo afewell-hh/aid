@@ -22,7 +22,11 @@
         "save_overlay",
         "download_bom_csv",
         "loading_html",
-        "validating_html"
+        "validating_html",
+        "load_library",
+        "load_reference_gallery",
+        "library_html",
+        "reference_gallery_html"
       ],
       "format": "esm"
     }

@@ -13,6 +13,7 @@ import (
 	"github.com/afewell-hh/aid/internal/bom"
 	"github.com/afewell-hh/aid/internal/calc"
 	"github.com/afewell-hh/aid/internal/design"
+	"github.com/afewell-hh/aid/internal/library"
 	"github.com/afewell-hh/aid/internal/planedit"
 	"github.com/afewell-hh/aid/internal/planstore"
 	"github.com/afewell-hh/aid/internal/templates"
@@ -32,6 +33,8 @@ var serveRoutes = []string{
 	"GET /api/plans/{id}/wiring/{fabric}",
 	"GET /api/templates",
 	"GET /api/templates/{id}",
+	"GET /api/catalog",
+	"GET /api/catalog/{id}",
 }
 
 // api holds the handler dependencies (the plan store). Handlers reuse
@@ -77,6 +80,8 @@ func newServeMux(store *planstore.Store) http.Handler {
 	mux.HandleFunc("/api/templates", a.listTemplates) // starter-template catalog (P0.2)
 	mux.HandleFunc("/api/templates/", a.getTemplate)  // one starter's training + overlay YAML
 	mux.HandleFunc("/api/validate", a.validate)       // stateless dry-run validate (P1.3)
+	mux.HandleFunc("/api/catalog", a.listCatalog)     // read-only Library browse (#80)
+	mux.HandleFunc("/api/catalog/", a.getCatalogItem) // one Library item by pinned id
 	mux.Handle("/", ui.Handler())                     // embedded frontend (Bootstrap 5 + app.js)
 	return mux
 }
@@ -197,6 +202,50 @@ func (a *api) getTemplate(w http.ResponseWriter, r *http.Request) {
 		"training": string(training),
 		"overlay":  string(overlay),
 	})
+}
+
+// --- catalog / Library browse (#80, read-only) ------------------------------
+
+// listCatalog: GET /api/catalog → {"items":[item,...]} — the read-only built-in
+// Library: the deduped union of the shipped reference templates' catalogs
+// (internal/library.BuiltinCatalog), enumerated deterministically (sorted by
+// pinned id). Read-only: non-GET is 405.
+func (a *api) listCatalog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	cat, err := library.BuiltinCatalog()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": cat.Items()})
+}
+
+// getCatalogItem: GET /api/catalog/{name} → the full catalog item for the pinned
+// name (the friendly class/type id), or 404 if unknown.
+func (a *api) getCatalogItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/api/catalog/")
+	if name == "" {
+		writeJSONError(w, http.StatusNotFound, "catalog item not found")
+		return
+	}
+	cat, err := library.BuiltinCatalog()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	it, ok := cat.ByName(name)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "catalog item not found: "+name)
+		return
+	}
+	writeJSON(w, http.StatusOK, it)
 }
 
 // --- handlers ---------------------------------------------------------------
