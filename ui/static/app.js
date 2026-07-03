@@ -5077,13 +5077,13 @@ function _M0FP25aidui3src15select__strings(id, options, selected, aria_label) {
   }
   return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS328(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS355(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
 function _M0FP25aidui3src12topo__select(id, current, aria_label) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS328(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS328(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS355(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS355(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -5100,6 +5100,19 @@ function _M0FP25aidui3src15override__value(sw) {
       return "";
     }
   }
+}
+function _M0FP25aidui3src14add__nic__form(server_class_ids, module_types) {
+  return `<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"small text-muted mb-2\">Add NIC</div><div class=\"row g-2 align-items-end\"><div class=\"col-4\">${_M0FP25aidui3src15select__strings("add-nic-server", server_class_ids, "", "Parent server class for new NIC")}</div><div class=\"col-3\"><input id=\"add-nic-id\" class=\"form-control form-control-sm\" placeholder=\"nic_id\" aria-label=\"New NIC id\"></div><div class=\"col-3\">${_M0FP25aidui3src12select__html("add-nic-module", module_types, "", true, "New NIC module type")}</div><div class=\"col-2\"><button id=\"add-nic-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div></div></div></div>`;
+}
+function _M0FP25aidui3src24add__switch__class__form(device_type_extensions) {
+  const fabric_classes = ["managed", "unmanaged"];
+  const roles = ["server-leaf", "border-leaf", "spine", "virtual"];
+  return `<div class=\"card mb-3\"><div class=\"card-body\"><div class=\"small text-muted mb-2\">Add switch class</div><div class=\"row g-2 align-items-end\"><div class=\"col-3\"><input id=\"add-swc-id\" class=\"form-control form-control-sm\" placeholder=\"new_switch_class_id\" aria-label=\"New switch class id\"></div><div class=\"col-3\"><input id=\"add-swc-fabric-name\" class=\"form-control form-control-sm\" placeholder=\"fabric_name\" aria-label=\"New switch class fabric name\"></div><div class=\"col-2\">${_M0FP25aidui3src15select__strings("add-swc-fabric-class", fabric_classes, "managed", "New switch class fabric class")}</div><div class=\"col-2\">${_M0FP25aidui3src15select__strings("add-swc-role", roles, "server-leaf", "New switch class hedgehog role")}</div></div><div class=\"row g-2 mt-1 align-items-end\"><div class=\"col-4\">${_M0FP25aidui3src12select__html("add-swc-devext", device_type_extensions, "", true, "New switch class device type extension")}</div><div class=\"col-3\">${_M0FP25aidui3src12topo__select("add-swc-topo", "", "New switch class topology mode")}</div><div class=\"col-3\"><input id=\"add-swc-override\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" placeholder=\"override qty (opt)\" aria-label=\"New switch class override quantity\"></div><div class=\"col-2\"><button id=\"add-swc-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div></div></div></div>`;
+}
+function _M0FP25aidui3src15add__zone__form(switch_class_ids, breakout_options, module_types) {
+  const zone_types = ["server", "uplink", "mesh", "peer", "session", "oob"];
+  const allocs = ["sequential", "interleaved", "custom"];
+  return `<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"small text-muted mb-2\">Add switch port zone</div><div class=\"row g-2 align-items-end\"><div class=\"col-3\">${_M0FP25aidui3src15select__strings("add-zone-swc", switch_class_ids, "", "Parent switch class for new zone")}</div><div class=\"col-3\"><input id=\"add-zone-name\" class=\"form-control form-control-sm\" placeholder=\"zone_name\" aria-label=\"New zone name\"></div><div class=\"col-2\">${_M0FP25aidui3src15select__strings("add-zone-type", zone_types, "server", "New zone type")}</div><div class=\"col-2\"><input id=\"add-zone-portspec\" class=\"form-control form-control-sm\" placeholder=\"port_spec\" aria-label=\"New zone port spec\"></div></div><div class=\"row g-2 mt-1 align-items-end\"><div class=\"col-3\">${_M0FP25aidui3src12select__html("add-zone-breakout", breakout_options, "", true, "New zone breakout option")}</div><div class=\"col-3\">${_M0FP25aidui3src12select__html("add-zone-xcvr", module_types, "", true, "New zone transceiver module type")}</div><div class=\"col-2\">${_M0FP25aidui3src15select__strings("add-zone-alloc", allocs, "sequential", "New zone allocation strategy")}</div><div class=\"col-2\"><input id=\"add-zone-priority\" class=\"form-control form-control-sm\" type=\"number\" placeholder=\"priority\" aria-label=\"New zone priority\"></div><div class=\"col-2\"><button id=\"add-zone-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div></div></div></div>`;
 }
 function _M0FP25aidui3src23structure__editor__html(structure_json) {
   let root;
@@ -5155,32 +5168,71 @@ function _M0FP25aidui3src23structure__editor__html(structure_json) {
     const _c = _Some;
     target_zones = _M0FP25aidui3src7arr__at(_c, "target_zones");
   }
-  let srv = "";
-  const _bind$5 = _M0FP25aidui3src7arr__at(root, "server_classes");
-  const _bind$6 = _bind$5.length;
+  const _bind$5 = _M0FP25aidui3src3get(root, "catalog");
+  let breakout_options;
+  if (_bind$5 === undefined) {
+    breakout_options = [];
+  } else {
+    const _Some = _bind$5;
+    const _c = _Some;
+    breakout_options = _M0FP25aidui3src7arr__at(_c, "breakout_options");
+  }
+  const switch_class_ids = [];
+  const _bind$6 = _M0FP25aidui3src7arr__at(root, "switch_classes");
+  const _bind$7 = _bind$6.length;
   let _tmp = 0;
   while (true) {
     const _ = _tmp;
-    if (_ < _bind$6) {
-      const sc = _bind$5[_];
+    if (_ < _bind$7) {
+      const s = _bind$6[_];
+      _M0MPC15array5Array4pushGsE(switch_class_ids, _M0FP25aidui3src7str__at(s, "id"));
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  const server_class_ids = [];
+  const _bind$8 = _M0FP25aidui3src7arr__at(root, "server_classes");
+  const _bind$9 = _bind$8.length;
+  let _tmp$2 = 0;
+  while (true) {
+    const _ = _tmp$2;
+    if (_ < _bind$9) {
+      const sc = _bind$8[_];
+      _M0MPC15array5Array4pushGsE(server_class_ids, _M0FP25aidui3src7str__at(sc, "id"));
+      _tmp$2 = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  let srv = "";
+  const _bind$10 = _M0FP25aidui3src7arr__at(root, "server_classes");
+  const _bind$11 = _bind$10.length;
+  let _tmp$3 = 0;
+  while (true) {
+    const _ = _tmp$3;
+    if (_ < _bind$11) {
+      const sc = _bind$10[_];
       const id = _M0FP25aidui3src7str__at(sc, "id");
       const qty = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(sc, "quantity"), 10);
       const gpus = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(sc, "gpus_per_server"), 10);
       const devtype = _M0FP25aidui3src7str__at(sc, "server_device_type");
       let nic_rows = "";
       const nic_ids = [];
-      const _bind$7 = _M0FP25aidui3src7arr__at(sc, "nics");
-      const _bind$8 = _bind$7.length;
-      let _tmp$2 = 0;
+      const _bind$12 = _M0FP25aidui3src7arr__at(sc, "nics");
+      const _bind$13 = _bind$12.length;
+      let _tmp$4 = 0;
       while (true) {
-        const _$2 = _tmp$2;
-        if (_$2 < _bind$8) {
-          const n = _bind$7[_$2];
+        const _$2 = _tmp$4;
+        if (_$2 < _bind$13) {
+          const n = _bind$12[_$2];
           const nicid = _M0FP25aidui3src7str__at(n, "nic_id");
           _M0MPC15array5Array4pushGsE(nic_ids, nicid);
           const mt = _M0FP25aidui3src7str__at(n, "module_type");
           nic_rows = `${nic_rows}<div class=\"row g-2 align-items-center mb-1\"><div class=\"col-4\"><code>${_M0FP25aidui3src3esc(nicid)}</code></div><div class=\"col-8\">${_M0FP25aidui3src12select__html(`nic-${id}-${nicid}`, module_types, mt, false, `Module type for NIC ${nicid} on ${id}`)}</div></div>`;
-          _tmp$2 = _$2 + 1 | 0;
+          _tmp$4 = _$2 + 1 | 0;
           continue;
         } else {
           break;
@@ -5188,17 +5240,17 @@ function _M0FP25aidui3src23structure__editor__html(structure_json) {
       }
       const dist_opts = ["same-switch", "alternating", "rail-optimized"];
       let conn_rows = "";
-      const _bind$9 = _M0FP25aidui3src7arr__at(sc, "connections");
-      const _bind$10 = _bind$9.length;
-      let _tmp$3 = 0;
+      const _bind$14 = _M0FP25aidui3src7arr__at(sc, "connections");
+      const _bind$15 = _bind$14.length;
+      let _tmp$5 = 0;
       while (true) {
-        const _$2 = _tmp$3;
-        if (_$2 < _bind$10) {
-          const cn = _bind$9[_$2];
+        const _$2 = _tmp$5;
+        if (_$2 < _bind$15) {
+          const cn = _bind$14[_$2];
           const ci = _M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(cn, "index"), 10);
           const cid = _M0FP25aidui3src7str__at(cn, "connection_id");
           conn_rows = `${conn_rows}<tr><td class=\"text-nowrap\"><code>${_M0FP25aidui3src3esc(cid)}</code></td><td>${_M0FP25aidui3src12select__html(`conn-${ci}-target_zone`, target_zones, _M0FP25aidui3src7str__at(cn, "target_zone"), false, `Target zone for connection ${cid}`)}</td><td>${_M0FP25aidui3src15select__strings(`conn-${ci}-nic`, nic_ids, _M0FP25aidui3src7str__at(cn, "nic"), `NIC for connection ${cid}`)}</td><td>${_M0FP25aidui3src15select__strings(`conn-${ci}-distribution`, dist_opts, _M0FP25aidui3src7str__at(cn, "distribution"), `Distribution for connection ${cid}`)}</td><td><input id=\"conn-${ci}-speed\" class=\"form-control form-control-sm\" type=\"number\" aria-label=\"Speed for connection ${_M0FP25aidui3src3esc(cid)}\" value=\"${_M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(cn, "speed"), 10)}\"></td><td><input id=\"conn-${ci}-ports\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" aria-label=\"Ports for connection ${_M0FP25aidui3src3esc(cid)}\" value=\"${_M0MPC13int3Int18to__string_2einner(_M0FP25aidui3src7int__at(cn, "ports_per_connection"), 10)}\"></td><td><button id=\"conn-rm-${ci}\" class=\"btn btn-outline-danger btn-sm\" aria-label=\"Remove connection ${_M0FP25aidui3src3esc(cid)}\"><span aria-hidden=\"true\">✕</span></button></td></tr>`;
-          _tmp$3 = _$2 + 1 | 0;
+          _tmp$5 = _$2 + 1 | 0;
           continue;
         } else {
           break;
@@ -5207,32 +5259,32 @@ function _M0FP25aidui3src23structure__editor__html(structure_json) {
       const conn_table = _M0FP25aidui3src7arr__at(sc, "connections").length > 0 ? `<table class=\"table table-sm align-middle mb-2\"><caption class=\"visually-hidden\">Server connections</caption><thead><tr><th scope=\"col\">ID</th><th scope=\"col\">Target zone</th><th scope=\"col\">NIC</th><th scope=\"col\">Distribution</th><th scope=\"col\">Speed</th><th scope=\"col\">Ports</th><th scope=\"col\"><span class=\"visually-hidden\">Actions</span></th></tr></thead><tbody>${conn_rows}</tbody></table>` : "<div class=\"small text-muted mb-2\">No connections.</div>";
       const add_conn = `<div class=\"row g-2 mb-1 align-items-center\"><div class=\"col-3\"><input id=\"addconn-${_M0FP25aidui3src3esc(id)}-id\" class=\"form-control form-control-sm\" placeholder=\"connection_id\" aria-label=\"New connection id for ${_M0FP25aidui3src3esc(id)}\"></div><div class=\"col-4\">${_M0FP25aidui3src12select__html(`addconn-${id}-target_zone`, target_zones, "", true, `Target zone for new connection on ${id}`)}</div><div class=\"col-2\">${_M0FP25aidui3src15select__strings(`addconn-${id}-nic`, nic_ids, "", `NIC for new connection on ${id}`)}</div><div class=\"col-2\"><input id=\"addconn-${_M0FP25aidui3src3esc(id)}-speed\" class=\"form-control form-control-sm\" type=\"number\" placeholder=\"speed\" aria-label=\"Speed for new connection on ${_M0FP25aidui3src3esc(id)}\"></div><div class=\"col-1\"><button id=\"addconn-${_M0FP25aidui3src3esc(id)}\" class=\"btn btn-outline-success btn-sm\" aria-label=\"Add connection to ${_M0FP25aidui3src3esc(id)}\"><span aria-hidden=\"true\">+</span></button></div></div>`;
       srv = `${srv}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2 mb-2\"><div class=\"col-6\"><label class=\"form-label mb-0 small\" for=\"srv-${_M0FP25aidui3src3esc(id)}-qty\">Quantity</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${qty}\"></div><div class=\"col-6\"><label class=\"form-label mb-0 small\" for=\"srv-${_M0FP25aidui3src3esc(id)}-gpus\">GPUs/server</label><input id=\"srv-${_M0FP25aidui3src3esc(id)}-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"${gpus}\"></div></div><div class=\"mb-2\"><label class=\"form-label mb-0 small\" for=\"srv-${_M0FP25aidui3src3esc(id)}-devtype\">Device type</label>${_M0FP25aidui3src12select__html(`srv-${id}-devtype`, device_types, devtype, false, `Device type for ${id}`)}</div><div class=\"small text-muted\">NICs (module type)</div>${nic_rows}<hr class=\"my-2\"><div class=\"small text-muted\">Connections</div>${conn_table}${add_conn}</div></div>`;
-      _tmp = _ + 1 | 0;
+      _tmp$3 = _ + 1 | 0;
       continue;
     } else {
       break;
     }
   }
   let sw = "";
-  const _bind$7 = _M0FP25aidui3src7arr__at(root, "switch_classes");
-  const _bind$8 = _bind$7.length;
-  let _tmp$2 = 0;
+  const _bind$12 = _M0FP25aidui3src7arr__at(root, "switch_classes");
+  const _bind$13 = _bind$12.length;
+  let _tmp$4 = 0;
   while (true) {
-    const _ = _tmp$2;
-    if (_ < _bind$8) {
-      const s = _bind$7[_];
+    const _ = _tmp$4;
+    if (_ < _bind$13) {
+      const s = _bind$12[_];
       const id = _M0FP25aidui3src7str__at(s, "id");
       const topo = _M0FP25aidui3src7str__at(s, "topology_mode");
       const devext = _M0FP25aidui3src7str__at(s, "device_type_extension");
       const ov = _M0FP25aidui3src15override__value(s);
       sw = `${sw}<div class=\"card mb-2\"><div class=\"card-body\"><div class=\"fw-semibold mb-2\">${_M0FP25aidui3src3esc(id)}</div><div class=\"row g-2\"><div class=\"col-4\"><label class=\"form-label mb-0 small\" for=\"sw-${_M0FP25aidui3src3esc(id)}-topo\">Topology</label>${_M0FP25aidui3src12topo__select(`sw-${id}-topo`, topo, `Topology mode for ${id}`)}</div><div class=\"col-5\"><label class=\"form-label mb-0 small\" for=\"sw-${_M0FP25aidui3src3esc(id)}-devext\">Device type</label>${_M0FP25aidui3src12select__html(`sw-${id}-devext`, device_type_extensions, devext, false, `Device type for ${id}`)}</div><div class=\"col-3\"><label class=\"form-label mb-0 small\" for=\"sw-${_M0FP25aidui3src3esc(id)}-override\">Override qty</label><input id=\"sw-${_M0FP25aidui3src3esc(id)}-override\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" placeholder=\"(derived)\" value=\"${_M0FP25aidui3src3esc(ov)}\"></div></div></div></div>`;
-      _tmp$2 = _ + 1 | 0;
+      _tmp$4 = _ + 1 | 0;
       continue;
     } else {
       break;
     }
   }
-  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Structured editor</span></div><div class=\"card-body\"><input type=\"hidden\" id=\"structure-data\" value=\"${_M0FP25aidui3src3esc(structure_json)}\"><div id=\"structure-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><h3 class=\"h6\">Server classes</h3>${srv}<div class=\"card mb-3\"><div class=\"card-body\"><div class=\"small text-muted mb-2\" id=\"add-srv-label\">Add server class</div><div class=\"row g-2\"><div class=\"col-3\"><input id=\"add-srv-id\" class=\"form-control form-control-sm\" placeholder=\"new_class_id\" aria-label=\"New server class id\"></div><div class=\"col-2\"><input id=\"add-srv-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"1\" aria-label=\"New server class quantity\"></div><div class=\"col-2\"><input id=\"add-srv-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"0\" aria-label=\"New server class GPUs per server\"></div><div class=\"col-3\">${_M0FP25aidui3src12select__html("add-srv-devtype", device_types, "", true, "New server class device type")}</div><div class=\"col-2\"><button id=\"add-srv-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div></div></div></div><button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm me-2 mb-3\">Save server classes</button><button id=\"save-conn-btn\" class=\"btn btn-primary btn-sm mb-3\">Save connections</button><h3 class=\"h6\">Switch classes</h3>${sw}<button id=\"save-sw-btn\" class=\"btn btn-primary btn-sm\">Save switch classes</button></div></div>`;
+  return `<div class=\"card\"><div class=\"card-header d-flex justify-content-between align-items-center\"><span>Structured editor</span></div><div class=\"card-body\"><input type=\"hidden\" id=\"structure-data\" value=\"${_M0FP25aidui3src3esc(structure_json)}\"><div id=\"structure-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><h3 class=\"h6\">Server classes</h3>${srv}<div class=\"card mb-3\"><div class=\"card-body\"><div class=\"small text-muted mb-2\" id=\"add-srv-label\">Add server class</div><div class=\"row g-2\"><div class=\"col-3\"><input id=\"add-srv-id\" class=\"form-control form-control-sm\" placeholder=\"new_class_id\" aria-label=\"New server class id\"></div><div class=\"col-2\"><input id=\"add-srv-qty\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" value=\"1\" aria-label=\"New server class quantity\"></div><div class=\"col-2\"><input id=\"add-srv-gpus\" class=\"form-control form-control-sm\" type=\"number\" min=\"0\" value=\"0\" aria-label=\"New server class GPUs per server\"></div><div class=\"col-3\">${_M0FP25aidui3src12select__html("add-srv-devtype", device_types, "", true, "New server class device type")}</div><div class=\"col-2\"><button id=\"add-srv-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div></div></div></div><button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm me-2 mb-3\">Save server classes</button><button id=\"save-conn-btn\" class=\"btn btn-primary btn-sm mb-3\">Save connections</button><h3 class=\"h6\">Switch classes</h3>${sw}${_M0FP25aidui3src24add__switch__class__form(device_type_extensions)}<button id=\"save-sw-btn\" class=\"btn btn-primary btn-sm\">Save switch classes</button><hr class=\"my-3\"><h3 class=\"h6\">Switch port zones</h3>${_M0FP25aidui3src15add__zone__form(switch_class_ids, breakout_options, module_types)}<hr class=\"my-3\"><h3 class=\"h6\">NICs</h3>${_M0FP25aidui3src14add__nic__form(server_class_ids, module_types)}</div></div>`;
 }
 function _M0FP25aidui3src18render__plan__list(target, plans_json) {
   _M0FP25aidui3src9set__html(target, _M0FP25aidui3src16plan__list__html(plans_json));
@@ -5371,6 +5423,9 @@ function _M0FP25aidui3src9join__ops(ops) {
     }
   }
   return `${body}]}`;
+}
+function _M0FP25aidui3src6jfield(body, key, value) {
+  return value === "" ? body : `${body},\"${key}\":\"${_M0FP25aidui3src12json__escape(value)}\"`;
 }
 function _M0FP25aidui3src13op__set__conn(idx, field, value) {
   return `{\"op\":\"set_connection_field\",\"conn_index\":${idx},\"field\":\"${field}\",\"value\":\"${_M0FP25aidui3src12json__escape(value)}\"}`;
@@ -5808,6 +5863,15 @@ function _M0FP25aidui3src15load__structure(id) {
     _M0FP25aidui3src9on__click("add-srv-btn", () => {
       _M0FP25aidui3src18add__server__class(id);
     });
+    _M0FP25aidui3src9on__click("add-swc-btn", () => {
+      _M0FP25aidui3src26add__switch__class__submit(id);
+    });
+    _M0FP25aidui3src9on__click("add-zone-btn", () => {
+      _M0FP25aidui3src17add__zone__submit(id);
+    });
+    _M0FP25aidui3src9on__click("add-nic-btn", () => {
+      _M0FP25aidui3src16add__nic__submit(id);
+    });
     let _bind;
     let _try_err;
     _L: {
@@ -5894,6 +5958,15 @@ function _M0FP25aidui3src16patch__structure(id, ops, btn) {
     _M0FP25aidui3src12load__detail(id);
   });
 }
+function _M0FP25aidui3src16add__nic__submit(id) {
+  const nicid = _M0FP25aidui3src10get__value("add-nic-id");
+  if (nicid === "") {
+    _M0FP25aidui3src9set__html("structure-error", _M0FP25aidui3src9warn__box("Enter an id for the new NIC."));
+    return undefined;
+  }
+  const op = `{\"op\":\"add_nic\",\"server_class\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-nic-server"))}\",\"nic_id\":\"${_M0FP25aidui3src12json__escape(nicid)}\",\"value\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-nic-module"))}\"}`;
+  _M0FP25aidui3src16patch__structure(id, [op], "add-nic-btn");
+}
 function _M0FP25aidui3src18add__server__class(id) {
   const newid = _M0FP25aidui3src10get__value("add-srv-id");
   if (newid === "") {
@@ -5902,6 +5975,32 @@ function _M0FP25aidui3src18add__server__class(id) {
   }
   const op = `{\"op\":\"add_server_class\",\"server_class\":\"${_M0FP25aidui3src12json__escape(newid)}\",\"quantity\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-srv-qty"))}\",\"gpus_per_server\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-srv-gpus"))}\",\"server_device_type\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-srv-devtype"))}\"}`;
   _M0FP25aidui3src16patch__structure(id, [op], "add-srv-btn");
+}
+function _M0FP25aidui3src26add__switch__class__submit(id) {
+  const newid = _M0FP25aidui3src10get__value("add-swc-id");
+  if (newid === "") {
+    _M0FP25aidui3src9set__html("structure-error", _M0FP25aidui3src9warn__box("Enter an id for the new switch class."));
+    return undefined;
+  }
+  let fields = `\"fabric_name\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-swc-fabric-name"))}\",\"fabric_class\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-swc-fabric-class"))}\",\"hedgehog_role\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-swc-role"))}\",\"device_type_extension\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-swc-devext"))}\"`;
+  fields = _M0FP25aidui3src6jfield(fields, "topology_mode", _M0FP25aidui3src10get__value("add-swc-topo"));
+  fields = _M0FP25aidui3src6jfield(fields, "override_quantity", _M0FP25aidui3src10get__value("add-swc-override"));
+  const op = `{\"op\":\"add_switch_class\",\"switch_class\":\"${_M0FP25aidui3src12json__escape(newid)}\",\"fields\":{${fields}}}`;
+  _M0FP25aidui3src16patch__structure(id, [op], "add-swc-btn");
+}
+function _M0FP25aidui3src17add__zone__submit(id) {
+  const zname = _M0FP25aidui3src10get__value("add-zone-name");
+  if (zname === "") {
+    _M0FP25aidui3src9set__html("structure-error", _M0FP25aidui3src9warn__box("Enter a name for the new zone."));
+    return undefined;
+  }
+  let fields = `\"zone_type\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-zone-type"))}\",\"port_spec\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-zone-portspec"))}\"`;
+  fields = _M0FP25aidui3src6jfield(fields, "breakout_option", _M0FP25aidui3src10get__value("add-zone-breakout"));
+  fields = _M0FP25aidui3src6jfield(fields, "transceiver_module_type", _M0FP25aidui3src10get__value("add-zone-xcvr"));
+  fields = _M0FP25aidui3src6jfield(fields, "allocation_strategy", _M0FP25aidui3src10get__value("add-zone-alloc"));
+  fields = _M0FP25aidui3src6jfield(fields, "priority", _M0FP25aidui3src10get__value("add-zone-priority"));
+  const op = `{\"op\":\"add_zone\",\"switch_class\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("add-zone-swc"))}\",\"zone_name\":\"${_M0FP25aidui3src12json__escape(zname)}\",\"fields\":{${fields}}}`;
+  _M0FP25aidui3src16patch__structure(id, [op], "add-zone-btn");
 }
 function _M0FP25aidui3src26remove__connection__submit(id, idx) {
   _M0FP25aidui3src16patch__structure(id, [`{\"op\":\"remove_connection\",\"conn_index\":${idx}}`], `conn-rm-${idx}`);
@@ -6078,9 +6177,6 @@ function _M0FP25aidui3src28copy__overlay__then__refresh(src_id, new_id) {
     });
   });
 }
-function _M0FP25aidui3src26add__switch__class__submit(id) {}
-function _M0FP25aidui3src17add__zone__submit(id) {}
-function _M0FP25aidui3src16add__nic__submit(id) {}
 function _M0FP25aidui3src19load__catalog__item(name) {
   _M0FP25aidui3src8api__get(`/catalog/${name}`, (ok, status, body) => {
     if (!ok || _M0FP25aidui3src16body__has__error(body)) {
@@ -6263,4 +6359,4 @@ function _M0FP25aidui3src11main__entry() {
   });
   _M0FP25aidui3src11load__plans("app");
 }
-export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src16validating__html as validating_html, _M0FP25aidui3src13loading__html as loading_html, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src13library__html as library_html, _M0FP25aidui3src24reference__gallery__html as reference_gallery_html, _M0FP25aidui3src22overlay__section__html as overlay_section_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src18download__bom__csv as download_bom_csv, _M0FP25aidui3src13load__overlay as load_overlay, _M0FP25aidui3src13save__overlay as save_overlay, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src26add__switch__class__submit as add_switch_class_submit, _M0FP25aidui3src17add__zone__submit as add_zone_submit, _M0FP25aidui3src16add__nic__submit as add_nic_submit, _M0FP25aidui3src13load__library as load_library, _M0FP25aidui3src24load__reference__gallery as load_reference_gallery, _M0FP25aidui3src11main__entry as main_entry }
+export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src16validating__html as validating_html, _M0FP25aidui3src13loading__html as loading_html, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src13library__html as library_html, _M0FP25aidui3src24reference__gallery__html as reference_gallery_html, _M0FP25aidui3src22overlay__section__html as overlay_section_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src18download__bom__csv as download_bom_csv, _M0FP25aidui3src13load__overlay as load_overlay, _M0FP25aidui3src13save__overlay as save_overlay, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src16add__nic__submit as add_nic_submit, _M0FP25aidui3src26add__switch__class__submit as add_switch_class_submit, _M0FP25aidui3src17add__zone__submit as add_zone_submit, _M0FP25aidui3src13load__library as load_library, _M0FP25aidui3src24load__reference__gallery as load_reference_gallery, _M0FP25aidui3src11main__entry as main_entry }

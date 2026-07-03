@@ -325,6 +325,9 @@ fn load_structure(id : String) -> Unit {
     on_click("save-sw-btn", fn() { save_switch_classes(id) })
     on_click("save-conn-btn", fn() { save_connections(id) })
     on_click("add-srv-btn", fn() { add_server_class(id) })
+    on_click("add-swc-btn", fn() { add_switch_class_submit(id) })
+    on_click("add-zone-btn", fn() { add_zone_submit(id) })
+    on_click("add-nic-btn", fn() { add_nic_submit(id) })
     // P1.1b: wire the per-class add-connection + per-connection remove buttons
     // (ids are dynamic, recovered from the just-rendered projection).
     match (try { Some(@json.parse(body)) } catch { _ => None }) {
@@ -683,22 +686,85 @@ fn add_server_class(id : String) -> Unit {
   patch_structure(id, [op], "add-srv-btn")
 }
 
-// --- #81 structured-create submits (RED stubs — inert until #81 GREEN) --------
-// Exported so the mock tests can drive the submit actions and pin the exact
-// PUT /api/plans/{id}/structure op bodies. RED: these build no op and issue no
-// request, so the op-body assertions fail at the intended seam. GREEN reads the
-// add-swc-*/add-zone-*/add-nic-* form fields, builds the op, and PUTs it via
-// patch_structure (like add_server_class above).
+// --- #81 structured-create submits ------------------------------------------
+// Each reads its add-* form fields, builds the op JSON (values json-escaped),
+// and PUTs it via patch_structure (like add_server_class). Exported so the mock
+// tests can drive the submit and pin the exact PUT op body; server-side
+// validation (planedit) is the load-bearing check.
+
+// jfield appends ,"key":"value" to a fields body when value is non-empty.
+fn jfield(body : String, key : String, value : String) -> String {
+  if value == "" {
+    body
+  } else {
+    body + ",\"" + key + "\":\"" + json_escape(value) + "\""
+  }
+}
+
 pub fn add_switch_class_submit(id : String) -> Unit {
-  ignore(id)
+  let newid = get_value("add-swc-id")
+  if newid == "" {
+    set_html("structure-error", warn_box("Enter an id for the new switch class."))
+    return
+  }
+  let mut fields = "\"fabric_name\":\"" +
+    json_escape(get_value("add-swc-fabric-name")) +
+    "\",\"fabric_class\":\"" +
+    json_escape(get_value("add-swc-fabric-class")) +
+    "\",\"hedgehog_role\":\"" +
+    json_escape(get_value("add-swc-role")) +
+    "\",\"device_type_extension\":\"" +
+    json_escape(get_value("add-swc-devext")) +
+    "\""
+  fields = jfield(fields, "topology_mode", get_value("add-swc-topo"))
+  fields = jfield(fields, "override_quantity", get_value("add-swc-override"))
+  let op = "{\"op\":\"add_switch_class\",\"switch_class\":\"" +
+    json_escape(newid) +
+    "\",\"fields\":{" +
+    fields +
+    "}}"
+  patch_structure(id, [op], "add-swc-btn")
 }
 
 pub fn add_zone_submit(id : String) -> Unit {
-  ignore(id)
+  let zname = get_value("add-zone-name")
+  if zname == "" {
+    set_html("structure-error", warn_box("Enter a name for the new zone."))
+    return
+  }
+  let mut fields = "\"zone_type\":\"" +
+    json_escape(get_value("add-zone-type")) +
+    "\",\"port_spec\":\"" +
+    json_escape(get_value("add-zone-portspec")) +
+    "\""
+  fields = jfield(fields, "breakout_option", get_value("add-zone-breakout"))
+  fields = jfield(fields, "transceiver_module_type", get_value("add-zone-xcvr"))
+  fields = jfield(fields, "allocation_strategy", get_value("add-zone-alloc"))
+  fields = jfield(fields, "priority", get_value("add-zone-priority"))
+  let op = "{\"op\":\"add_zone\",\"switch_class\":\"" +
+    json_escape(get_value("add-zone-swc")) +
+    "\",\"zone_name\":\"" +
+    json_escape(zname) +
+    "\",\"fields\":{" +
+    fields +
+    "}}"
+  patch_structure(id, [op], "add-zone-btn")
 }
 
 pub fn add_nic_submit(id : String) -> Unit {
-  ignore(id)
+  let nicid = get_value("add-nic-id")
+  if nicid == "" {
+    set_html("structure-error", warn_box("Enter an id for the new NIC."))
+    return
+  }
+  let op = "{\"op\":\"add_nic\",\"server_class\":\"" +
+    json_escape(get_value("add-nic-server")) +
+    "\",\"nic_id\":\"" +
+    json_escape(nicid) +
+    "\",\"value\":\"" +
+    json_escape(get_value("add-nic-module")) +
+    "\"}"
+  patch_structure(id, [op], "add-nic-btn")
 }
 
 // trigger_calc: POST /api/plans/{id}/calc, render the validation summary, and
