@@ -683,6 +683,24 @@ fn add_server_class(id : String) -> Unit {
   patch_structure(id, [op], "add-srv-btn")
 }
 
+// --- #81 structured-create submits (RED stubs — inert until #81 GREEN) --------
+// Exported so the mock tests can drive the submit actions and pin the exact
+// PUT /api/plans/{id}/structure op bodies. RED: these build no op and issue no
+// request, so the op-body assertions fail at the intended seam. GREEN reads the
+// add-swc-*/add-zone-*/add-nic-* form fields, builds the op, and PUTs it via
+// patch_structure (like add_server_class above).
+pub fn add_switch_class_submit(id : String) -> Unit {
+  ignore(id)
+}
+
+pub fn add_zone_submit(id : String) -> Unit {
+  ignore(id)
+}
+
+pub fn add_nic_submit(id : String) -> Unit {
+  ignore(id)
+}
+
 // trigger_calc: POST /api/plans/{id}/calc, render the validation summary, and
 // wire per-fabric wiring-download buttons from the response's managed_fabrics.
 // Two-plane contract (P0.4): a structural 4xx {"error":...} / network failure is

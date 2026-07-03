@@ -1038,3 +1038,79 @@ test("#81 add-nic mini-form: data-derived server class + module type + button", 
   assert.match(html, /<option value="nic_dual_25g"/, "module dropdown is data-derived");
   assert.match(html, /id="add-nic-btn"/, "add nic button");
 });
+
+// --- #81: exact op-body tests — drive the submit actions, assert PUT JSON -----
+// The lead RED gate: pin the EXACT PUT /api/plans/{id}/structure op body each
+// mini-form submits (not just that the form renders). RED: the submit stubs are
+// inert (no request), so "expected a PUT" fails. GREEN reads the form fields,
+// builds the op, and PUTs it via patch_structure.
+function putOp(fetches) {
+  const put = fetches.find((f) => f.url === "/api/plans/p/structure" && f.method === "PUT");
+  assert.ok(put, `expected a PUT /api/plans/p/structure; got ${JSON.stringify(fetches)}`);
+  const parsed = JSON.parse(put.body);
+  assert.ok(Array.isArray(parsed.ops) && parsed.ops.length === 1, "expected exactly one op");
+  return parsed.ops[0];
+}
+
+test("#81 add_switch_class submit: exact PUT op body", async () => {
+  reset();
+  el("add-swc-id").value = "extra_leaf";
+  el("add-swc-fabric-name").value = "extra-fabric";
+  el("add-swc-fabric-class").value = "managed";
+  el("add-swc-role").value = "server-leaf";
+  el("add-swc-devext").value = "sw_ds2000_inb_ext";
+  el("add-swc-topo").value = "mesh";
+  el("add-swc-override").value = "2";
+  setResponder(() => STRUCTURE); // patch_structure reloads the structure after PUT
+  app.add_switch_class_submit("p");
+  await flush();
+  const op = putOp(fetches);
+  assert.equal(op.op, "add_switch_class");
+  assert.equal(op.switch_class, "extra_leaf");
+  assert.equal(op.fields.fabric_name, "extra-fabric");
+  assert.equal(op.fields.fabric_class, "managed");
+  assert.equal(op.fields.hedgehog_role, "server-leaf");
+  assert.equal(op.fields.device_type_extension, "sw_ds2000_inb_ext");
+  assert.equal(op.fields.topology_mode, "mesh");
+  assert.equal(op.fields.override_quantity, "2");
+});
+
+test("#81 add_zone submit: exact PUT op body", async () => {
+  reset();
+  el("add-zone-swc").value = "soc_storage_scale_out_leaf";
+  el("add-zone-name").value = "extra_zone";
+  el("add-zone-type").value = "server";
+  el("add-zone-portspec").value = "1-4";
+  el("add-zone-breakout").value = "brk_2x400_osfp";
+  el("add-zone-xcvr").value = "osfp_400g_dr4";
+  el("add-zone-alloc").value = "sequential";
+  el("add-zone-priority").value = "99";
+  setResponder(() => STRUCTURE);
+  app.add_zone_submit("p");
+  await flush();
+  const op = putOp(fetches);
+  assert.equal(op.op, "add_zone");
+  assert.equal(op.switch_class, "soc_storage_scale_out_leaf");
+  assert.equal(op.zone_name, "extra_zone");
+  assert.equal(op.fields.zone_type, "server");
+  assert.equal(op.fields.port_spec, "1-4");
+  assert.equal(op.fields.breakout_option, "brk_2x400_osfp");
+  assert.equal(op.fields.transceiver_module_type, "osfp_400g_dr4");
+  assert.equal(op.fields.allocation_strategy, "sequential");
+  assert.equal(op.fields.priority, "99");
+});
+
+test("#81 add_nic submit: exact PUT op body", async () => {
+  reset();
+  el("add-nic-server").value = "compute_xpu";
+  el("add-nic-id").value = "extra_nic";
+  el("add-nic-module").value = "nic_dual_25g";
+  setResponder(() => STRUCTURE);
+  app.add_nic_submit("p");
+  await flush();
+  const op = putOp(fetches);
+  assert.equal(op.op, "add_nic");
+  assert.equal(op.server_class, "compute_xpu");
+  assert.equal(op.nic_id, "extra_nic");
+  assert.equal(op.value, "nic_dual_25g");
+});

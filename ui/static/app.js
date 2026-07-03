@@ -5077,13 +5077,13 @@ function _M0FP25aidui3src15select__strings(id, options, selected, aria_label) {
   }
   return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS325(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS328(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
 function _M0FP25aidui3src12topo__select(id, current, aria_label) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS325(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS325(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS328(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS328(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -6078,6 +6078,9 @@ function _M0FP25aidui3src28copy__overlay__then__refresh(src_id, new_id) {
     });
   });
 }
+function _M0FP25aidui3src26add__switch__class__submit(id) {}
+function _M0FP25aidui3src17add__zone__submit(id) {}
+function _M0FP25aidui3src16add__nic__submit(id) {}
 function _M0FP25aidui3src19load__catalog__item(name) {
   _M0FP25aidui3src8api__get(`/catalog/${name}`, (ok, status, body) => {
     if (!ok || _M0FP25aidui3src16body__has__error(body)) {
@@ -6260,4 +6263,4 @@ function _M0FP25aidui3src11main__entry() {
   });
   _M0FP25aidui3src11load__plans("app");
 }
-export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src16validating__html as validating_html, _M0FP25aidui3src13loading__html as loading_html, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src13library__html as library_html, _M0FP25aidui3src24reference__gallery__html as reference_gallery_html, _M0FP25aidui3src22overlay__section__html as overlay_section_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src18download__bom__csv as download_bom_csv, _M0FP25aidui3src13load__overlay as load_overlay, _M0FP25aidui3src13save__overlay as save_overlay, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src13load__library as load_library, _M0FP25aidui3src24load__reference__gallery as load_reference_gallery, _M0FP25aidui3src11main__entry as main_entry }
+export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src16validating__html as validating_html, _M0FP25aidui3src13loading__html as loading_html, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src13library__html as library_html, _M0FP25aidui3src24reference__gallery__html as reference_gallery_html, _M0FP25aidui3src22overlay__section__html as overlay_section_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src18download__bom__csv as download_bom_csv, _M0FP25aidui3src13load__overlay as load_overlay, _M0FP25aidui3src13save__overlay as save_overlay, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src26add__switch__class__submit as add_switch_class_submit, _M0FP25aidui3src17add__zone__submit as add_zone_submit, _M0FP25aidui3src16add__nic__submit as add_nic_submit, _M0FP25aidui3src13load__library as load_library, _M0FP25aidui3src24load__reference__gallery as load_reference_gallery, _M0FP25aidui3src11main__entry as main_entry }
