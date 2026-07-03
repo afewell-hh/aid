@@ -78,4 +78,52 @@ test.describe("P1.1 structured editor (#67)", () => {
     await expect(page.locator("#srv-extra_compute-qty")).toHaveValue("2");
     await expect(page.locator("#srv-extra_compute-gpus")).toHaveValue("8");
   });
+
+  // #81: the three missing structured-create surfaces.
+  test("add a switch class via the form -> it appears in the editor", async ({ page }) => {
+    await openMeshDetail(page);
+
+    await page.fill("#add-swc-id", "extra_leaf");
+    await page.fill("#add-swc-fabric-name", "extra-fabric");
+    await page.locator("#add-swc-fabric-class").selectOption("managed");
+    await page.locator("#add-swc-role").selectOption("server-leaf");
+    await page.locator("#add-swc-devext").selectOption("sw_ds2000_inb_ext");
+    await page.locator("#add-swc-topo").selectOption("mesh");
+    await page.locator("#add-swc-btn").click();
+
+    // The new switch class round-trips into the reloaded editor (its topology
+    // selector appears).
+    await expect(page.locator("#sw-extra_leaf-topo")).toHaveValue("mesh");
+  });
+
+  test("add a switch port zone via the form -> it appears as a target-zone option", async ({ page }) => {
+    await openMeshDetail(page);
+
+    await page.locator("#add-zone-swc").selectOption("soc_storage_scale_out_leaf");
+    await page.fill("#add-zone-name", "extra_zone");
+    await page.locator("#add-zone-type").selectOption("server");
+    await page.fill("#add-zone-portspec", "1-4");
+    await page.locator("#add-zone-breakout").selectOption("brk_2x400_osfp");
+    await page.locator("#add-zone-xcvr").selectOption("osfp_400g_dr4");
+    await page.locator("#add-zone-btn").click();
+
+    // The new zone surfaces as a "switch_class/zone_name" connection target-zone
+    // option in the reloaded editor.
+    await expect(
+      page.locator('option[value="soc_storage_scale_out_leaf/extra_zone"]').first(),
+    ).toBeAttached();
+  });
+
+  test("add a NIC via the form -> it appears on the server class", async ({ page }) => {
+    await openMeshDetail(page);
+
+    await page.locator("#add-nic-server").selectOption("compute_xpu");
+    await page.fill("#add-nic-id", "extra_nic");
+    await page.locator("#add-nic-module").selectOption("nic_dual_25g");
+    await page.locator("#add-nic-btn").click();
+
+    // The new NIC round-trips into the reloaded editor (its module-type select
+    // appears, keyed nic-<server_class>-<nic_id>).
+    await expect(page.locator("#nic-compute_xpu-extra_nic")).toBeVisible();
+  });
 });

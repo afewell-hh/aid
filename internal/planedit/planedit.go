@@ -212,6 +212,9 @@ type Op struct {
 	SwitchClass  string `json:"switch_class,omitempty"`
 	NicID        string `json:"nic_id,omitempty"`
 	ConnectionID string `json:"connection_id,omitempty"`
+	// ZoneName is the new switch_port_zone's name (add_zone). Top-level per the
+	// #79 op contract; the zone's other fields ride in Fields.
+	ZoneName string `json:"zone_name,omitempty"`
 	// ConnIndex is the position in server_connections that set/remove target
 	// (connection_id is not unique, so index is the stable key, P1.1b/#69).
 	ConnIndex int    `json:"conn_index,omitempty"`

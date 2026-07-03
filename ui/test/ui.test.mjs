@@ -986,3 +986,55 @@ test("P2.4 list rows are clickable: a row-body click opens the plan detail", asy
   );
   assert.match(dom["app"]?.innerHTML ?? "", /id="calc-btn"/, "the detail rendered after the row click");
 });
+
+// --- #81: structured-CREATE mini-forms (add switch class / zone / nic) --------
+// RED: structure_editor_html renders no create mini-forms for switch classes,
+// zones, or NICs yet, so these render assertions fail. GREEN adds the forms +
+// wiring; the exact op bodies they PUT are pinned by the Go structure API tests.
+const CREATE_STRUCT = JSON.stringify({
+  server_classes: [
+    { id: "compute_xpu", quantity: 8, gpus_per_server: 8, server_device_type: "srv_xpu_generic_dt", nics: [] },
+  ],
+  switch_classes: [
+    { id: "soc_storage_scale_out_leaf", topology_mode: "mesh", device_type_extension: "sw_ds5000_ext", override_quantity: 2 },
+  ],
+  catalog: {
+    module_types: ["nic_dual_25g", "osfp_400g_dr4"],
+    device_types: ["srv_xpu_generic_dt"],
+    device_type_extensions: ["sw_ds5000_ext", "sw_ds2000_inb_ext"],
+    breakout_options: ["brk_2x400_osfp"],
+    target_zones: ["soc_storage_scale_out_leaf/uplink"],
+  },
+});
+
+test("#81 add-switch-class mini-form: data-derived fields + button", () => {
+  const html = app.structure_editor_html(CREATE_STRUCT);
+  assert.match(html, /id="add-swc-id"/, "new switch class id input");
+  assert.match(html, /id="add-swc-fabric-name"/, "fabric_name input");
+  assert.match(html, /id="add-swc-fabric-class"/, "fabric_class selector");
+  assert.match(html, /id="add-swc-role"/, "hedgehog_role selector");
+  assert.match(html, /id="add-swc-devext"/, "device_type_extension selector");
+  assert.match(html, /<option value="sw_ds2000_inb_ext"/, "devext dropdown is data-derived from the catalog");
+  assert.match(html, /id="add-swc-btn"/, "add switch class button");
+});
+
+test("#81 add-zone mini-form: data-derived parent/breakout/transceiver + button", () => {
+  const html = app.structure_editor_html(CREATE_STRUCT);
+  assert.match(html, /id="add-zone-swc"/, "parent switch_class selector");
+  assert.match(html, /id="add-zone-name"/, "zone_name input");
+  assert.match(html, /id="add-zone-type"/, "zone_type selector");
+  assert.match(html, /id="add-zone-portspec"/, "port_spec input");
+  assert.match(html, /id="add-zone-breakout"/, "breakout_option selector");
+  assert.match(html, /<option value="brk_2x400_osfp"/, "breakout dropdown is data-derived");
+  assert.match(html, /id="add-zone-xcvr"/, "transceiver_module_type selector");
+  assert.match(html, /id="add-zone-btn"/, "add zone button");
+});
+
+test("#81 add-nic mini-form: data-derived server class + module type + button", () => {
+  const html = app.structure_editor_html(CREATE_STRUCT);
+  assert.match(html, /id="add-nic-server"/, "parent server_class selector");
+  assert.match(html, /id="add-nic-id"/, "nic_id input");
+  assert.match(html, /id="add-nic-module"/, "module_type selector");
+  assert.match(html, /<option value="nic_dual_25g"/, "module dropdown is data-derived");
+  assert.match(html, /id="add-nic-btn"/, "add nic button");
+});
