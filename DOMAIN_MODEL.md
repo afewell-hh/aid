@@ -1,285 +1,110 @@
 # AID Domain Model
 
-## Design Principles
+> **Status (2026-07): current.** This document was rewritten to match the
+> **real diet/XOC relational model** AID uses today (D18/D19). It **supersedes**
+> the earlier "universal `DeviceClass` with recursive sub-components" model,
+> which was an **invented** design that shared essentially zero keys with the
+> real topology-plan shape and was replaced during the foundation rebuild.
+> Authoritative: `DECISIONS.md` (D18, D19, D21, D22, D26, D27),
+> `docs/foundation-redesign.md`, `schema/`, and `internal/topology/topology.go`
+> (the Go types below are quoted from there).
 
-- **DeviceClass is the universal hardware building block.** Any hardware component —
-  server, switch, NIC, GPU board, memory DIMM, storage drive, transceiver, PDU, rack
-  unit — is a `DeviceClass`. There is no server-specific or switch-specific root type.
-- **Composition via recursive sub-components.** A `DeviceClass` may contain other
-  `DeviceClass` instances as named sub-components with per-parent quantities. BOM
-  derivation is a recursive traversal at plan time with no database.
-- **Topology is an explicit graph.** The design output is a labeled bipartite graph —
-  it is not reconstructed from database tags at export time.
-- **Fabric is a first-class aggregate.** A fabric owns its switch plan entries and
-  enforces its topology-mode invariants internally.
-- **Plan-specific concerns live in PlanEntry, not DeviceClass.** Quantity, role,
-  connections, and port zones are plan-level data. `DeviceClass` is a reusable hardware
-  template with no plan-specific state.
+## Design principles (as built)
 
----
+- **The model is the real diet/XOC shape, not an invented one** (D18). A plan is
+  a bundled DIET YAML document: `meta` + `reference_data` (the catalog) + a
+  relational `spec` (+ optional `status`/`expected`). AID ingests exactly what
+  HNP authors; it does not translate an invented topology language (D25).
+- **Relational, not a device tree** (D19). Topology intent is expressed as
+  *classes*, *port zones*, and *connections* referencing a *reference-data
+  catalog* by pinned id — **not** as a recursive `DeviceClass` hardware tree.
+- **Spec vs status** (D21). `spec` is authored input and the *only* thing that
+  drives calculation. `status`/`expected` holds computed/expected values (a
+  Kubernetes-style status) used for self-check tests; it never drives the calc.
+- **The catalog is a separate, AID-owned artifact** (D21) with a two-layer
+  component graph (bare hardware types vs. configured classes, D19). An
+  optic/identity **overlay** supplies BOM optic columns + wiring `profile`.
 
-## Core Domain Classes
-
-### TopologyPlan (root aggregate)
-
-The root object. Owns everything in the design.
-
-```
-TopologyPlan {
-  id: PlanId               // stable identifier
-  name: string
-  customer_name: string
-  status: Draft | Review | Approved | Exported
-  entries: PlanEntry[]     // every device in the plan (servers, switches)
-  fabric_domains: FabricDomain[]
-  device_catalog: DeviceClass[]  // registered hardware templates
-  naming_templates: NamingTemplate[]
-}
-```
-
----
-
-### DeviceClass (universal hardware template)
-
-Represents any class of hardware component. Reusable across plans and contexts.
+## The plan document (top level)
 
 ```
-DeviceClass {
-  id: DeviceClassId
-  name: string             // e.g. "AS-4126GS GPU Server", "ConnectX-7 OSFP NIC"
-  slug: string             // kebab-case unique identifier
-  category: string         // user-defined: "compute", "network", "nic", "transceiver", etc.
-  manufacturer: string?
-  part_number: string?
-  description: string?
-  attributes: Attribute[]  // arbitrary key-value pairs (vendor-specific specs, etc.)
-  ports: PortSpec[]        // network ports on this device (for NICs, switches)
-  sub_components: SubComponent[]  // child DeviceClass instances
-}
-
-Attribute {
-  key: string
-  value: string            // always a string; interpret by key convention
-}
-
-PortSpec {
-  port_id: string          // e.g. "p0", "p1"
-  speed_gbps: int
-  cage_type: OSFP | QSFP112 | QSFP28 | SFP28 | RJ45
-  medium: Optical | DAC | AOC | Copper
-}
-
-SubComponent {
-  slot_id: string          // unique within parent (e.g. "nic-fe", "gpu-board", "dimm-0")
-  device_class: DeviceClass
-  quantity_per_parent: int
-}
+meta:            { case_id, name, description, version, ... }   # identity (planstore keys on meta.case_id)
+reference_data:  { device_types, device_type_extensions, breakout_options, module_types }   # the catalog
+spec / plan:     { server_classes, switch_classes, switch_port_zones,
+                   server_connections, mesh_links?, mclag_domains? }
+status/expected: { counts, ... }                                # computed/expected; self-check only (D21)
 ```
 
-**Example — GPU server with nested sub-components:**
+## Core relational types (`internal/topology`)
 
-```
-DeviceClass: AS-4126GS ComputeGPU Server
-  sub_components:
-    slot_id: "chassis"      → DeviceClass: AS-4126GS Barebone        qty: 1
-    slot_id: "nic-fe"       → DeviceClass: ConnectX-7 OSFP NIC       qty: 2
-      sub_components:
-        slot_id: "xcvr"     → DeviceClass: OSFP 400G Transceiver     qty: 1 (per NIC)
-    slot_id: "nic-be"       → DeviceClass: BlueField-3 DPU           qty: 1
-    slot_id: "gpu"          → DeviceClass: H100 SXM GPU Board        qty: 8
-    slot_id: "dimm"         → DeviceClass: 64GB DDR5 DIMM            qty: 24
+**`Plan`** = `Meta` (identity; `case_id`, `name`) + `Spec` (authored input) +
+optional `Status` (computed/expected). **`Spec`** is the relational core:
 
-DeviceClass: DS5000 Leaf Switch
-  sub_components:
-    slot_id: "xcvr"         → DeviceClass: OSFP 800G Transceiver     qty: 64
-```
+| Field (`spec.…`) | Go type | Meaning |
+|---|---|---|
+| `server_classes[]` | `ServerClassUse` | a class of servers used in this plan (id + `class_ref` into the catalog + quantity + its NIC slots) |
+| `switch_classes[]` | `SwitchClassUse` | a class of switches (see below) |
+| `switch_port_zones[]` | `SwitchPortZone` | a named range of ports on a switch class with a role, port spec, breakout, and allocation strategy |
+| `server_connections[]` | `ServerConnection` | one server-NIC-port → switch-zone connection intent |
+| `mesh_links[]` | `MeshLink` | leaf↔leaf mesh links (mesh topology) |
+| `mclag_domains[]` | `MCLAGDomain` | MCLAG pairing (when not inline on the class) |
 
-**BOM derivation (recursive, plan-time, no database):**
+**`SwitchClassUse`** — `switch_class_id`, `class_ref`, `fabric_name`,
+`fabric_class` (`managed`|`unmanaged` — gates which fabrics get rendered as hhfab
+wiring), `hedgehog_role` (Switch CRD `spec.role`), `override_quantity?` (else the
+count is *derived*), `topology_mode` (`spine-leaf`|`mesh`), and inline
+`redundancy_type` (`mclag`|`eslag`) / `redundancy_group` (the wiring `SwitchGroup`).
 
-```
-DeviceClassBOM {
-  device_class: DeviceClass
-  plan_quantity: int           // from PlanEntry.quantity
-  line_items: BOMLineItem[]    // one per sub_component, depth-first
-}
+**`SwitchPortZone`** — `switch_class`, `zone_name`, `zone_type`
+(`server`|`uplink`|`fabric`|`mesh`|…), `port_spec` (e.g. `"1-63:2"`),
+`breakout_option`, `allocation_strategy` (`sequential`|…). Uplink/fabric zones
+are what the switch-count derivation and Clos spine wiring key on.
 
-BOMLineItem {
-  path: string[]               // e.g. ["nic-fe", "xcvr"]
-  device_class: DeviceClass
-  quantity_per_parent: int
-  quantity_per_unit: int       // product of all qty_per_parent up the tree
-  fleet_quantity: int          // quantity_per_unit × plan_quantity
-}
-```
+**`ServerConnection`** — `server_class`, `connection_id`, `nic` (NIC slot),
+`ports_per_connection`, `hedgehog_conn_type` (`unbundled`|`bundled`|`mclag`|`eslag`),
+`distribution` (`same-switch`|`alternating`|`rail-optimized`), a `target_zone`
+that resolves to `target_switch_class` + `target_zone_name`, `speed`, optional
+`rail` (rail-optimized backends), and `transceiver_module_type` (the optic
+selection, resolved by ingest into the class's cage binding).
 
----
+## The catalog (`reference_data`, `internal/catalog`)
 
-### FabricDomain
+A two-layer, AID-owned component graph referenced by the classes above (D19):
 
-A named, independently-wired switching fabric. Enforces topology-mode invariants.
+- **`device_types`** — bare hardware device identities (manufacturer/model/slug).
+- **`device_type_extensions`** — configured extensions of a device type (the
+  ports/cages/capabilities a class actually uses).
+- **`breakout_options`** — named breakout configs (`port_spec` → logical ports).
+- **`module_types`** — transceiver/optic module types (e.g. `osfp_400g_dr4`,
+  `sfp28_25gbase_sr`, `rj45_1000base_t`). The **overlay** supplies their optic
+  identity (the BOM's cols 7–19) + descriptive strings; these are AID-owned
+  public facts, authored (not read back from `bom.csv`).
 
-```
-FabricDomain {
-  fabric_id: FabricId
-  fabric_name: string           // e.g. "frontend", "backend", "scale-out"
-  fabric_class: Managed | Unmanaged
-  topology_mode: Clos | Mesh
-  switch_entries: PlanEntry[]   // must be switch-role entries
-}
+Classes bind these by **pinned `ID{name, version}`**. The built-in **Library**
+(`internal/library`, Epic #75) is the strict dedup-by-pinned-id *union* of the
+catalogs derived from the shipped reference templates — which is why the shipped
+reference data must be identity-consistent across templates (D27).
 
-Invariants:
-- Mesh fabric: switch count ∈ {2, 3}
-- All non-spine switch entries in a Clos fabric share topology_mode
-- MCLAG switch count is even and >= 2
-- ESLAG switch count is 2–4
-```
+## From plan to outputs (where the model goes)
 
----
+`internal/topology.IngestBundled` parses this document into the relational `Plan`
++ resolves the `reference_data` into a `*catalog.Catalog`. From there:
+`internal/calc` derives switch/server quantities + the per-endpoint allocation IR
+(running the proved MoonBit kernel); `internal/bom` reduces the resolved model to
+the `bom.csv` projection + the full purchasable BOM; `internal/wiring` renders
+per-fabric hhfab CRDs. The BOM/wiring are **projections of one resolved model**,
+not a second independent count. See `ARCHITECTURE.md`.
 
-### PlanEntry (plan-specific use of a DeviceClass)
+## What was retired (so old references don't mislead)
 
-Represents a group of identical devices within the topology plan.
-Quantity, role, and wiring intent all live here, not in `DeviceClass`.
-
-```
-PlanEntry {
-  entry_id: EntryId
-  device_class: DeviceClass    // what kind of device
-  quantity: int                // how many instances in this plan
-  role: PlanRole               // Server | Spine | ServerLeaf | BorderLeaf | OOBLeaf | HHG
-  label: string?               // override for naming templates (e.g. "gpu-servers")
-  // Switch-specific (only when role ∈ {Spine, ServerLeaf, BorderLeaf, OOBLeaf}):
-  fabric_domain: FabricDomain?
-  override_quantity: int?      // explicit override; else quantity is calculated
-  topology_mode: Clos | Mesh?
-  redundancy: MCLAGConfig? | ESLAGConfig?
-  port_zones: SwitchPortZone[]
-  // Server-specific (when role == Server):
-  connections: PlanConnection[]
-}
-
-PlanRole = Server | Spine | ServerLeaf | BorderLeaf | OOBLeaf | HHG
-
-effective_quantity = override_quantity ?? calculated_quantity ?? quantity
-```
-
----
-
-### SwitchPortZone
-
-A named allocation region on a switch plan entry.
-
-```
-SwitchPortZone {
-  zone_id: ZoneId
-  zone_name: string
-  zone_type: Server | Uplink | Mesh | Peer | Session | OOB
-  port_spec: PortRange         // e.g. "1-48" or "1-32:2"
-  breakout_option: BreakoutOption?
-  priority: int                // lower = allocate first
-  allocation_strategy: Sequential | Interleaved | Spaced
-  transceiver_intent: DeviceClass?  // a transceiver DeviceClass expected in this zone
-  peer_zone: SwitchPortZone?        // target zone for uplink-type zones
-}
-```
-
----
-
-### PlanConnection
-
-A named connection from a specific NIC sub-component port to a switch port zone.
-
-```
-PlanConnection {
-  connection_id: ConnectionId
-  nic_slot_id: string          // references SubComponent.slot_id on the device_class
-  port_index: int              // zero-based port index on the NIC's PortSpec list
-  ports_per_connection: int
-  connection_type: Unbundled | Bundled | MCLAG | ESLAG
-  distribution: SameSwitch | Alternating | RailOptimized
-  target_zone: SwitchPortZone
-  speed_gbps: int
-  rail: int?                   // for RailOptimized distribution
-  port_type: Data | IPMI | PXE
-  transceiver_intent: DeviceClass?  // expected transceiver DeviceClass on this port
-}
-```
-
-The `nic_slot_id` references a `SubComponent.slot_id` on the parent `DeviceClass`. For
-example, if the server DeviceClass has `slot_id: "nic-fe"`, a connection with
-`nic_slot_id: "nic-fe"` refers to the ConnectX-7 NIC in that slot.
-
----
-
-## TopologyIR (Output Graph)
-
-The pure output of the calculation kernel. Input to all export adapters.
-
-```
-TopologyIR {
-  plan_id: PlanId
-  nodes: TopologyNode[]
-  edges: TopologyEdge[]
-  fabrics: FabricSummary[]
-  boms: DeviceClassBOM[]       // one per PlanEntry
-  validation: ValidationResult
-}
-
-TopologyNode {
-  name: string
-  node_type: Server | Switch | Spine
-  device_class_id: DeviceClassId
-  fabric: string?
-  hedgehog_role: string?
-  instance_index: int
-}
-
-TopologyEdge {
-  edge_id: EdgeId
-  node_a: TopologyNode
-  node_b: TopologyNode
-  speed_gbps: int
-  fabric: string
-  zone: string
-  breakout_index: int?
-  connection_type: string
-  port_a: string               // physical port name on node_a
-  port_b: string               // physical port name on node_b
-}
-
-FabricSummary {
-  fabric_name: string
-  switch_count: int
-  total_server_bandwidth_gbps: int
-  total_spine_bandwidth_gbps: int
-  oversubscription_ratio: float    // > 1.0 triggers WARNING
-}
-
-ValidationResult {
-  is_valid: bool
-  errors: ValidationIssue[]    // block generation
-  warnings: ValidationIssue[]  // surface in report, do not block
-}
-```
-
----
-
-## Ownership Hierarchy Summary
-
-```
-TopologyPlan
-  ├── DeviceClass catalog (0..N)       ← hardware templates; reused across entries
-  │     └── SubComponent (0..N)        ← nested DeviceClass with qty_per_parent
-  │           └── SubComponent ...     ← recursive; arbitrarily deep
-  ├── FabricDomain (1..N)
-  │     └── (references PlanEntry)
-  └── PlanEntry (1..N)                 ← plan-specific: qty, role, connections
-        ├── device_class → DeviceClass  (reference, not ownership)
-        ├── SwitchPortZone (0..N)      ← switch entries only
-        └── PlanConnection (0..N)      ← server entries only
-              └── nic_slot_id → SubComponent.slot_id (reference)
-```
-
-The key distinction: `DeviceClass` is a reusable hardware template (owned by the catalog).
-`PlanEntry` is a plan-specific instantiation (owned by `TopologyPlan`). BOM derivation
-walks `DeviceClass.sub_components` recursively, scaled by `PlanEntry.quantity`.
+- **`DeviceClass` (universal hardware template) + recursive `sub_components`** →
+  the relational classes/zones/connections + the two-layer reference-data
+  catalog above (D18/D19). There is no universal device tree.
+- **`PlanEntry` / `FabricDomain` / `device_catalog: DeviceClass[]`** → the
+  `spec.*` relational lists + `reference_data` catalog.
+- **Recursive `DeviceClassBOM`** → the plan-time relational BOM reduction
+  (`internal/bom`, D23) — one resolve, two renders (projection + full BOM).
+- The **AS-4126GS "DeviceClass with nested slots" example** was illustrative of
+  the invented model; the real full-purchasable-BOM requirement is met by the
+  catalog's `bom_line_templates` + per-cage transceivers scaled per instance
+  (see `docs/foundation-redesign.md` §4).

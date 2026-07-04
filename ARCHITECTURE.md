@@ -1,223 +1,129 @@
 # AID Architecture
 
-## Design Principles
+> **Status (2026-07): current.** This document was rewritten to match the
+> **foundation-rebuild architecture (F0–F7)** that AID actually runs today. It
+> **supersedes** the earlier "five-layer WASM Component Model / universal
+> `DeviceClass` / Rust export adapters / SQLite" description, which described an
+> **invented** design that was replaced during the rebuild. Authoritative
+> sources, in order: **`DECISIONS.md`** (esp. D16, D18, D19, D21, D22, D23,
+> D25, D26), **`docs/foundation-redesign.md`** (the rebuild design), and the
+> code itself. If this file and `DECISIONS.md` ever disagree, `DECISIONS.md`
+> wins.
 
-1. **Calculation is independent of persistence.** The topology kernel must produce a correct
-   result given only plan data as input — no database, no running service, no file I/O.
+## What AID is
 
-2. **NetBox is an optional adapter, not a dependency.** AID can be used entirely offline.
-   Publishing to NetBox is a one-way push via REST API, not a coupling point.
+AID (AI Infrastructure Designer) turns a declarative topology **plan** for an
+AI/ML cluster into: **switch/server quantities**, a **bill of materials**, and
+**hhfab-validatable wiring**. Its correctness anchor is that it **reproduces the
+real OCP/XOC reference outputs** (quantities, `bom.csv`, wiring) for the real
+diet/XOC plans — validated by an oracle harness against vendored reference
+compositions (mesh xoc-64/128, Clos xoc-256). See `DECISIONS.md` D18/D20.
 
-3. **System-of-systems via WASM Component Model.** Every major capability boundary is
-   expressed as a WIT interface. Components are language-independent and composable.
+## Design principles (as built)
 
-4. **Formal verification for hard invariants.** The topology kernel carries machine-checked
-   proofs for its correctness properties. If the proof fails, the build fails.
+1. **Reproduce reality, don't invent it.** The plan schema, the domain model,
+   and the catalog are the *real* diet/XOC shapes (D18/D19). AID does not model
+   an invented topology language. Where AID intentionally diverges from a real
+   reference artifact, it is recorded (e.g. D27).
+2. **A small proved core, everything else ordinary Go.** The one place with a
+   formal-methods boundary is the **calculation kernel** (MoonBit, `moon
+   prove` via Why3+Z3). Everything else — ingest, catalog resolution, BOM,
+   wiring, surfaces — is plain Go (D2, D16, D23).
+3. **One WASM boundary, not a system-of-systems.** Only the kernel crosses a
+   WASM boundary (JSON-over-linear-memory, D16). The BOM and wiring exporters
+   are **Go packages over the resolved model, not Rust/WASM adapters** (D23).
+   The old Rust `hhfab-adapter`/`bom-adapter` were retired (F7d).
+4. **Plan is the source of truth; state is a flat file.** Plans are bundled DIET
+   YAML documents in a directory of `<id>.yaml` files (D21). No database.
+5. **NetBox is deferred** (D22) — not part of the core pipeline.
 
-5. **DeviceClass is the atomic BOM unit.** Any hardware component — server, switch, NIC,
-   transceiver — is a `DeviceClass` with optional sub-components. BOM derivation is
-   recursive traversal at plan time, not post-generation inventory reads.
+## The pipeline (data flow)
 
----
-
-## Five-Layer Architecture
-
-### Layer 1 — Topology Calculation Kernel (MoonBit WASM component)
-
-**Responsibility:** Given a `TopologyPlan` input, produce a `TopologyIR` output.
-
-Inputs (via WIT):
-- `TopologyPlan` — device catalog (`DeviceClass` with nested sub-components), plan
-  entries (`PlanEntry`), connections (`PlanConnection`), fabric domains, port zones
-
-Outputs (via WIT):
-- `TopologyIR` — the complete topology as a typed graph
-- `DeviceClassBOM[]` — hierarchical bill of materials per plan entry (recursive)
-- `ValidationResult` — constraint violations, warnings (oversubscription ratio per fabric)
-
-Contains:
-- Switch quantity calculation (leaf and spine counts)
-- Port allocation (zone-aware, priority-ordered)
-- Clos wiring distribution (alternating, rail-optimized, same-switch)
-- Mesh pair enumeration and inter-switch link assignment
-- Breakout option selection
-- BOM derivation (recursive DeviceClass traversal, per-unit and fleet totals)
-- Constraint validation (topology mode rules, MCLAG/ESLAG counts, oversubscription)
-
-Formally verified properties (`moon prove`):
-- Port non-overlap: no logical port is allocated to more than one connection
-- Allocation completeness: total allocated ports == total demanded ports
-- Switch count lower bound: effective_quantity >= ceil(demand / capacity) for each zone,
-  for the non-ESLAG paths (none/alternating/MCLAG — these only raise the count). ESLAG is a
-  deliberate hard cap and is a *separate* invariant: 2 <= effective_quantity <= 4 (the [2,4]
-  clamp can intentionally drop below ceil(demand/capacity), so the lower bound does not apply
-  under ESLAG — see `ALGORITHMS.md` Algorithm 1)
-- BOM scaling: fleet_count(component) == per_unit_count × plan_entry.quantity (at each level)
-- Mesh constraint: mesh switch count ∈ {2, 3}
-- MCLAG even-count: MCLAG switch count is even and >= 2
-
-**Verification scope (Phase 8, Issue #7).** These properties are machine-proved
-by `moon prove` (Why3 + Z3) at each invariant's **pure-arithmetic core** — the
-`Int`/`Bool` functions in the `aid/kernel/proofs` package (`kernel/proofs/`),
-which the production kernel routes its real computation through (the proven core
-is the production path, not a copy). A `moon prove` logic body cannot reference
-`Array` methods, struct fields, or enum equality, so the surrounding
-**Array / whole-plan wiring** — the allocation loop's port count, the recursive
-BOM traversal, and `validate_plan`'s iteration that *rejects* out-of-range mesh
-/ MCLAG / ESLAG counts — is covered by the kernel's **fixture tests**, not by
-`moon prove`. The proof gate (`scripts/moon-prove-gate.sh kernel/proofs`,
-enforced in CI) blocks the build on any unproved core goal (D2). Per-invariant
-proof obligations, `moon prove` evidence, and this core-vs-wiring split are
-recorded in Issue #7.
-
-Zero imports from NetBox, Django, filesystem, or HTTP.
-
-### Layer 2 — Export Adapters (WASM components, Rust or MoonBit)
-
-**Responsibility:** Transform `TopologyIR` into output artifacts.
-
-#### hhfab-adapter (Rust WASM component)
-- Input: `TopologyIR` + export options (fabric scope, split-by-fabric)
-- Output: hhfab wiring YAML (Kubernetes CRD format, `wiring.githedgehog.com/v1beta1`)
-- CRD types: VLANNamespace, IPv4Namespace, SwitchGroup, Switch, Server, Connection
-- Validates output structure before returning
-
-#### bom-adapter (MoonBit or Rust WASM component)
-- Input: `DeviceClassBOM[]` + plan metadata
-- Output: BOM CSV and/or JSON
-- Format: per-device-class sections with per-unit and fleet-total quantities, nested by
-  sub-component tree
-- No NetBox reads — BOM is derived entirely from the plan model
-
-### Layer 3 — I/O Adapters (Rust or Go)
-
-**Responsibility:** Side-effecting integrations with external systems.
-
-#### netbox-adapter (Rust or Go)
-- Input: `TopologyIR`
-- Action: POST Devices, Interfaces, Cables, Modules to NetBox via REST API
-- Idempotent: uses `name` as idempotency key per object type
-- Does not use Django ORM — NetBox REST API only
-- This layer is optional. AID functions fully without it.
-
-#### plan-storage (Go)
-- Reads and writes topology plan YAML files
-- Persists generated state (TopologyIR hash, last generation timestamp, BOM cache)
-  in SQLite (local, single-user) or a configurable backend
-- No schema migrations required for plan YAML — it is a versioned document format
-
-### Layer 4 — CLI and Orchestration (Go)
-
-**Responsibility:** User-facing command surface and component orchestration.
+A plan flows through pure Go packages, with the proved kernel called in the
+middle for the arithmetic:
 
 ```
-aid plan create   --output plan.yaml
-aid plan validate plan.yaml
-aid topology calc plan.yaml --output topology.json
-aid topology bom  plan.yaml --format csv --output bom.csv
-aid export wiring plan.yaml --fabric backend --output wiring-backend.yaml
-aid publish netbox plan.yaml --netbox-url https://... --token ...
+bundled DIET plan YAML
+   │  internal/topology.IngestBundled          (parse → relational model + catalog)
+   ▼
+(*topology.Plan, *catalog.Catalog)
+   │  internal/calc.Compute / calc.Evaluate     (build calc-plan → run KERNEL → decode)
+   ▼        └─ internal/components.Kernel → embed/kernel.wasm  (via internal/wasmhost, D16)
+calc.CalcOutput  { switch/server quantities · per-endpoint allocation IR · transceiver verdicts · errors }
+   │                                   ┌── internal/bom.Resolve → RenderProjection / RenderFullBOM  (bom.csv + full BOM)
+   ├───────────────────────────────────┤
+   │  (catalog + overlay merged AFTER calc) └── internal/wiring.Render → hhfab CRDs per managed fabric
+   ▼
+internal/design  = the coordinator facade over all of the above (one Resolve → validation + quantities + BOM + wiring)
 ```
 
-- Hosts WASM components via `wasmtime-go`
-- Reads plan YAML, passes to topology-calculator.wasm
-- Routes TopologyIR to appropriate adapters based on subcommand
-- Returns human-readable output for terminal use
-- Optionally runs as `aid serve` to expose a REST API for the web frontend
+`internal/design.Resolve/Evaluate/Wiring` is the single facade the surfaces call.
+`calc.Compute` fails on kernel-reported errors; `calc.Evaluate` is the non-failing
+variant so surfaces can *show* validation (two-plane validation): structural/parse
+failure → HTTP 4xx; calc errors → `is_valid:false` data. The optic/identity
+**overlay** is merged into the catalog *after* calc (it only affects BOM optic
+columns + wiring `profile`, not the arithmetic).
 
-### Layer 5 — Web Frontend (MoonBit → JavaScript + Bootstrap 5)
+## The calculation kernel (MoonBit + `moon prove`)
 
-**Responsibility:** Browser-based GUI for creating, viewing, and managing topology plans.
-Emulates NetBox's visual appearance using Bootstrap 5.
+- `kernel/src/*.mbt` — the calc: `decode`/`encode` (the D16 JSON boundary),
+  `alloc`/`distribution`/`switch_count`/`f2_calc` (port allocation, distribution,
+  switch-count derivation incl. Clos spine counts), `bom` (BOM scaling).
+- `kernel/proofs/*.mbt` (`cores.mbt`) — **proved pure cores** (Int/Bool only;
+  no Array/struct translation). `kernel/src` routes its arithmetic through these
+  cores; `moon prove` (Why3 1.7.2 + Z3 4.8.12, opam switch `why3env`) proves the
+  invariants (port non-overlap, ceil-div lower bounds, redundancy floors,
+  BOM/fleet scaling). A CI gate parses `moon prove` stdout (exit code is always
+  0) and a negative control must stay red. See `scripts/moon-prove-gate.sh`.
+- Built to **`embed/kernel.wasm`**, embedded in the Go binary and called over the
+  **D16 boundary** (`alloc`/`dealloc` + `export_*(ptr,len)->packed`, JSON in/out)
+  by `internal/wasmhost` via `internal/components.Kernel`. This is the **only**
+  WASM component (the `abi.mbt` old export shells are dead and tracked for
+  removal; `docs/followups/retire-old-kernel-abi-shells.md`).
 
-Architecture:
-- MoonBit compiled to JavaScript (`moon build --target js`) for all frontend logic
-- Go API server (`aid serve`) provides REST endpoints — the frontend calls only this
-- Bootstrap 5 (bundled, not CDN) for card-based layout, tables, forms, dark nav
-- No server-side HTML rendering — Go is a pure API backend
+## The engine packages (Go)
 
-UI surfaces:
-- **Plan list**: table view of all topology plans with status badges
-- **Plan detail**: card-based view showing fabric domains, device classes, port zones,
-  BOM summary, and validation results
-- **Device class editor**: create/edit device classes with sub-component nesting
-- **Connection intent editor**: per-NIC connection records with zone assignment
-- **BOM view**: hierarchical BOM per device class with fleet totals
-- **Wiring export**: trigger export, download wiring YAML per fabric
+| Package | Role |
+|---|---|
+| `internal/objectmodel` | typed-but-open object substrate + pinned `ID{Name,Version}` |
+| `internal/topology` | ingest bundled DIET plan → relational `Plan` (spec + status/expected) + resolve into the catalog; `Validate`, `Rebundle` |
+| `internal/catalog` | the AID-owned two-layer catalog (bare hardware types + configured classes) + overlay merge |
+| `internal/planschema` | the plan/catalog JSON schemas |
+| `internal/calc` | build the calc-plan, run the kernel, decode `CalcOutput`; `Compute` (fail-fast) + `Evaluate` (non-failing) + `DeriveQuantities` |
+| `internal/bom` | one `Resolve` → `RenderProjection` (`bom.csv`) / `RenderFullBOM` / `RenderJSON` (D23) |
+| `internal/wiring` | `Render` → per-fabric hhfab CRDs incl. mesh + Clos fabric links (D23) |
+| `internal/oracle` | parametric oracle harness (`Composition` table) — reproduces each vendored reference end-to-end |
+| `internal/design` | the coordinator facade the CLI/REST call |
+| `internal/planedit` | structured projection + `yaml.Node` surgical field-patch / create-ops (re-validate-before-persist, D26) |
+| `internal/library` | strict dedup-by-pinned-id **union** of the built-in reference catalogs (Epic #75) |
+| `internal/templates` | embedded starter plans + overlays (`go:embed`), served as templates |
+| `internal/planstore` | flat-file `<id>.yaml` (+ `<id>.overlay.yaml`) plan store (D21) |
+| `internal/wasmhost`, `internal/components` | WASM host + kernel loader |
 
-The frontend is optional — all AID functionality is accessible via `aid` CLI without
-running `aid serve`. The GUI is an additional surface on top of the same Go API.
+## Surfaces (all on the rebuilt engine — F7)
 
----
+- **CLI** (`cmd/aid`): `plan validate`, `topology calc`, `topology bom`,
+  `export wiring`, `design`, `serve` — all route through `internal/design`.
+- **REST** (`aid serve`, `cmd/aid/serve.go`, Go `net/http`): `/api/plans` CRUD,
+  `/api/plans/{id}/{calc,bom,wiring/{fabric},overlay,validate}`, `/api/catalog`,
+  `/api/templates`, plus the structured projection/patch/create ops for the GUI
+  editor. Plan store is `internal/planstore`.
+- **GUI** (`ui/`, MoonBit→JS, D14; Bootstrap 5, D15): a client-only SPA over the
+  REST API — plan list, structured designer (server/switch classes, zones, NICs,
+  connections, mesh↔Clos), live validation, overlay, BOM/wiring/CSV export, the
+  built-in Library browse + reference gallery. Real-browser Playwright E2E
+  (`make ui-e2e`) + a Node mock-harness (`make ui-test`). See
+  `docs/ux/gui-ux-review.md`.
 
-## WASM Component Model Boundaries
+## What was retired (so old references don't mislead)
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ aid CLI (Go)                                                    │
-│                                                                 │
-│  plan.yaml ──► [topology-calculator.wasm] ──► TopologyIR       │
-│                        │                           │           │
-│                        ▼                           ▼           │
-│               ValidationResult         [hhfab-adapter.wasm]    │
-│                        │               [bom-adapter.wasm]      │
-│                        │               [netbox-adapter]        │
-│                        ▼                           ▼           │
-│               (stdout / exit code)        (files / REST API)   │
-└────────────────────────────────────────────────────────────────┘
-```
-
-All component boundaries are defined by WIT interfaces in `wit/`. The CLI is the sole
-orchestrator — components do not call each other directly.
-
----
-
-## TopologyIR — Intermediate Representation
-
-The `TopologyIR` is the pure output of the calculation kernel and the shared input
-to all export adapters. It is a typed, labeled graph:
-
-```
-TopologyIR {
-  nodes: Node[]       // Switch, Server, Spine, SpineGroup
-  edges: Edge[]       // PlannedCable with speed, zone, fabric, breakout, conn_type
-  fabrics: FabricSummary[]  // per-fabric: switch counts, oversubscription ratio
-  metadata: PlanMetadata
-}
-```
-
-The `TopologyIR` is serializable to JSON and is the stable handoff point between
-all AID components. An `aid topology calc` command can write it to disk for inspection
-or pipe it to any adapter.
-
----
-
-## Plan Persistence Strategy
-
-- **Source of truth:** topology plan YAML files (human-authored, version-controlled)
-- **Generated state:** SQLite database (`~/.aid/state.db` or project-local `.aid/state.db`)
-  - last topology IR hash per plan file
-  - last generation timestamp
-  - cached BOM outputs
-- **No server required for local use.** SQLite is embedded.
-- Multi-user / team use: swap the storage adapter for a shared backend (future).
-
----
-
-## NetBox Integration Model
-
-AID treats NetBox as a publish target, not a dependency.
-
-The netbox-adapter maps `TopologyIR` to NetBox REST API objects:
-
-| TopologyIR | NetBox object | API endpoint |
-|-----------|---------------|-------------|
-| Node (Switch) | dcim.Device | POST /api/dcim/devices/ |
-| Node (Server) | dcim.Device | POST /api/dcim/devices/ |
-| Edge (cable) | dcim.Cable | POST /api/dcim/cables/ |
-| SubComponent (NIC) | dcim.Module | POST /api/dcim/modules/ |
-
-Custom fields (`aid_plan_id`, `aid_fabric`, `aid_zone`) are stamped on generated objects
-for plan-scoped cleanup and re-export. The adapter creates these fields on first use.
-
-Cleanup: `aid publish netbox --clean plan.yaml` deletes all objects tagged with `aid_plan_id`.
+- The universal **`DeviceClass`** model → the real diet/XOC **relational** model
+  + component-graph catalog (D18/D19). See `DOMAIN_MODEL.md`.
+- **Rust WASM export adapters** (`hhfab-adapter`, `bom-adapter`, `ir-gen`,
+  `bom-gen`) + `internal/orchestrate` → deleted (F7d); replaced by the Go
+  renderers `internal/bom` + `internal/wiring` (D23).
+- **SQLite state** → never built; flat-file YAML plan store (D21).
+- **`TopologyIR`** (the old export envelope) → the F2 `calc.CalcOutput` IR.
+- **NetBox integration as a core layer** → deferred (D22).
+- The design-time "authored-map → training normalization" phase → dropped; the
+  DIET/training YAML *is* the authoring format (D25).
