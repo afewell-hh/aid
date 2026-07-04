@@ -26,7 +26,10 @@
         "load_library",
         "load_reference_gallery",
         "library_html",
-        "reference_gallery_html"
+        "reference_gallery_html",
+        "add_switch_class_submit",
+        "add_zone_submit",
+        "add_nic_submit"
       ],
       "format": "esm"
     }

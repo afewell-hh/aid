@@ -212,6 +212,9 @@ type Op struct {
 	SwitchClass  string `json:"switch_class,omitempty"`
 	NicID        string `json:"nic_id,omitempty"`
 	ConnectionID string `json:"connection_id,omitempty"`
+	// ZoneName is the new switch_port_zone's name (add_zone). Top-level per the
+	// #79 op contract; the zone's other fields ride in Fields.
+	ZoneName string `json:"zone_name,omitempty"`
 	// ConnIndex is the position in server_connections that set/remove target
 	// (connection_id is not unique, so index is the stable key, P1.1b/#69).
 	ConnIndex int    `json:"conn_index,omitempty"`
@@ -312,6 +315,12 @@ func applyOne(root *yaml.Node, op Op) error {
 		}
 	case "add_server_class":
 		return addServerClass(root, op)
+	case "add_switch_class":
+		return addSwitchClass(root, op)
+	case "add_zone":
+		return addZone(root, op)
+	case "add_nic":
+		return addNic(root, op)
 	case "set_connection_field":
 		conn, err := connectionAt(root, op.ConnIndex)
 		if err != nil {
@@ -491,6 +500,189 @@ func addServerClass(root *yaml.Node, op Op) error {
 	add("gpus_per_server", g)
 	add("server_device_type", op.ServerDeviceType)
 	seq.Content = append(seq.Content, item)
+	return nil
+}
+
+// --- structured create: switch classes, zones, NICs (#81) -------------------
+
+// referenceDataIDs collects the ids under reference_data.<key> (the dropdown
+// sources the create ops validate cross-references against).
+func referenceDataIDs(root *yaml.Node, key string) map[string]bool {
+	out := map[string]bool{}
+	rd := mapValue(root, "reference_data")
+	if rd == nil {
+		return out
+	}
+	seq := mapValue(rd, key)
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return out
+	}
+	for _, item := range seq.Content {
+		if v := mapValue(item, "id"); v != nil {
+			out[v.Value] = true
+		}
+	}
+	return out
+}
+
+// appendMapping builds a mapping node from ordered k/v pairs and appends it to
+// seq (the shared shape of the three create ops).
+func appendMapping(seq *yaml.Node, kv ...[2]string) {
+	item := &yaml.Node{Kind: yaml.MappingNode}
+	for _, p := range kv {
+		item.Content = append(item.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: p[0]},
+			&yaml.Node{Kind: yaml.ScalarNode, Value: p[1]},
+		)
+	}
+	seq.Content = append(seq.Content, item)
+}
+
+// addSwitchClass appends a new switch class. Requires a unique switch_class_id, a
+// fabric_name, a fabric_class ∈ {managed, unmanaged}, a hedgehog_role, and a
+// device_type_extension that resolves in reference_data. topology_mode and
+// override_quantity are optional. The re-validate guard (Apply) is the backstop.
+func addSwitchClass(root *yaml.Node, op Op) error {
+	seq := mapValue(root, "switch_classes")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return fmt.Errorf("no switch_classes sequence")
+	}
+	if op.SwitchClass == "" {
+		return fmt.Errorf("add_switch_class needs a switch_class id")
+	}
+	for _, item := range seq.Content {
+		if v := mapValue(item, "switch_class_id"); v != nil && v.Value == op.SwitchClass {
+			return fmt.Errorf("switch class %q already exists", op.SwitchClass)
+		}
+	}
+	f := op.Fields
+	if f == nil {
+		f = map[string]string{}
+	}
+	if f["fabric_name"] == "" {
+		return fmt.Errorf("fabric_name is required")
+	}
+	switch f["fabric_class"] {
+	case "managed", "unmanaged":
+	default:
+		return fmt.Errorf("fabric_class must be managed or unmanaged")
+	}
+	if f["hedgehog_role"] == "" {
+		return fmt.Errorf("hedgehog_role is required")
+	}
+	if f["device_type_extension"] == "" {
+		return fmt.Errorf("device_type_extension is required")
+	}
+	if !referenceDataIDs(root, "device_type_extensions")[f["device_type_extension"]] {
+		return fmt.Errorf("device_type_extension %q is not a known device_type_extension", f["device_type_extension"])
+	}
+	kv := [][2]string{
+		{"switch_class_id", op.SwitchClass},
+		{"fabric_name", f["fabric_name"]},
+		{"fabric_class", f["fabric_class"]},
+		{"hedgehog_role", f["hedgehog_role"]},
+		{"device_type_extension", f["device_type_extension"]},
+	}
+	if v := f["topology_mode"]; v != "" {
+		kv = append(kv, [2]string{"topology_mode", v})
+	}
+	if v := f["override_quantity"]; v != "" {
+		kv = append(kv, [2]string{"override_quantity", v})
+	}
+	appendMapping(seq, kv...)
+	return nil
+}
+
+// addZone appends a new switch_port_zone. Requires an existing switch_class, a
+// zone_name unique within that class, a zone_type and a port_spec; optional
+// breakout_option / transceiver_module_type must resolve in reference_data.
+func addZone(root *yaml.Node, op Op) error {
+	seq := mapValue(root, "switch_port_zones")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return fmt.Errorf("no switch_port_zones sequence")
+	}
+	if op.SwitchClass == "" {
+		return fmt.Errorf("add_zone needs a switch_class")
+	}
+	if _, err := findInSeq(root, "switch_classes", "switch_class_id", op.SwitchClass); err != nil {
+		return fmt.Errorf("switch_class %q not found", op.SwitchClass)
+	}
+	if op.ZoneName == "" {
+		return fmt.Errorf("zone_name is required")
+	}
+	for _, item := range seq.Content {
+		sc := mapValue(item, "switch_class")
+		zn := mapValue(item, "zone_name")
+		if sc != nil && sc.Value == op.SwitchClass && zn != nil && zn.Value == op.ZoneName {
+			return fmt.Errorf("zone %q already exists on switch_class %q", op.ZoneName, op.SwitchClass)
+		}
+	}
+	f := op.Fields
+	if f == nil {
+		f = map[string]string{}
+	}
+	if f["zone_type"] == "" {
+		return fmt.Errorf("zone_type is required")
+	}
+	if f["port_spec"] == "" {
+		return fmt.Errorf("port_spec is required")
+	}
+	if v := f["breakout_option"]; v != "" && !referenceDataIDs(root, "breakout_options")[v] {
+		return fmt.Errorf("breakout_option %q is not a known breakout_option", v)
+	}
+	if v := f["transceiver_module_type"]; v != "" && !referenceDataIDs(root, "module_types")[v] {
+		return fmt.Errorf("transceiver_module_type %q is not a known module_type", v)
+	}
+	kv := [][2]string{
+		{"switch_class", op.SwitchClass},
+		{"zone_name", op.ZoneName},
+		{"zone_type", f["zone_type"]},
+		{"port_spec", f["port_spec"]},
+	}
+	for _, k := range []string{"breakout_option", "transceiver_module_type", "allocation_strategy", "priority"} {
+		if v := f[k]; v != "" {
+			kv = append(kv, [2]string{k, v})
+		}
+	}
+	appendMapping(seq, kv...)
+	return nil
+}
+
+// addNic appends a new server_nics row. Requires an existing server_class, a
+// nic_id unique within that class, and a module_type that resolves in
+// reference_data.module_types.
+func addNic(root *yaml.Node, op Op) error {
+	seq := mapValue(root, "server_nics")
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return fmt.Errorf("no server_nics sequence")
+	}
+	if op.ServerClass == "" {
+		return fmt.Errorf("add_nic needs a server_class")
+	}
+	if _, err := findInSeq(root, "server_classes", "server_class_id", op.ServerClass); err != nil {
+		return fmt.Errorf("server_class %q not found", op.ServerClass)
+	}
+	if op.NicID == "" {
+		return fmt.Errorf("nic_id is required")
+	}
+	for _, item := range seq.Content {
+		sc := mapValue(item, "server_class")
+		nid := mapValue(item, "nic_id")
+		if sc != nil && sc.Value == op.ServerClass && nid != nil && nid.Value == op.NicID {
+			return fmt.Errorf("nic %q already exists on server_class %q", op.NicID, op.ServerClass)
+		}
+	}
+	if op.Value == "" {
+		return fmt.Errorf("module_type is required")
+	}
+	if !referenceDataIDs(root, "module_types")[op.Value] {
+		return fmt.Errorf("module_type %q is not a known module_type", op.Value)
+	}
+	appendMapping(seq,
+		[2]string{"server_class", op.ServerClass},
+		[2]string{"nic_id", op.NicID},
+		[2]string{"module_type", op.Value},
+	)
 	return nil
 }
 

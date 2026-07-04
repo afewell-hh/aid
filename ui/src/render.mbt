@@ -842,6 +842,19 @@ pub fn structure_editor_html(structure_json : String) -> String {
     Some(c) => arr_at(c, "target_zones")
     None => []
   }
+  let breakout_options = match get(root, "catalog") {
+    Some(c) => arr_at(c, "breakout_options")
+    None => []
+  }
+  // Class-id lists (parents for the add-zone / add-nic mini-forms).
+  let switch_class_ids : Array[String] = []
+  for s in arr_at(root, "switch_classes") {
+    switch_class_ids.push(str_at(s, "id"))
+  }
+  let server_class_ids : Array[String] = []
+  for sc in arr_at(root, "server_classes") {
+    server_class_ids.push(str_at(sc, "id"))
+  }
 
   // server classes
   let mut srv = ""
@@ -944,6 +957,71 @@ pub fn structure_editor_html(structure_json : String) -> String {
   "<button id=\"save-srv-btn\" class=\"btn btn-primary btn-sm me-2 mb-3\">Save server classes</button>" +
   "<button id=\"save-conn-btn\" class=\"btn btn-primary btn-sm mb-3\">Save connections</button>" +
   "<h3 class=\"h6\">Switch classes</h3>\{sw}" +
+  "\{add_switch_class_form(device_type_extensions)}" +
   "<button id=\"save-sw-btn\" class=\"btn btn-primary btn-sm\">Save switch classes</button>" +
+  "<hr class=\"my-3\"><h3 class=\"h6\">Switch port zones</h3>" +
+  "\{add_zone_form(switch_class_ids, breakout_options, module_types)}" +
+  "<hr class=\"my-3\"><h3 class=\"h6\">NICs</h3>" +
+  "\{add_nic_form(server_class_ids, module_types)}" +
   "</div></div>"
+}
+
+// add_switch_class_form: the #81 mini-form for a new switch class — id +
+// fabric_name inputs, fabric_class / hedgehog_role / device_type_extension /
+// topology selectors (data-derived), optional override quantity.
+fn add_switch_class_form(device_type_extensions : Array[Json]) -> String {
+  let fabric_classes = ["managed", "unmanaged"]
+  let roles = ["server-leaf", "border-leaf", "spine", "virtual"]
+  "<div class=\"card mb-3\"><div class=\"card-body\">" +
+  "<div class=\"small text-muted mb-2\">Add switch class</div>" +
+  "<div class=\"row g-2 align-items-end\">" +
+  "<div class=\"col-3\"><input id=\"add-swc-id\" class=\"form-control form-control-sm\" placeholder=\"new_switch_class_id\" aria-label=\"New switch class id\"></div>" +
+  "<div class=\"col-3\"><input id=\"add-swc-fabric-name\" class=\"form-control form-control-sm\" placeholder=\"fabric_name\" aria-label=\"New switch class fabric name\"></div>" +
+  "<div class=\"col-2\">\{select_strings("add-swc-fabric-class", fabric_classes, "managed", "New switch class fabric class")}</div>" +
+  "<div class=\"col-2\">\{select_strings("add-swc-role", roles, "server-leaf", "New switch class hedgehog role")}</div>" +
+  "</div><div class=\"row g-2 mt-1 align-items-end\">" +
+  "<div class=\"col-4\">\{select_html("add-swc-devext", device_type_extensions, "", true, "New switch class device type extension")}</div>" +
+  "<div class=\"col-3\">\{topo_select("add-swc-topo", "", "New switch class topology mode")}</div>" +
+  "<div class=\"col-3\"><input id=\"add-swc-override\" class=\"form-control form-control-sm\" type=\"number\" min=\"1\" placeholder=\"override qty (opt)\" aria-label=\"New switch class override quantity\"></div>" +
+  "<div class=\"col-2\"><button id=\"add-swc-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div>" +
+  "</div></div></div>"
+}
+
+// add_zone_form: the #81 mini-form for a new switch port zone — parent
+// switch_class + zone_name + zone_type + port_spec, optional breakout /
+// transceiver (data-derived) / allocation strategy / priority.
+fn add_zone_form(
+  switch_class_ids : Array[String],
+  breakout_options : Array[Json],
+  module_types : Array[Json]
+) -> String {
+  let zone_types = ["server", "uplink", "mesh", "peer", "session", "oob"]
+  let allocs = ["sequential", "interleaved", "custom"]
+  "<div class=\"card mb-2\"><div class=\"card-body\">" +
+  "<div class=\"small text-muted mb-2\">Add switch port zone</div>" +
+  "<div class=\"row g-2 align-items-end\">" +
+  "<div class=\"col-3\">\{select_strings("add-zone-swc", switch_class_ids, "", "Parent switch class for new zone")}</div>" +
+  "<div class=\"col-3\"><input id=\"add-zone-name\" class=\"form-control form-control-sm\" placeholder=\"zone_name\" aria-label=\"New zone name\"></div>" +
+  "<div class=\"col-2\">\{select_strings("add-zone-type", zone_types, "server", "New zone type")}</div>" +
+  "<div class=\"col-2\"><input id=\"add-zone-portspec\" class=\"form-control form-control-sm\" placeholder=\"port_spec\" aria-label=\"New zone port spec\"></div>" +
+  "</div><div class=\"row g-2 mt-1 align-items-end\">" +
+  "<div class=\"col-3\">\{select_html("add-zone-breakout", breakout_options, "", true, "New zone breakout option")}</div>" +
+  "<div class=\"col-3\">\{select_html("add-zone-xcvr", module_types, "", true, "New zone transceiver module type")}</div>" +
+  "<div class=\"col-2\">\{select_strings("add-zone-alloc", allocs, "sequential", "New zone allocation strategy")}</div>" +
+  "<div class=\"col-2\"><input id=\"add-zone-priority\" class=\"form-control form-control-sm\" type=\"number\" placeholder=\"priority\" aria-label=\"New zone priority\"></div>" +
+  "<div class=\"col-2\"><button id=\"add-zone-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div>" +
+  "</div></div></div>"
+}
+
+// add_nic_form: the #81 mini-form for a new server NIC — parent server_class +
+// nic_id + module_type (data-derived).
+fn add_nic_form(server_class_ids : Array[String], module_types : Array[Json]) -> String {
+  "<div class=\"card mb-2\"><div class=\"card-body\">" +
+  "<div class=\"small text-muted mb-2\">Add NIC</div>" +
+  "<div class=\"row g-2 align-items-end\">" +
+  "<div class=\"col-4\">\{select_strings("add-nic-server", server_class_ids, "", "Parent server class for new NIC")}</div>" +
+  "<div class=\"col-3\"><input id=\"add-nic-id\" class=\"form-control form-control-sm\" placeholder=\"nic_id\" aria-label=\"New NIC id\"></div>" +
+  "<div class=\"col-3\">\{select_html("add-nic-module", module_types, "", true, "New NIC module type")}</div>" +
+  "<div class=\"col-2\"><button id=\"add-nic-btn\" class=\"btn btn-sm btn-outline-success\">Add</button></div>" +
+  "</div></div></div>"
 }
