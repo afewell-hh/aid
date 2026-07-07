@@ -60,6 +60,14 @@ fn read_input(ptr : Int, len : Int) -> Bytes {
 
 fn write_output(out : Bytes) -> Int64 {
   let len = out.length()
+  // Keep the encoded source buffer alive across the destination allocation, the
+  // same lifetime strategy `alloc` already applies to host-visible buffers. Under
+  // the raw-instruction ABI the toolchain otherwise treats `out` as reclaimable
+  // once `alloc(len)` needs comparable space, so a large output's tail bytes get
+  // reused before the copy loop reads them — corrupting the JSON near its end
+  // (Issue #59). Retaining `out` forces `alloc` to return a genuinely disjoint
+  // buffer, so the byte copy stays exact for any size.
+  live.push(out)
   let ptr = alloc(len)
   for i in 0..<len {
     store8(ptr + i, out[i].to_int())
