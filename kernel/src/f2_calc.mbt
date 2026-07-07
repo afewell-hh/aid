@@ -425,6 +425,16 @@ fn compute_switch_qty(sc : SwitchClassIn, conns : Array[ConnIn]) -> Int {
   }
 }
 
+fn zone_total_demand(conns : Array[ConnIn], switch_class_id : String, zone_name : String) -> Int {
+  let mut demand = 0
+  for c in conns {
+    if c.target_switch_class == switch_class_id && c.target_zone == zone_name {
+      demand = demand + c.server_quantity * c.ports_per_connection
+    }
+  }
+  demand
+}
+
 fn qty_for(qtys : Array[ClassQty], class_id : String) -> Int {
   for q in qtys {
     if q.class_id == class_id {
@@ -574,6 +584,25 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
         z.breakout_logical_ports,
       )
       let zone_capacity = zone_ports.length()
+      if sc.redundancy == "eslag" &&
+        (z.zone_type == "server" || z.zone_type == "oob") {
+        let demand = zone_total_demand(plan.connections, sc.switch_class_id, z.zone_name)
+        let max_eslag_capacity = zone_capacity * 4
+        if demand > max_eslag_capacity {
+          errors.push({
+            code: "ESLAG_CAPACITY_EXCEEDED",
+            message: "zone '" +
+            z.zone_name +
+            "' on ESLAG switch class '" +
+            sc.switch_class_id +
+            "' requires demand " +
+            demand.to_string() +
+            " but ESLAG supports at most 4 switches x " +
+            zone_capacity.to_string() +
+            " port slots",
+          })
+        }
+      }
       // One cursor per switch instance — port_allocator.py keys (switch, zone).
       let cursors = Array::make(if eff > 0 { eff } else { 1 }, 0)
       let mut overflowed = false
@@ -686,10 +715,13 @@ fn f2_run(plan : CalcPlan) -> CalcOutput2 {
       }
     }
   }
+  // Once calc errors exist, endpoint allocation is not a reliable export input.
+  // Keep quantities + errors for surfaces, but suppress invalid allocation IR.
+  let out_endpoints = if errors.length() > 0 { [] } else { endpoints }
   {
     switch_quantity,
     server_quantity,
-    endpoints,
+    endpoints: out_endpoints,
     transceiver_verdicts: verdicts,
     errors,
   }

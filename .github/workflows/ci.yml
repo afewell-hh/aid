@@ -98,8 +98,8 @@ jobs:
           make wasm
           make embed-check
 
-      - name: Go — go test ./... (the oracle suite shells real hhfab validate)
-        run: go test ./...
+      - name: Go — make test (the oracle suite shells real hhfab validate)
+        run: make test
 
       # Explicit proof that the oracle hhfab-validate gate RAN (did not skip) —
       # converts a silent skip into a hard failure even if the preflight ever

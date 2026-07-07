@@ -5,13 +5,17 @@
 # seeds the vendored oracle plans through the REAL REST API, then runs the
 # Playwright-driven generator (ui/test/gen-evidence.mjs) in headless chromium to
 # capture each surface AFTER a real request round-trip — writing self-contained
-# HTML + PNG screenshots under ui/docs/. Always tears the server down.
+# HTML under ui/docs/evidence. PNG screenshots under ui/docs/screenshots are
+# refreshed only when AID_UPDATE_SCREENSHOTS=1 because browser PNG output is
+# run-variable across environments. Always tears the server down.
 #
 # Same offline shims as run-e2e.sh: chromium via PLAYWRIGHT_BROWSERS_PATH, the
 # @playwright/test module via an ephemeral ui/test/node_modules symlink.
 #
 # Required env / args (the `ui-evidence` Makefile target provides these):
 #   AID_BIN, PLAYWRIGHT_NODE_MODULES, PLAYWRIGHT_BROWSERS_PATH
+# Optional:
+#   AID_UPDATE_SCREENSHOTS=1  refresh tracked PNG screenshots
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

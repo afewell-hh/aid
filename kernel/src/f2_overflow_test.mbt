@@ -42,6 +42,11 @@ test "F2 §4 over-allocation surfaces ZONE_OVERFLOW (no silent wrap)" {
   assert_eq(contains_sub(f2_calculate(overfull_plan), "ZONE_OVERFLOW"), true)
 }
 
+test "F2 calc-output with errors remains a complete JSON object" {
+  let out = f2_calculate(overfull_plan)
+  assert_eq(out[out.length() - 1], '}')
+}
+
 test "F2 §4 a zone that fits reports no allocation error" {
   let out = f2_calculate(fits_plan)
   assert_eq(contains_sub(out, "ZONE_OVERFLOW"), false)

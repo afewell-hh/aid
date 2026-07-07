@@ -1,4 +1,4 @@
-# Requests issued by the GUI during evidence capture (driven against http://127.0.0.1:42569).
+# Requests issued by the GUI during evidence capture (driven against <same-origin aid serve>).
 # external (non-same-origin) requests: 0
 
 /

@@ -27,16 +27,19 @@ const here = dirname(fileURLToPath(import.meta.url)); // ui/test
 const docsDir = join(here, "..", "docs"); // ui/docs
 const evidenceDir = join(docsDir, "evidence");
 const shotsDir = join(docsDir, "screenshots");
+const updateScreenshots = process.env.AID_UPDATE_SCREENSHOTS === "1";
 mkdirSync(evidenceDir, { recursive: true });
-mkdirSync(shotsDir, { recursive: true });
+if (updateScreenshots) mkdirSync(shotsDir, { recursive: true });
 
 // Start clean so a renamed/dropped surface never leaves an orphaned artifact
 // (the evidence dir must reflect EXACTLY this run, not a union with prior runs).
 for (const f of readdirSync(evidenceDir)) {
   if (f.endsWith(".html") || f === "requests.txt") rmSync(join(evidenceDir, f));
 }
-for (const f of readdirSync(shotsDir)) {
-  if (f.endsWith(".png")) rmSync(join(shotsDir, f));
+if (updateScreenshots) {
+  for (const f of readdirSync(shotsDir)) {
+    if (f.endsWith(".png")) rmSync(join(shotsDir, f));
+  }
 }
 
 // Seeded oracle plan ids (deterministic, from ui/test/seed-oracle-plans.sh).
@@ -84,6 +87,11 @@ async function main() {
     writeFileSync(join(evidenceDir, file), page(title, note, html));
   const captureApp = () => p.locator("#app").innerHTML();
   const captureRegion = (id) => p.locator(`#${id}`).innerHTML();
+  const screenshot = async (name) => {
+    if (updateScreenshots) {
+      await p.screenshot({ path: join(shotsDir, name), fullPage: true });
+    }
+  };
 
   // 1. Plan list (GET /api/plans) — with the P2.1 derived-facts summary column.
   await p.goto("/");
@@ -91,7 +99,7 @@ async function main() {
   writeSurface("01-plan-list.html", "Plan list",
     "GET /api/plans — each row shows the engine-derived facts (topology / GPU / servers / switches) and a validity cue.",
     await captureApp());
-  await p.screenshot({ path: join(shotsDir, "01-plan-list.png"), fullPage: true });
+  await screenshot("01-plan-list.png");
 
   // 2. New-plan authoring form (GET /api/templates) — the create surface.
   await p.locator("#new-plan-btn").click();
@@ -99,7 +107,7 @@ async function main() {
   writeSurface("02-new-plan.html", "New plan (authoring)",
     "The create surface: a name field, a starter-template picker (GET /api/templates), and the raw-YAML editor. From-template prefills the YAML and attaches the optic overlay on create.",
     await captureApp());
-  await p.screenshot({ path: join(shotsDir, "02-new-plan.png"), fullPage: true });
+  await screenshot("02-new-plan.png");
 
   // 3. Plan detail (GET /api/plans/{id}) — facts header, action toolbar, the
   //    structured editor (GET .../structure), and the optic-overlay tab.
@@ -111,7 +119,7 @@ async function main() {
   writeSurface("03-plan-detail.html", "Plan detail",
     "GET /api/plans/{id}: the derived-facts header, the action toolbar (one primary — Calculate), the structured server/switch/connection editor (dropdowns sourced from the plan's catalog), the raw-YAML escape hatch, and the optic-overlay tab.",
     await captureApp());
-  await p.screenshot({ path: join(shotsDir, "03-plan-detail.png"), fullPage: true });
+  await screenshot("03-plan-detail.png");
 
   // 3b. Optic / identity overlay tab in isolation (present, prefilled from PUT).
   writeSurface("07-overlay.html", "Optic / identity overlay",
@@ -134,7 +142,7 @@ async function main() {
   writeSurface("04-calc-valid.html", "Calculate — valid",
     "POST /api/plans/{id}/calc: a green Valid cue, the engine-computed switch/server quantities per class, an endpoint/verdict summary, and a Download-wiring button per managed fabric (hhfab CRDs).",
     await captureRegion("detail-result"));
-  await p.screenshot({ path: join(shotsDir, "04-calc.png"), fullPage: true });
+  await screenshot("04-calc.png");
 
   // 5. BOM (GET /api/plans/{id}/bom) — use the Clos plan (overlay attached →
   //    the optic columns are populated). View BOM, then capture.
@@ -145,7 +153,7 @@ async function main() {
   writeSurface("06-bom.html", "Bill of materials",
     "GET /api/plans/{id}/bom: a flat line-item table (section / model / class / manufacturer / quantity + optic standard) with a Download BOM (CSV) export. Optic columns are populated because the Clos plan carries an optic overlay.",
     await captureRegion("detail-result"));
-  await p.screenshot({ path: join(shotsDir, "05-bom.png"), fullPage: true });
+  await screenshot("05-bom.png");
 
   // 6. Calc — invalid (calc-as-data): the over-allocated plan returns is_valid:
   //    false + ZONE_OVERFLOW as DATA (HTTP 200), rendered as the Invalid cue.
@@ -167,7 +175,7 @@ async function main() {
     .sort()
     .join("\n");
   writeFileSync(join(evidenceDir, "requests.txt"),
-    `# Requests issued by the GUI during evidence capture (driven against ${origin}).\n` +
+    `# Requests issued by the GUI during evidence capture (driven against <same-origin aid serve>).\n` +
     `# external (non-same-origin) requests: ${external.length}\n\n${manifest}\n`);
   if (external.length > 0) {
     console.error("gen-evidence: FAIL — external requests detected (not air-gapped):\n" + external.join("\n"));
@@ -175,7 +183,12 @@ async function main() {
   }
 
   const files = readdirSync(evidenceDir).filter((f) => f.endsWith(".html")).sort();
-  console.log(`gen-evidence: wrote ${files.length} evidence pages + screenshots from live ${origin}`);
+  console.log(`gen-evidence: wrote ${files.length} evidence pages from live ${origin}`);
+  if (updateScreenshots) {
+    console.log("gen-evidence: screenshots refreshed (AID_UPDATE_SCREENSHOTS=1)");
+  } else {
+    console.log("gen-evidence: screenshots unchanged (set AID_UPDATE_SCREENSHOTS=1 to refresh)");
+  }
   console.log("  " + files.join("\n  "));
   console.log(`gen-evidence: air-gapped OK — 0 external requests across ${new Set(requests).size} unique URLs`);
 }

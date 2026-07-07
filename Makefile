@@ -4,7 +4,7 @@
 #
 #   make wasm    build kernel.wasm (MoonBit), copy into embed/
 #   make build   wasm + go build -o aid ./cmd/aid
-#   make test    go test ./...
+#   make test    go test AID packages
 #   make embed-check  fail if embed/kernel.wasm is still a placeholder (#33)
 
 SHELL := /bin/bash
@@ -34,7 +34,7 @@ build: wasm
 	go build -o aid ./cmd/aid
 
 test:
-	go test ./...
+	go test ./cmd/... ./internal/... ./embed ./ui
 
 # Stale-embed guard (#33): the placeholder is an 8-byte wasm header; a real
 # component is far larger. Run in CI before tests to catch an un-rebuilt embed.

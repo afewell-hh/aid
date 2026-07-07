@@ -42,8 +42,13 @@ smoke test, and the generator **fails if the page issues any non-same-origin
 request** (the air-gapped / no-CDN guarantee).
 
 ```bash
-make ui-evidence   # boots a seeded server, captures surfaces, writes ui/docs/{evidence,screenshots}
+make ui-evidence   # boots a seeded server and refreshes normalized HTML evidence
+AID_UPDATE_SCREENSHOTS=1 make ui-evidence   # also refreshes PNG screenshots
 ```
+
+PNG screenshots are opt-in because headless-browser image output varies across
+hosts and browser revisions. The default evidence target updates the deterministic
+HTML/request artifacts and leaves the tracked screenshot snapshot unchanged.
 
 The HTML pages are self-contained (they link the locally-bundled Bootstrap CSS) and
 open offline. The captured request manifest is written to
