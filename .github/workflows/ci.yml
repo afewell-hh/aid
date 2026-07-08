@@ -82,7 +82,12 @@ jobs:
           [ -n "$bin" ] || { echo "wit-bindgen binary not found in tarball"; exit 1; }
           install -m 0755 "$bin" "$HOME/.local/bin/wit-bindgen"
 
-      - name: WIT/MoonBit type drift guard
+      # LEGACY / NON-LIVE guard (#84): checks that kernel/src/types.mbt still mirrors
+      # the RETIRED pre-rebuild WIT contract in wit/. wit/ is NOT the live source of
+      # truth — the live host boundary is export_f2_calculate / export_f3_bom (JSON,
+      # not WIT-mirrored; DECISIONS D16 amended). Retained for quarantine consistency
+      # only, pending the retire-vs-reconcile follow-up.
+      - name: Legacy WIT/MoonBit type drift guard (quarantined, non-live — #84)
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.local/bin:$PATH"

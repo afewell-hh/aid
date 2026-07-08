@@ -1,5 +1,11 @@
 package aid:core@0.1.0;
 
+// LEGACY / NON-LIVE (#84): pre-rebuild WIT surface retained for quarantine and the
+// #38 consistency guard only. The Rust BOM adapter this describes was RETIRED in
+// F7d (#64/#35); the live BOM is the Go internal/bom renderer over the F2/F3
+// boundary (D23). Does NOT specify a live boundary. Retire-vs-reconcile is
+// deferred to a follow-up.
+
 /// Layer 2 — BOM export adapter (MoonBit or Rust WASM component).
 ///
 /// Consumes `device-class-bom[]` ONLY (as produced by the calculator). It must

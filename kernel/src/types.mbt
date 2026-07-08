@@ -1,3 +1,9 @@
+// LEGACY / NON-LIVE (#84): pre-rebuild WIT mirror retained for quarantine and the
+// #38 consistency guard only. It mirrors wit/, which describes the RETIRED
+// pre-rebuild topology-calculator model — NOT the live F2/F3 JSON boundary
+// (D18–D27; the live F2/F3 shapes live in f2_types.mbt and are not WIT-mirrored).
+// Do not treat as the live contract; retire-vs-reconcile is deferred to a follow-up.
+//
 // AID topology kernel — domain & output types.
 //
 // This file is a hand-authored 1:1 mirror of `wit/types.wit` (interface `types`)

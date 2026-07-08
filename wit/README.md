@@ -1,10 +1,22 @@
 # AID Core WIT Package
 
-This directory holds the WASM Component Model contracts (WIT) for the AID core
-MVP: the topology calculator, the hhfab wiring adapter, and the BOM adapter.
-These interfaces are the architectural boundary between the pure MoonBit
-calculation kernel, the export adapters, and the Go CLI/API orchestration layer.
-Downstream schema, fixture, kernel, adapter, and CLI work depends on them.
+> **LEGACY / NON-LIVE (#84).** This WIT package describes the **retired
+> pre-rebuild** topology-calculator model (DeviceClass / topology-ir /
+> device-class-bom) and the hhfab/bom adapters that were removed in F7d
+> (#64/#35). It is **not** the live boundary: after the foundation rebuild
+> (D18–D27) the host drives only `export_f2_calculate` / `export_f3_bom`
+> (JSON-over-linear-memory; see `kernel/wasm/abi.mbt` and DECISIONS D16, amended),
+> and those F2/F3 shapes are **not** WIT-mirrored. The package is retained only
+> for quarantine and the `#38` consistency guard (`kernel/tools/check-types-drift.sh`),
+> which checks that `kernel/src/types.mbt` still mirrors this legacy WIT — pending
+> a separate retire-vs-reconcile decision. Do not treat anything here as the live
+> contract or extend it for new work.
+
+This directory holds the pre-rebuild WASM Component Model contracts (WIT):
+the topology calculator, the hhfab wiring adapter, and the BOM adapter. When
+authored, these interfaces were the architectural boundary between the pure
+MoonBit calculation kernel, the export adapters, and the Go CLI/API orchestration
+layer; that role is superseded by the live F2/F3 boundary above.
 
 Package: `aid:core@0.1.0`
 

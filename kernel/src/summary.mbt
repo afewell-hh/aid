@@ -1,3 +1,8 @@
+// LEGACY / NON-LIVE (#84): pre-rebuild kernel surface (accessors over the legacy
+// CalcOutput / topology-ir / fabric-summary) retained for quarantine and the #38
+// guard only. No host/Go consumer after the foundation rebuild (D18–D27).
+// Reachable only via kernel unit tests. Retire-vs-reconcile deferred to a follow-up.
+//
 // Read-only accessors over kernel output, used by tests (and later by callers)
 // to query counts/BOM totals/validation without re-deriving them. These are
 // pure projections of the output structs — not algorithm logic.

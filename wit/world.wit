@@ -1,5 +1,12 @@
 package aid:core@0.1.0;
 
+// LEGACY / NON-LIVE (#84): pre-rebuild WIT surface retained for quarantine and the
+// #38 consistency guard only. This aggregate world exports the RETIRED
+// topology-calculator + hhfab/bom adapter interfaces (adapters removed in F7d,
+// #64/#35). It does NOT specify the live F2/F3 JSON boundary
+// (export_f2_calculate / export_f3_bom — see kernel/wasm/abi.mbt; DECISIONS D16,
+// amended). Retire-vs-reconcile is deferred to a follow-up.
+
 /// Aggregate contract world for the AID core MVP.
 ///
 /// This world exports all three core interfaces so the package has a single

@@ -1,5 +1,14 @@
 package aid:core@0.1.0;
 
+// LEGACY / NON-LIVE (#84): pre-rebuild WIT surface retained for quarantine and the
+// #38 consistency guard only. These types describe the RETIRED pre-rebuild
+// topology-calculator model (DeviceClass / topology-ir / device-class-bom /
+// fabric-summary); they do NOT specify the live F2/F3 JSON boundary
+// (export_f2_calculate / export_f3_bom — see kernel/wasm/abi.mbt; DECISIONS D16,
+// amended). The live F2/F3 shapes are defined in kernel/src/f2_types.mbt and are
+// not WIT-mirrored. Retire-vs-reconcile is deferred to a follow-up; do not treat
+// as the live contract.
+
 /// Shared domain, intermediate-representation (IR), BOM, and validation types
 /// for the AID core component contracts.
 ///

@@ -1,3 +1,10 @@
+// PARTIALLY LEGACY (#84): the TopologyPlan decoder in this file is NON-LIVE
+// pre-rebuild surface (no host/Go consumer after D18–D27), retained for quarantine
+// and the #38 guard only. The shared JSON primitives (d_obj, d_field, d_str,
+// d_field_str, d_arr_or_empty, DecodeErr) ARE live — the F2/F3 decoders reuse them
+// — so this file must NOT be deleted wholesale. Retire-vs-reconcile deferred to a
+// follow-up.
+//
 // JSON -> TopologyPlan decoder (the kernel ingress edge, DECISIONS.md D16).
 //
 // The kernel is pure: this takes a JSON *string* (never a file path) in the

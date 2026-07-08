@@ -1,3 +1,9 @@
+// PARTIALLY LEGACY (#84): the topology-ir / device-class-bom / calc-result
+// encoders in this file are NON-LIVE pre-rebuild surface (no host/Go consumer
+// after D18–D27), retained for quarantine and the #38 guard only. The small JSON
+// primitives (j_esc, j_arr) ARE live — the F2/F3 encoders reuse them — so this
+// file must NOT be deleted wholesale. Retire-vs-reconcile deferred to a follow-up.
+//
 // Canonical calc-output -> JSON encoder (DECISIONS.md D16 consolidation).
 //
 // This is the single source of the snake_case JSON wire shapes the Phase-6 Go

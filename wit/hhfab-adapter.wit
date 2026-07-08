@@ -1,5 +1,11 @@
 package aid:core@0.1.0;
 
+// LEGACY / NON-LIVE (#84): pre-rebuild WIT surface retained for quarantine and the
+// #38 consistency guard only. The Rust hhfab wiring adapter this describes was
+// RETIRED in F7d (#64/#35); the live wiring is the Go internal/wiring renderer over
+// the F2/F3 boundary (D23). Does NOT specify a live boundary. Retire-vs-reconcile
+// is deferred to a follow-up.
+
 /// Layer 2 — hhfab wiring export adapter (Rust WASM component).
 ///
 /// Consumes `topology-ir` ONLY. It must never read plan YAML, query NetBox, or

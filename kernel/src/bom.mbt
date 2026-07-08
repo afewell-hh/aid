@@ -1,3 +1,8 @@
+// LEGACY / NON-LIVE (#84): pre-rebuild kernel surface (legacy DeviceClass BOM)
+// retained for quarantine and the #38 guard only. No host/Go consumer after the
+// foundation rebuild (D18–D27; the live BOM is the Go internal/bom over F2/F3).
+// Reachable only via kernel unit tests. Retire-vs-reconcile deferred to a follow-up.
+//
 // Algorithm 6 — recursive DeviceClass BOM traversal (ALGORITHMS.md; D6, D13).
 //
 //   - quantity_per_unit(node) = product of quantity_per_parent from root to node

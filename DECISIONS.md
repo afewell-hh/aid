@@ -323,6 +323,21 @@ tooling matures (targeted during/after Phase 6).
   the kernel in Phase 6 (the Phase-5 `ir-gen` tool is interim test-data tooling, not a second
   contract).
 
+**Amendment (#84, quarantine — 2026-07).** After the foundation rebuild (D18–D27) and the
+F7d adapter retirement (#64/#35), the **live host wasm exports are `export_f2_calculate` and
+`export_f3_bom` only** — the entries `internal/components` names and `internal/wasmhost`
+invokes. The pre-rebuild `export_calculate` / `export_validate` wasm shells were **removed**
+in #84 (their pure `@src.calculate`/`@src.validate` functions and the WIT `topology-calculator`
+/ `types` contract remain compiled/present but are **quarantined legacy**, exercised only by
+kernel unit tests). Two clarifications to the text above: (a) `wit/` and its `kernel/src/types.mbt`
+mirror describe the **retired** pre-rebuild model and are **no longer the live type source of
+truth**; the live F2/F3 JSON shapes live in `kernel/src/f2_types.mbt` and are not WIT-mirrored.
+(b) The `#38` drift guard (`kernel/tools/check-types-drift.sh`) continues to run, but now guards
+only the **retained legacy WIT↔mirror** consistency, not a live contract. The D16
+JSON-over-linear-memory boundary itself **stays live** (as F2/F3). Whether to ultimately retire
+the invented WIT + `#38` guard, or reconcile the WIT to the live F2/F3 boundary and retarget the
+guard, is deferred to a separate retire-vs-reconcile follow-up.
+
 ---
 
 ## D17: Oversubscription is computed from explicitly-declared leaf UPLINK zones, not inferred

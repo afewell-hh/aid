@@ -1,3 +1,11 @@
+// LEGACY / NON-LIVE (#84): pre-rebuild kernel surface retained for quarantine
+// and the #38 WIT-mirror consistency guard only. No host/Go consumer after the
+// foundation rebuild (D18–D27); the live wasm boundary is export_f2_calculate /
+// export_f3_bom (kernel/wasm/abi.mbt). The old export_calculate/export_validate
+// wasm shells were removed in #84 — `calculate`/`validate` stay compiled only via
+// kernel unit tests. Do not extend or re-export; retire-vs-reconcile is deferred
+// to a follow-up.
+//
 // Top-level kernel entry points: plan JSON -> calc-output / validation.
 //
 // Logical realizations of the `topology-calculator` WIT interface (`calculate`,
