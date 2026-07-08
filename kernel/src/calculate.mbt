@@ -6,12 +6,14 @@
 // kernel unit tests. Do not extend or re-export; retire-vs-reconcile is deferred
 // to a follow-up.
 //
-// Top-level kernel entry points: plan JSON -> calc-output / validation.
+// Top-level kernel entry points (legacy): plan JSON -> calc-output / validation.
 //
-// Logical realizations of the `topology-calculator` WIT interface (`calculate`,
-// `validate`). Per D16 the MVP wasm boundary is JSON-over-memory; these typed
-// functions are what the boundary edge (Phase 6) will wrap. The pure kernel
-// takes the JSON string, decodes to typed input, and computes — no I/O.
+// Logical realizations of the retired `topology-calculator` WIT interface
+// (`calculate`, `validate`). When authored, these typed functions were what the
+// D16 JSON-over-memory boundary edge wrapped; that wrapping (export_calculate /
+// export_validate) was removed in #84, so they are no longer wrapped by any live
+// wasm export. The pure kernel takes the JSON string, decodes to typed input, and
+// computes — no I/O.
 
 fn opt_or_empty(o : String?) -> String {
   match o {
