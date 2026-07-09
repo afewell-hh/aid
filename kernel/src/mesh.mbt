@@ -1,3 +1,7 @@
+// LEGACY / NON-LIVE (#84): pre-rebuild kernel surface retained for quarantine and
+// the #38 guard only. No host/Go consumer after the foundation rebuild (D18–D27).
+// Reachable only via kernel unit tests. Retire-vs-reconcile deferred to a follow-up.
+//
 // Algorithm 5 — mesh inter-switch link count (ALGORITHMS.md).
 
 /// Cables per switch pair for a mesh fabric.

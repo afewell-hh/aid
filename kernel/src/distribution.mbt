@@ -1,3 +1,8 @@
+// LEGACY / NON-LIVE (#84): pre-rebuild kernel surface retained for quarantine and
+// the #38 guard only. No host/Go consumer after the foundation rebuild (D18–D27);
+// live F2 distribution is f2_switch_index in f2_calc.mbt. Reachable only via kernel
+// unit tests. Retire-vs-reconcile deferred to a follow-up.
+//
 // Algorithms 3 & 4 — switch distribution (ALGORITHMS.md).
 
 /// Algorithm 4 — alternating (round-robin) distribution.

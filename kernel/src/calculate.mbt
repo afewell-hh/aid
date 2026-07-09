@@ -1,9 +1,19 @@
-// Top-level kernel entry points: plan JSON -> calc-output / validation.
+// LEGACY / NON-LIVE (#84): pre-rebuild kernel surface retained for quarantine
+// and the #38 WIT-mirror consistency guard only. No host/Go consumer after the
+// foundation rebuild (D18–D27); the live wasm boundary is export_f2_calculate /
+// export_f3_bom (kernel/wasm/abi.mbt). The old export_calculate/export_validate
+// wasm shells were removed in #84 — `calculate`/`validate` stay compiled only via
+// kernel unit tests. Do not extend or re-export; retire-vs-reconcile is deferred
+// to a follow-up.
 //
-// Logical realizations of the `topology-calculator` WIT interface (`calculate`,
-// `validate`). Per D16 the MVP wasm boundary is JSON-over-memory; these typed
-// functions are what the boundary edge (Phase 6) will wrap. The pure kernel
-// takes the JSON string, decodes to typed input, and computes — no I/O.
+// Top-level kernel entry points (legacy): plan JSON -> calc-output / validation.
+//
+// Logical realizations of the retired `topology-calculator` WIT interface
+// (`calculate`, `validate`). When authored, these typed functions were what the
+// D16 JSON-over-memory boundary edge wrapped; that wrapping (export_calculate /
+// export_validate) was removed in #84, so they are no longer wrapped by any live
+// wasm export. The pure kernel takes the JSON string, decodes to typed input, and
+// computes — no I/O.
 
 fn opt_or_empty(o : String?) -> String {
   match o {

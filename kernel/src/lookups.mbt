@@ -1,3 +1,8 @@
+// LEGACY / NON-LIVE (#84): pre-rebuild kernel surface retained for quarantine and
+// the #38 guard only. No host/Go consumer after the foundation rebuild (D18–D27);
+// serves the legacy calculate/validate/BOM path, reachable only via kernel unit
+// tests. Retire-vs-reconcile deferred to a follow-up.
+//
 // Shared, package-internal lookups over the plan/catalog, used by the BOM,
 // validation and calculate orchestration. Pure linear scans (fixtures are small).
 

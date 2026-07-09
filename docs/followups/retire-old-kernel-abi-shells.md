@@ -1,51 +1,35 @@
-# Follow-up: retire the old kernel ABI shells (deferred from F7d)
+# Follow-up: retire the old kernel ABI shells — RESOLVED (superseded by #84 / #85)
 
-**Status:** deferred (intentionally, per the F7d guardrail). Tracked here because
-`gh` is unavailable in the deva environment — **lead to file as a GitHub issue**
-and link from #64 / #35.
+**Status:** the deferral recorded here is closed. The two dead ABI-shell exports
+were **removed in #84**, and the remaining retirement work is now tracked as a
+GitHub issue — **#85 (retire-vs-reconcile the legacy WIT contract + #38 guard)**.
+This file is kept only as a historical pointer.
 
-## What was deferred
+## What has happened since
 
-`kernel/wasm/abi.mbt` still exports the two old boundary shells:
+- **#84 (quarantine, merged/branch `deva/issue-84-quarantine-legacy-wit`)** removed
+  the two old boundary exports from `kernel/wasm/abi.mbt` and
+  `kernel/wasm/moon.pkg.json`:
+  - `export_calculate(ptr,len)` → `@src.encode_calc_result(@src.calculate(...))`
+  - `export_validate(ptr,len)`  → `@src.encode_validation_result(@src.validate(...))`
 
-- `export_calculate(ptr,len)` → `@src.encode_calc_result(@src.calculate(...))`
-- `export_validate(ptr,len)`  → `@src.encode_validation_result(@src.validate(...))`
+  The live host boundary is now **only** `export_f2_calculate` / `export_f3_bom`.
+  The pure `@src.calculate` / `@src.validate` functions and their encoders remain
+  compiled (via kernel unit tests) but are **quarantined legacy** — carrying
+  `LEGACY / NON-LIVE` banners — and the D16 amendment in `DECISIONS.md` records
+  the change.
 
-F7d removed everything that *called* them — `internal/orchestrate`,
-`components.Hhfab/Bom`, and the `KernelCalculate`/`KernelValidate` entry
-constants — so these exports are now **unreachable from the rebuilt engine**
-(the Go boundary uses only `export_f2_calculate` / `export_f3_bom`).
+- The reason removal was originally deferred (option 1 below "orphans" the shared
+  `@src.calculate`/`encode` surface that the kept **F2** path reuses) still holds
+  for a *full* prune: `kernel/src/decode.mbt` and `encode.mbt` share JSON
+  primitives (`d_obj`/`d_field`/…, `j_esc`/`j_arr`) with F2/F3, so they cannot be
+  deleted wholesale. #84 therefore removed only the dead exports and quarantined
+  the rest.
 
-## Why not removed in F7d
+## The remaining follow-up → **#85**
 
-The F7d standing guardrail is "never risk the proved kernel for cleanup; remove
-the abi shells only if cleanly separable with moon prove green + kernel.wasm
-rebuilding clean + the F2 path unaffected — otherwise leave them dead and file a
-follow-up."
-
-Removing only the two `abi.mbt` exports is mechanically trivial, but it **orphans**
-`@src.calculate` / `@src.validate` / `@src.encode_calc_result` /
-`@src.encode_validation_result` in `kernel/src`, and a *full* retirement of those
-touches the shared encoder/type surface that the kept **F2** path
-(`@src.f2_calculate`) also uses. That is real risk to the proved kernel for a
-purely cosmetic gain (dead, unreachable exports), so F7d defers it.
-
-F7d evidence (kernel untouched this phase):
-- `make wasm` rebuilds `embed/kernel.wasm` **byte-identical** to committed.
-- `scripts/moon-prove-gate.sh spikes/moonbit-port-proof kernel/proofs` → all
-  packages proved (port-proof 2 goals, kernel/proofs 8 goals).
-
-## The follow-up
-
-Audit `kernel/src` for the calc/validate/encode surface shared between the old
-(`calculate`/`validate`) path and the kept F2/F3 path. Then either:
-
-1. remove the two `abi.mbt` exports **and** the now-dead `@src.*` old-path
-   functions/encoders that are exclusively theirs, leaving the F2/F3 path + the
-   proof cores untouched; or
-2. if the surface is too entangled to separate safely, leave the shells dead and
-   record that decision.
-
-**Acceptance:** `moon prove` green (port-proof + kernel/proofs), `kernel.wasm`
-rebuilds clean, the full Go suite + oracle (mesh + Clos, real hhfab validate)
-stay green, and `KernelF2Calculate` / `KernelF3Bom` are byte-for-byte unaffected.
+Deciding whether to (A) fully retire the invented WIT contract + `#38` drift guard
+(after extracting the shared JSON primitives into their own module) or (B)
+reconcile the WIT to the live F2/F3 boundary and retarget the guard is an
+architecture decision, tracked in **#85**. See that issue for the full
+option analysis; the #84 audit note captures the shared-surface entanglement.

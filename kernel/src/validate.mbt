@@ -1,3 +1,9 @@
+// LEGACY / NON-LIVE (#84): pre-rebuild kernel surface retained for quarantine
+// and the #38 WIT-mirror consistency guard only. No host/Go consumer after the
+// foundation rebuild (D18–D27); the live wasm boundary is export_f2_calculate /
+// export_f3_bom. The old export_validate wasm shell was removed in #84 —
+// `validate` stays compiled only via kernel unit tests. Do not extend.
+//
 // Constraint validation -> ValidationResult (ALGORITHMS.md; D11).
 //
 // Domain violations are returned as data (errors with identifiable codes),

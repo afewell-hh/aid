@@ -1,17 +1,23 @@
-// Kernel WASM JSON-over-linear-memory ABI shell (DECISIONS.md D16).
+// Kernel WASM JSON-over-linear-memory ABI shell (DECISIONS.md D16, amended).
 //
-// Realizes the topology-calculator WIT interface as UTF-8 JSON over linear
-// memory — the MVP convention shared by all three components and the uniform
-// path the Phase-6 Go host drives:
+// UTF-8 JSON over linear memory is the live MVP convention the Go host drives:
 //
 //   alloc(len) -> ptr ; dealloc(ptr,len)
-//   export_calculate(ptr,len) -> packed (ptr<<32)|len   # plan JSON -> result<calc-output>
-//   export_validate(ptr,len)  -> packed (ptr<<32)|len   # plan JSON -> result<validation-result>
+//   export_f2_calculate(ptr,len) -> packed (ptr<<32)|len  # calc-plan JSON -> calc-output JSON
+//   export_f3_bom(ptr,len)       -> packed (ptr<<32)|len  # bom-scale plan JSON -> scaled-lines JSON
 //
-// This is a thin edge over the pure kernel: it reads the input JSON from linear
-// memory, calls @src.calculate / @src.validate, encodes the result with the
-// canonical @src.encode_* encoder, and writes the output JSON back. No kernel
-// logic lives here.
+// LIVE host boundary: `export_f2_calculate` / `export_f3_bom` only — the entries
+// `internal/components` names and `internal/wasmhost` invokes after the
+// foundation rebuild (D18–D27; F7d, #64/#35).
+//
+// LEGACY / NON-LIVE: the older `export_calculate` / `export_validate` WIT shells
+// (plan JSON -> result<calc-output>/<validation-result> over @src.calculate /
+// @src.validate / @src.encode_*) were RETIRED with the pre-rebuild
+// topology-calculator model. Their wasm exports are removed here (#84); the pure
+// @src.calculate / @src.validate functions and their encoders remain compiled
+// only via kernel unit tests and are quarantined pending the retire-vs-reconcile
+// follow-up. Do not re-export them or treat the WIT `calculate`/`validate`
+// interface as the live contract.
 //
 // Mechanics (verified against moon 0.1.20260529 in the Phase-6 spike): use ONLY
 // whitelisted raw wasm instructions (i32.load8_u / i32.store8) plus the 8-byte
@@ -73,20 +79,6 @@ fn write_output(out : Bytes) -> Int64 {
     store8(ptr + i, out[i].to_int())
   }
   (ptr.to_int64() << 32) | len.to_int64()
-}
-
-/// plan JSON -> JSON of result<calc-output, calc-error>.
-pub fn export_calculate(ptr : Int, len : Int) -> Int64 {
-  let plan_json = @utf8.decode_lossy(read_input(ptr, len)[:])
-  let json = @src.encode_calc_result(@src.calculate(plan_json))
-  write_output(@utf8.encode(json[:]))
-}
-
-/// plan JSON -> JSON of result<validation-result, calc-error>.
-pub fn export_validate(ptr : Int, len : Int) -> Int64 {
-  let plan_json = @utf8.decode_lossy(read_input(ptr, len)[:])
-  let json = @src.encode_validation_result(@src.validate(plan_json))
-  write_output(@utf8.encode(json[:]))
 }
 
 /// F2 calc-plan JSON -> F2 calc-output JSON (note §1.1; Issue #52). The F2

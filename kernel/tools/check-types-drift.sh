@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
-# Drift guard: ensure kernel/src/types.mbt still covers every type in the WIT
-# contract (wit/), which is the source of truth (DECISIONS.md D16; issue #6
-# type-sourcing decision). types.mbt is a hand-authored mirror, so this check
-# regenerates the `wit-bindgen moonbit` bindings as a reference oracle and fails
-# if any WIT record/enum/variant is missing from types.mbt.
+# LEGACY / NON-LIVE drift guard (#84): ensure kernel/src/types.mbt still covers
+# every type in the RETIRED pre-rebuild WIT contract (wit/). wit/ is NOT the live
+# source of truth: after the foundation rebuild (D18–D27) the live host boundary is
+# export_f2_calculate / export_f3_bom, whose JSON shapes live in
+# kernel/src/f2_types.mbt and are NOT WIT-mirrored (DECISIONS.md D16, amended).
+# This guard is retained only to keep the quarantined legacy WIT ↔ types.mbt mirror
+# internally consistent, pending a separate retire-vs-reconcile decision. It does
+# NOT validate the live F2/F3 contract.
+#
+# Mechanics: types.mbt is a hand-authored mirror, so this check regenerates the
+# `wit-bindgen moonbit` bindings as a reference oracle and fails if any WIT
+# record/enum/variant is missing from types.mbt.
 #
 # Runnable check — wire into CI / run before committing a wit/ change.
-# Exit 0 = in sync; exit 1 = drift (a WIT type not mirrored in types.mbt).
+# Exit 0 = in sync; exit 1 = drift (a legacy WIT type not mirrored in types.mbt).
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo"
@@ -39,4 +46,4 @@ if [ -n "$missing" ]; then
 fi
 
 count="$(echo "$oracle_names" | grep -c . || true)"
-echo "OK: kernel/src/types.mbt mirrors all $count WIT types (types + topology-calculator interfaces)."
+echo "OK (legacy/quarantined — #84): kernel/src/types.mbt mirrors all $count retired WIT types (types + topology-calculator interfaces). This guards the pre-rebuild WIT only, not the live F2/F3 boundary."

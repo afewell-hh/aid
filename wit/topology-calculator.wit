@@ -1,5 +1,12 @@
 package aid:core@0.1.0;
 
+// LEGACY / NON-LIVE (#84): pre-rebuild WIT surface retained for quarantine and the
+// #38 consistency guard only. This `calculate` / `validate` interface describes the
+// RETIRED pre-rebuild model; its wasm shells (export_calculate / export_validate)
+// were removed in #84. It does NOT specify the live F2/F3 JSON boundary
+// (export_f2_calculate / export_f3_bom — see kernel/wasm/abi.mbt; DECISIONS D16,
+// amended). Retire-vs-reconcile is deferred to a follow-up; do not treat as live.
+
 /// Layer 1 — the pure topology calculation kernel (MoonBit WASM component).
 ///
 /// Pure computation only: no filesystem, HTTP, database, or NetBox I/O. Given a

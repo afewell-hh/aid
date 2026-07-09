@@ -1,10 +1,18 @@
+// LEGACY / NON-LIVE (#84): pre-rebuild WIT mirror retained for quarantine and the
+// #38 consistency guard only. It mirrors wit/, which describes the RETIRED
+// pre-rebuild topology-calculator model — NOT the live F2/F3 JSON boundary
+// (D18–D27; the live F2/F3 shapes live in f2_types.mbt and are not WIT-mirrored).
+// Do not treat as the live contract; retire-vs-reconcile is deferred to a follow-up.
+//
 // AID topology kernel — domain & output types.
 //
 // This file is a hand-authored 1:1 mirror of `wit/types.wit` (interface `types`)
 // and the `calc-output` / `calc-error` shapes in `wit/topology-calculator.wit`.
-// `wit/` is the single source of truth (DECISIONS.md D16); the
-// `kernel/tools/check-types-drift.sh` guard regenerates `wit-bindgen moonbit`
-// and fails if a WIT record/enum/variant is missing here.
+// Historically `wit/` was the single source of truth (DECISIONS.md D16); after the
+// rebuild that role is retired — `wit/` and this mirror are quarantined legacy
+// (D16 amendment). The `kernel/tools/check-types-drift.sh` guard still regenerates
+// `wit-bindgen moonbit` and fails if a legacy WIT record/enum/variant is missing
+// here, but it guards only this legacy mirror, not the live F2/F3 boundary.
 //
 // WIT -> MoonBit mapping (kebab-case identifiers become snake_case):
 //   record       -> struct        enum         -> enum (no payload)

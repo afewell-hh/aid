@@ -1,15 +1,21 @@
+// PARTIALLY LEGACY (#84): the topology-ir / device-class-bom / calc-result
+// encoders in this file are NON-LIVE pre-rebuild surface (no host/Go consumer
+// after D18–D27), retained for quarantine and the #38 guard only. The small JSON
+// primitives (j_esc, j_arr) ARE live — the F2/F3 encoders reuse them — so this
+// file must NOT be deleted wholesale. Retire-vs-reconcile deferred to a follow-up.
+//
 // Canonical calc-output -> JSON encoder (DECISIONS.md D16 consolidation).
 //
-// This is the single source of the snake_case JSON wire shapes the Phase-6 Go
-// host and the Layer-2 adapters consume:
+// HISTORICAL (pre-rebuild): when authored, this was the single source of the
+// snake_case JSON wire shapes the Phase-6 Go host and the Layer-2 adapters
+// consumed:
 //   - topology-ir   -> IR_CONTRACT.md  (hhfab adapter input)
 //   - device-class-bom[] -> BOM_CONTRACT.md (bom adapter input)
 //   - validation-result, calc-output, result<calc-output, calc-error>
-//
-// It supersedes the interim hand-rolled encoders (hhfab-adapter/tools/ir-gen,
-// bom-adapter/tools/bom-gen); those are retired separately (issue #35). Pure
-// string building — no I/O, no externs — so it is unit-testable on the normal
-// target and reusable from the wasm ABI shell (kernel/wasm).
+// After the rebuild (D18–D27) those consumers are gone (adapters retired F7d; the
+// live encoders are the F2/F3 ones in f2_calc.mbt / f3_bom.mbt), so these encoders
+// are NON-LIVE. Only the shared j_esc / j_arr primitives below remain live. Pure
+// string building — no I/O, no externs.
 //
 // Field names are snake_case and mirror wit/types.wit. Integer-typed fields emit
 // integer tokens; only oversubscription-ratio is a float.
