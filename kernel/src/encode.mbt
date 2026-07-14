@@ -20,27 +20,10 @@
 // Field names are snake_case and mirror wit/types.wit. Integer-typed fields emit
 // integer tokens; only oversubscription-ratio is a float.
 
-// ---- JSON primitives -------------------------------------------------------
-
-fn j_esc(s : String) -> String {
-  let mut out = "\""
-  for c in s {
-    if c == '"' {
-      out = out + "\\\""
-    } else if c == '\\' {
-      out = out + "\\\\"
-    } else if c == '\n' {
-      out = out + "\\n"
-    } else if c == '\r' {
-      out = out + "\\r"
-    } else if c == '\t' {
-      out = out + "\\t"
-    } else {
-      out = out + c.to_string()
-    }
-  }
-  out + "\""
-}
+// ---- legacy-only JSON primitives -------------------------------------------
+// The shared j_esc / j_arr helpers moved to json_util.mbt (#85) because the live
+// F2/F3 encoders reuse them; the option/string-array helpers below are used only
+// by this retired encoder and go away with it.
 
 fn j_opt_str(o : String?) -> String {
   match o {
@@ -54,17 +37,6 @@ fn j_opt_uint(o : UInt?) -> String {
     Some(n) => n.to_string()
     None => "null"
   }
-}
-
-fn j_arr(parts : Array[String]) -> String {
-  let mut out = "["
-  for i in 0..<parts.length() {
-    if i > 0 {
-      out = out + ","
-    }
-    out = out + parts[i]
-  }
-  out + "]"
 }
 
 fn j_str_arr(parts : Array[String]) -> String {

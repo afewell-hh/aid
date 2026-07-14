@@ -14,34 +14,11 @@
 // at the ingress/test layer; this decoder fails closed on anything it cannot
 // turn into a well-formed TopologyPlan.
 
-priv suberror DecodeErr {
-  DecodeErr(String)
-}
-
-// ---- primitive accessors (raise on shape mismatch) ----------------------
-
-fn d_obj(j : Json) -> Map[String, Json] raise DecodeErr {
-  if j is Object(m) {
-    m
-  } else {
-    raise DecodeErr("expected object")
-  }
-}
-
-fn d_field(m : Map[String, Json], k : String) -> Json raise DecodeErr {
-  match m.get(k) {
-    Some(v) => v
-    None => raise DecodeErr("missing field: " + k)
-  }
-}
-
-fn d_str(j : Json) -> String raise DecodeErr {
-  if j is String(s) {
-    s
-  } else {
-    raise DecodeErr("expected string")
-  }
-}
+// ---- legacy-only primitive accessors ------------------------------------
+// The shared d_obj / d_field / d_str / d_arr / d_field_str / d_arr_or_empty
+// helpers and the DecodeErr suberror moved to json_util.mbt (#85) because the live
+// F2/F3 decoders reuse them; the UInt accessors below are used only by this retired
+// decoder and go away with it.
 
 fn d_uint(j : Json) -> UInt raise DecodeErr {
   if j is Number(n, ..) {
@@ -49,18 +26,6 @@ fn d_uint(j : Json) -> UInt raise DecodeErr {
   } else {
     raise DecodeErr("expected number")
   }
-}
-
-fn d_arr(j : Json) -> Array[Json] raise DecodeErr {
-  if j is Array(a) {
-    a
-  } else {
-    raise DecodeErr("expected array")
-  }
-}
-
-fn d_field_str(m : Map[String, Json], k : String) -> String raise DecodeErr {
-  d_str(d_field(m, k))
 }
 
 fn d_field_uint(m : Map[String, Json], k : String) -> UInt raise DecodeErr {
@@ -78,13 +43,6 @@ fn d_opt_uint(m : Map[String, Json], k : String) -> UInt? raise DecodeErr {
   match m.get(k) {
     Some(v) => Some(d_uint(v))
     None => None
-  }
-}
-
-fn d_arr_or_empty(m : Map[String, Json], k : String) -> Array[Json] raise DecodeErr {
-  match m.get(k) {
-    Some(v) => d_arr(v)
-    None => []
   }
 }
 
