@@ -1,9 +1,11 @@
 # Follow-up: retire the old kernel ABI shells — RESOLVED (superseded by #84 / #85)
 
-**Status:** the deferral recorded here is closed. The two dead ABI-shell exports
-were **removed in #84**, and the remaining retirement work is now tracked as a
-GitHub issue — **#85 (retire-vs-reconcile the legacy WIT contract + #38 guard)**.
-This file is kept only as a historical pointer.
+**Status:** fully resolved. The two dead ABI-shell exports were **removed in #84**,
+and the remaining retirement — the invented WIT contract, its `types.mbt` mirror,
+the legacy kernel cluster, and the `#38` drift guard — was **completed in #85**
+(Option A; **DECISIONS D28**). The live kernel contract is now the F2/F3 JSON shapes
+plus executable golden tests (`internal/wasmhost/golden_boundary_test.go`). This
+file is kept only as a historical pointer.
 
 ## What has happened since
 

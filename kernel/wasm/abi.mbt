@@ -1,4 +1,4 @@
-// Kernel WASM JSON-over-linear-memory ABI shell (DECISIONS.md D16, amended).
+// Kernel WASM JSON-over-linear-memory ABI shell (DECISIONS.md D16, amended by D28).
 //
 // UTF-8 JSON over linear memory is the live MVP convention the Go host drives:
 //
@@ -10,14 +10,12 @@
 // `internal/components` names and `internal/wasmhost` invokes after the
 // foundation rebuild (D18–D27; F7d, #64/#35).
 //
-// LEGACY / NON-LIVE: the older `export_calculate` / `export_validate` WIT shells
-// (plan JSON -> result<calc-output>/<validation-result> over @src.calculate /
-// @src.validate / @src.encode_*) were RETIRED with the pre-rebuild
-// topology-calculator model. Their wasm exports are removed here (#84); the pure
-// @src.calculate / @src.validate functions and their encoders remain compiled
-// only via kernel unit tests and are quarantined pending the retire-vs-reconcile
-// follow-up. Do not re-export them or treat the WIT `calculate`/`validate`
-// interface as the live contract.
+// The live boundary CONTRACT is the F2/F3 JSON shapes (kernel/src/f2_types.mbt +
+// f3_bom.mbt, mirrored in Go by internal/calc / internal/bom) PLUS the executable
+// golden contract tests in internal/wasmhost/golden_boundary_test.go — NOT a WIT
+// interface. The invented pre-rebuild WIT contract (`calculate`/`validate` +
+// topology-ir) and its #38 drift guard were RETIRED in #85 (Option A; D28); the
+// old `export_calculate`/`export_validate` shells were already removed in #84.
 //
 // Mechanics (verified against moon 0.1.20260529 in the Phase-6 spike): use ONLY
 // whitelisted raw wasm instructions (i32.load8_u / i32.store8) plus the 8-byte

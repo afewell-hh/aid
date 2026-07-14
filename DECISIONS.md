@@ -132,6 +132,17 @@ element. See D13 for the full DeviceClass model.
 
 ## D8: WASM Component Model for all capability boundaries
 
+> **Superseded in part by D28 (#85).** The "every boundary is a WIT interface" /
+> WIT-as-source-of-truth posture no longer holds for the live system. After the
+> rebuild there is exactly **one** WASM component (the proved kernel) behind **one**
+> Go host; the BOM and wiring renderers are Go packages (D23), the Rust adapters
+> were retired (F7d), and the invented `wit/` contract + its `#38` drift guard were
+> **deleted** (D28). The live kernel boundary is the F2/F3 JSON shapes plus
+> executable golden tests, not a WIT interface. D8's boundary-discipline *principle*
+> stands; its WASM-Component-Model/WIT *mechanism* is not maintained where no
+> multi-component boundary exists. A real WIT would be re-introduced from the live
+> model only if a genuine cross-language/third-party boundary returns.
+
 **Decision:** Every major AID capability boundary is expressed as a WIT interface in
 `wit/`. Components communicate only through these interfaces.
 
@@ -332,11 +343,14 @@ in #84 (their pure `@src.calculate`/`@src.validate` functions and the WIT `topol
 kernel unit tests). Two clarifications to the text above: (a) `wit/` and its `kernel/src/types.mbt`
 mirror describe the **retired** pre-rebuild model and are **no longer the live type source of
 truth**; the live F2/F3 JSON shapes live in `kernel/src/f2_types.mbt` and are not WIT-mirrored.
-(b) The `#38` drift guard (`kernel/tools/check-types-drift.sh`) continues to run, but now guards
-only the **retained legacy WIT↔mirror** consistency, not a live contract. The D16
-JSON-over-linear-memory boundary itself **stays live** (as F2/F3). Whether to ultimately retire
-the invented WIT + `#38` guard, or reconcile the WIT to the live F2/F3 boundary and retarget the
-guard, is deferred to a separate retire-vs-reconcile follow-up.
+(b) The `#38` drift guard (`kernel/tools/check-types-drift.sh`) guarded only the **retained
+legacy WIT↔mirror** consistency at the time of #84, not a live contract — it was subsequently
+**deleted** in #85 (see below). The D16
+JSON-over-linear-memory boundary itself **stays live** (as F2/F3). **Resolved by D28 (#85):**
+the retire-vs-reconcile question below was decided as **retire** — the invented WIT contract,
+its `kernel/src/types.mbt` mirror, the legacy kernel cluster, and the `#38` drift guard were
+deleted; the live kernel contract is now the F2/F3 JSON shapes plus executable golden tests. The
+"WIT is the contract of record / canonical-ABI end-state" clause of D16 is withdrawn accordingly.
 
 ---
 
@@ -550,3 +564,25 @@ Exact ordering of the post-F5 phases is decided at each gate (lead stays in the 
 **Decision.** Reconcile the shipped data to be consistent (strict union path; do NOT weaken the guard or rename classes): add the missing `transceiver_module_type` bindings (`sfp28_25gbase_sr` on inb, `rj45_1000base_t` on oob) to xoc-128's management connections **and** the matching identity entries to xoc-128's optic overlays (byte-identical to xoc-64, so no new conflict); normalize the DS5000 model string. Management transceivers now render as **named** BOM rows in xoc-128 (`RJ45-1000BASE-T` ×6, `SFP28-25GBASE-SR` ×6), consistent with xoc-64.
 
 **Consequence — qualifies D20.** xoc-128's vendored oracle `bom.csv` now intentionally **diverges from the real XOC source `bom.csv`** by these two named management-transceiver rows (12 units the real xoc-128 composition omitted). This is an accepted, explicit rebaseline: the real xoc-128 reference data was **incomplete** relative to xoc-64 (same management roles/NICs/zones, missing transceivers), and AID cannot be byte-exact to both an incomplete xoc-128 and a complete xoc-64 while treating `hh_controller`/`hh_gateway` as one pinned class. So the D20 "byte-exact reproduction of the real XOC outputs" property now holds for xoc-64 and xoc-256, and holds for xoc-128 **except** for the reconciled management transceivers (a correction toward internal consistency, documented here and pinned by `internal/oracle/reconcile_test.go`). Not a silent drift.
+
+## D28: Retire the invented WIT contract + #38 drift guard; the live kernel boundary is F2/F3 JSON pinned by golden tests (resolves the D16 amendment; supersedes the WIT-source-of-truth parts of D8/D16)
+
+**Context.** The foundation rebuild (D18–D27) moved the live kernel boundary to the F2/F3 JSON-over-linear-memory exports (`export_f2_calculate`, `export_f3_bom`), and D23/F7d (#64/#35) removed the multi-component WASM premise (Rust adapters gone; BOM + wiring are Go renderers). The `wit/` package, its `kernel/src/types.mbt` mirror, and the `#38` `check-types-drift.sh` guard described/guarded the **retired** pre-rebuild `topology-calculator` / `topology-ir` / `DeviceClass` model — a contract with no live consumer, quarantined in #84. #84's amendment to D16 deferred the retire-vs-reconcile decision to this record.
+
+**Decision (Option A, #85).** **Retire** the invented WIT contract outright rather than reconcile it to the live boundary:
+- delete `wit/*.wit` + `wit/README.md`, the `kernel/src/types.mbt` mirror, and the legacy kernel cluster (`calculate`, `validate`, `bom`, `summary`, `distribution`, `mesh`, `oversubscription`, `lookups`, the legacy halves of `decode`/`encode`, `helpers`, `codes`, `fixtures_gen`) and their unit tests;
+- **first** extract the JSON primitives the live F2/F3 codecs share (`d_obj`/`d_field`/`d_str`/`d_arr`/`d_field_str`/`d_arr_or_empty`/`DecodeErr`, `j_esc`/`j_arr`) into `kernel/src/json_util.mbt`, so the deletion is mechanical and wire-neutral;
+- delete `kernel/tools/check-types-drift.sh` and the wit-bindgen CI steps + `WIT_BINDGEN_VERSION` pin.
+
+**The live kernel contract is now defined as:** the F2/F3 JSON shapes (`kernel/src/f2_types.mbt` + `f3_bom.mbt`, mirrored in Go by `internal/calc` / `internal/bom`) **plus executable golden contract tests** (`internal/wasmhost/golden_boundary_test.go`) that pin both the accepted input shape and the decoded output envelope, in both directions, for F2 and F3. Regenerate the goldens with `-update` on an intentional boundary change; a diff there is a reviewable wire change. The D16 JSON-over-linear-memory ABI itself **stays live** (as F2/F3).
+
+**Why retire, not reconcile.** A reconciled WIT would be a fourth hand-maintained copy of an internal, co-versioned Go↔kernel seam (MoonBit types + MoonBit codec + Go structs already exist), and `wit-bindgen moonbit` can only guard the MoonBit side — the Go mirror would stay unguarded without more machinery. The golden tests are a stronger, field-level, both-sides, behavioral guard at a fraction of the cost. D8's original WIT rationale (language-agnostic, independently-versioned, third-party-swappable components) no longer applies: one kernel component, one Go host, one binary, NetBox deferred as a future Go REST client (D22/#13).
+
+**Supersedes / resolves.** Supersedes the source-of-truth / every-boundary-is-a-WIT-interface portions of **D8** and the "WIT is the contract of record / canonical-ABI end-state" clause of **D16**; resolves the #84 D16 amendment's deferred question as *retire*. Subsumes **#27** (the `fabric-summary.total-spine-bandwidth-gbps` rename is moot — the field lived only on the deleted surface).
+
+**Consequences.**
+- **No wire/behavior change**, proven by pre/post golden comparison of representative F2/F3 outputs (not by wasm byte identity): F2 `f2_calc_output.json` and F3 `f3_scaled_lines.json` are byte-identical across the change. `embed/kernel.wasm` is also byte-identical to the pre-deletion build — the legacy path was already dead-code-eliminated from the release artifact once its exports were removed in #84.
+- **Proof gate unchanged at 8 goals.** Deleting `mesh.mbt` orphans the proven core `@proofs.mesh_cable_count` from any production caller (mesh cabling is deferred to F4/Go). The core is intentionally **kept proven and CI-gated**, ready to be re-consumed when mesh cabling lands; no proof cores were deleted. Deleting the legacy Algorithm-1 `leaf_count` wrapper does not affect the I3/I6 redundancy cores — the live F2 kernel routes `@proofs.leaf_adjust_non_eslag` / `leaf_clamp_eslag` directly.
+- **CI no longer downloads wit-bindgen.** The boundary is guarded by the golden tests under `make test`.
+- **Reversibility.** If AID later pursues a real Component-Model / canonical-ABI boundary or third-party adapters, a WIT is re-authored from the live model at that point — cheaper and correct, versus carrying a wrong-model contract now.
+- **Out of scope (flagged, not done here):** `kernel/tools/gen-fixtures.sh` / `gen-fixtures-mbt.mjs` (which generated the deleted `fixtures_gen.mbt`) and the toy fixtures under `tests/fixtures/{valid,invalid}` belong to the separate D20 toy-fixture retirement, not the WIT/topology-IR cluster; left for a focused follow-up.
