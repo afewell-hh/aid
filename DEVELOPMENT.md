@@ -22,7 +22,7 @@ see `TECH_STACK.md`.
 | MoonBit (`moon`) | Topology kernel, BOM adapter, JS frontend, `moon prove` proofs | `moon --version` | 1 (bindgen), 3, 4, 6b, 7, 8 |
 | Why3 | Proof platform driving `moon prove` (requires an SMT solver) | `why3 --version` | 7 (spike), 8 (proofs) |
 | Z3 (SMT solver) | Discharges `moon prove` goals via Why3 | `z3 --version` | 7 (spike), 8 (proofs) |
-| wasm-tools | Validate/compose WASM components and WIT | `wasm-tools --version` | 1, 3, 5 |
+| wasm-tools | Inspect/validate WASM components (optional; WIT tooling retired #85/D28) | `wasm-tools --version` | 1, 3, 5 |
 | wit-bindgen | **RETIRED (#85 / D28)** — was `wit-bindgen moonbit` scaffolding for the invented WIT contract; that `wit/` surface and its drift guard were deleted, so `wit-bindgen` is no longer required or used by the build/CI | `wit-bindgen --version` | — |
 | hhfab | Behavioral contract: `hhfab validate` on generated wiring YAML | `hhfab versions` | 3, 5, 6 |
 
@@ -43,6 +43,14 @@ see `TECH_STACK.md`.
 
 ## Current Local Readiness
 
+> **HISTORICAL SNAPSHOT (Issue #2 / #15).** This section records the one-time toolchain
+> provisioning for the pre-rebuild phases; it is not the current required-tools list.
+> Notably **`wit-bindgen` is no longer part of the toolchain** — the invented WIT contract
+> it scaffolded was deleted in #85 (DECISIONS D28), so do **not** install or expect it. The
+> live build needs `moon`, Go, and (for proofs) Why3 + Z3; `wasm-tools` is optional for
+> inspecting the wasm. `wit-bindgen`/`cargo-component` lines below are retained only as the
+> historical provisioning record.
+
 First captured for Issue #2 (foundation readiness); the four missing tools were then
 provisioned under Issue #15 (Backlog Step 01a). These reflect one developer workstation,
 not a CI baseline — re-run the verify commands in your own environment. All four newly
@@ -57,7 +65,7 @@ provisioned tools are **user-local** installs (no system-wide changes, no sudo).
 | Why3 | ✅ present | `Why3 platform, version 1.7.2` |
 | Z3 (SMT solver) | ✅ present | `Z3 version 4.8.12 - 64 bit` |
 | wasm-tools | ✅ present | `wasm-tools 1.251.0` |
-| wit-bindgen | ✅ present | `wit-bindgen-cli 0.57.1` |
+| ~~wit-bindgen~~ | ⛔ retired (#85 / D28) — no longer part of the toolchain | (was `wit-bindgen-cli 0.57.1`) |
 | hhfab | ✅ present | `v0.43.1` (fabric API `v0.96.2`) |
 
 > Why3 + Z3 were provisioned during the issue #5 / Phase 7 spike (Backlog Step 04);
@@ -72,8 +80,9 @@ moon 0.1.20260529 (3e1c753 2026-05-29) ~/.moon/bin/moon
 $ wasm-tools --version
 wasm-tools 1.251.0
 
-$ wit-bindgen --version
-wit-bindgen-cli 0.57.1
+# (wit-bindgen was captured here at provisioning time; RETIRED in #85 / D28 — no longer installed)
+# $ wit-bindgen --version
+# wit-bindgen-cli 0.57.1
 
 $ cargo component --version
 cargo-component-component 0.21.1
@@ -106,10 +115,9 @@ Summary:
   2 goals proved
 ```
 
-Smoke checks (`moon help`, `wasm-tools --help`, `wit-bindgen --help`,
-`cargo component --help`) all exit `0`. `wit-bindgen --help` lists the `moonbit`
-subcommand and `wasm-tools --help` lists `validate` — the two commands the Phase 1
-exit gate depends on.
+Smoke checks (`moon help`, `wasm-tools --help`, `cargo component --help`) all exit `0`.
+(The pre-rebuild Phase-1 exit gate also checked `wit-bindgen --help`/`wasm-tools validate`
+against `wit/`; that gate and the `wit/` surface were retired in #85 / D28.)
 
 ### Installation method (Issue #15)
 
@@ -121,7 +129,7 @@ curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
 
 # Bytecode Alliance tools → installs to ~/.cargo/bin (needs C toolchain + OpenSSL)
 cargo install --locked wasm-tools
-cargo install wit-bindgen-cli
+# cargo install wit-bindgen-cli   # RETIRED (#85 / D28): no longer used — do not install
 cargo install cargo-component --locked
 ```
 
@@ -158,10 +166,9 @@ PATH persistence for non-interactive shells (so future agents/CI resolve the too
   Verified: `bash -lc 'cd spikes/moonbit-port-proof && why3 --version && z3 --version && moon prove'`
   succeeds from a fresh login shell.
 
-Reproducibility note: `wit-bindgen-cli` is installed without `--locked` because that is the
-official upstream command, and upstream states the CLI is not yet stable — pin the recorded
-version (`0.57.1`) when reproducing. A future CI/workstation-setup ticket can convert these
-steps into a provisioning script.
+Reproducibility note: the `wit-bindgen-cli` install step above is **retired** (#85 / D28) —
+skip it; the tool is no longer used. A future CI/workstation-setup ticket can convert the
+remaining steps into a provisioning script.
 
 ### CI & provisioning scripts (Issue #21)
 
@@ -193,11 +200,12 @@ CDN serves only `latest`, so CI installs `latest`, caches the exact bits keyed o
 As of Issue #15, the validation toolchain is fully provisioned locally. Each tool and the
 work it enables:
 
-- **wasm-tools** (`1.251.0`) — `wasm-tools validate` for the Phase 1 WIT exit gate; WASM
-  component compose/validate in Phases 3 and 5.
+- **wasm-tools** (`1.251.0`) — WASM component inspect/validate/compose. (Originally also the
+  `wasm-tools validate` half of the pre-rebuild Phase-1 WIT exit gate, retired in #85 / D28.)
 
-- **wit-bindgen** (`0.57.1`) — `wit-bindgen moonbit` scaffolding for the Phase 1 exit gate;
-  bindings for Phases 3, 5, and 9. Upstream marks the CLI unstable — pin the version.
+- **wit-bindgen** — **RETIRED (#85 / D28).** Was `wit-bindgen moonbit` scaffolding for the
+  pre-rebuild Phase-1 WIT exit gate and Phase 3/5/9 bindings; the invented `wit/` contract it
+  targeted was deleted, so the tool is no longer installed, verified, or used.
 
 - **MoonBit (`moon` `0.1.20260529`, moonc `v0.9.3`)** — the pulled-forward feasibility spike
   (Backlog Step 04 / roadmap Phase 7), the topology kernel (Phase 3), BOM adapter (Phase 4),
