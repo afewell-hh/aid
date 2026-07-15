@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# Regenerate the kernel's fixture test data from the plan YAML source of truth.
+# Regenerate the committed plan.json from the plan YAML source of truth.
 #
 # Source of truth : tests/fixtures/{valid,invalid}/*/plan.yaml
-# Outputs (committed, regenerable, never hand-edited):
+# Output (committed, regenerable, never hand-edited):
 #   - <fixture>/plan.json          yaml -> json (js-yaml; Node only, no Python)
-#   - kernel/src/fixtures_gen.mbt  plan.json embedded as MoonBit String constants
+#
+# NOTE (#85 / D28): the MoonBit fixture embedding (kernel/src/fixtures_gen.mbt via
+# gen-fixtures-mbt.mjs) was RETIRED with the legacy WIT/topology-calculator kernel
+# path — both are deleted, so this script no longer emits any MoonBit source. The
+# toy fixtures under tests/fixtures/{valid,invalid} are a separate D20 concern; the
+# live kernel is tested against the real XOC oracle, not these.
 #
 # Run from anywhere:  kernel/tools/gen-fixtures.sh
 set -euo pipefail
@@ -16,5 +21,3 @@ for y in tests/fixtures/valid/*/plan.yaml tests/fixtures/invalid/*/plan.yaml; do
   npx --yes js-yaml@4.1.0 "$y" > "$d/plan.json"
   echo "wrote $d/plan.json"
 done
-
-node kernel/tools/gen-fixtures-mbt.mjs

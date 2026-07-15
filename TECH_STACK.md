@@ -23,8 +23,8 @@
 
 **Key tools:**
 - `moon` — build, test, prove
-- `wit-bindgen moonbit` — generate WIT bindings
-- `wasm-tools` — compose and validate WASM components
+- `wasm-tools` — inspect/validate WASM components
+- (`wit-bindgen moonbit` was used for the invented WIT contract; retired in #85 / D28)
 - `moon prove` — run Z3 proofs against `.mbtp` predicate files
 
 **Risks to manage:**
@@ -102,8 +102,9 @@ language but a different compilation target.
 
 **Why not a separate JS framework (React, Svelte, etc.):**
 - Keeping the frontend in MoonBit eliminates a second language from the stack
-- MoonBit's type system applies equally to frontend logic — the same data types used
-  in the kernel WIT interfaces can be reused in the UI layer
+- MoonBit's type system applies equally to frontend logic — the same JSON data shapes
+  the kernel boundary uses can be modeled in the UI layer (the kernel boundary is F2/F3
+  JSON, not WIT, since #85 / D28)
 - The design goal is NetBox-like appearance, not a sophisticated single-page app;
   Bootstrap 5 + MoonBit JS is sufficient
 
@@ -118,6 +119,16 @@ language but a different compilation target.
 
 ## WASM Component Model
 
+> **SUPERSEDED (DECISIONS D28, #85).** This section describes the pre-rebuild design.
+> The invented WIT contract and the `wit/` files listed below were **deleted** in #85
+> (Option A), and the Rust adapters were retired in F7d/D23. The live system has one
+> WASM component — the proved MoonBit kernel — behind one Go host; its boundary is the
+> **F2/F3 JSON-over-linear-memory** exports (`export_f2_calculate` / `export_f3_bom`),
+> whose contract is the JSON shapes in `kernel/src/f2_types.mbt` + `f3_bom.mbt` plus the
+> executable golden tests in `internal/wasmhost/golden_boundary_test.go`. The BOM and
+> wiring renderers are Go packages (D23), and `wit-bindgen` is no longer used. The text
+> below is retained for historical context only.
+
 AID uses the WASM Component Model (WIT interfaces, Canonical ABI) for all inter-component
 boundaries. This is not an internal implementation detail — it is the primary architectural
 boundary mechanism.
@@ -128,7 +139,7 @@ boundary mechanism.
 - Enables third-party extension: anyone can implement a new export adapter against the published WIT
 - Browser portability: WASM components can run in a browser for a future web UI
 
-**WIT interface files (in `wit/`):**
+**WIT interface files (in `wit/`) — deleted in #85 (D28); listed for history only:**
 ```
 wit/
   world.wit                 # top-level world definition

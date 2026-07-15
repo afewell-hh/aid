@@ -155,8 +155,11 @@ The lead must understand these boundaries well enough to catch scope violations:
 - MoonBit compiled to JavaScript (`moon build --target js`); calls the Go REST API only
 - Optional — all functionality remains available via the `aid` CLI without it
 
-The WIT interfaces in `wit/` define every layer boundary. No component should call another
-component directly — all orchestration goes through the CLI.
+The CLI is the sole orchestrator: no component calls another directly — all data flow goes
+through the Go CLI/host. (The `wit/` interfaces that once defined the layer boundaries were
+retired in #85 / DECISIONS D28; the live kernel boundary is now the F2/F3 JSON shapes plus the
+golden tests in `internal/wasmhost/golden_boundary_test.go`. The no-cross-component-calls
+principle stands.)
 
 ---
 
@@ -166,7 +169,8 @@ component directly — all orchestration goes through the CLI.
 AID's hard invariants. The lead must know:
 - Formal verification scope: pure functions only (no I/O, no recursive pointers)
 - Build tool: `moon build`, `moon test`, `moon prove`
-- WASM output: requires `wit-bindgen moonbit` + `wasm-tools`
+- WASM output: `moon build --target wasm` (the kernel emits core wasm directly; the old
+  `wit-bindgen moonbit` scaffolding was retired in #85 / D28)
 - Phase 7 is a go/no-go gate for MoonBit in production
 
 **Rust** is used where MoonBit's library ecosystem is insufficient, primarily YAML
