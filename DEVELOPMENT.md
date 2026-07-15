@@ -23,7 +23,7 @@ see `TECH_STACK.md`.
 | Why3 | Proof platform driving `moon prove` (requires an SMT solver) | `why3 --version` | 7 (spike), 8 (proofs) |
 | Z3 (SMT solver) | Discharges `moon prove` goals via Why3 | `z3 --version` | 7 (spike), 8 (proofs) |
 | wasm-tools | Validate/compose WASM components and WIT | `wasm-tools --version` | 1, 3, 5 |
-| wit-bindgen | Generate language bindings from WIT interfaces | `wit-bindgen --version` | 1, 3, 5, 9 |
+| wit-bindgen | **RETIRED (#85 / D28)** — was `wit-bindgen moonbit` scaffolding for the invented WIT contract; that `wit/` surface and its drift guard were deleted, so `wit-bindgen` is no longer required or used by the build/CI | `wit-bindgen --version` | — |
 | hhfab | Behavioral contract: `hhfab validate` on generated wiring YAML | `hhfab versions` | 3, 5, 6 |
 
 > The local `hhfab` build may not support `hhfab version`; use `hhfab versions` instead.
@@ -217,6 +217,11 @@ work it enables:
 > → adapters → CLI/API → frontend) still gates the work.
 
 ### Phase 1 readiness summary
+
+> **HISTORICAL (superseded by #85 / D28).** Phase 1 was the pre-rebuild "WIT interface
+> design" phase; the invented WIT contract and its `wit-bindgen` scaffolding were retired
+> (the `wit/` files deleted). The live kernel boundary is the F2/F3 JSON shapes plus the
+> golden tests in `internal/wasmhost/golden_boundary_test.go`. The note below is history.
 
 Phase 1 (WIT interface design) is now **toolchain-unblocked**: WIT authoring can proceed,
 and the Phase 1 exit gate (`wasm-tools validate` plus `wit-bindgen moonbit` scaffolding) can

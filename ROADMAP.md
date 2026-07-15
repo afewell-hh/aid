@@ -1,11 +1,24 @@
 # AID Implementation Roadmap
 
+> **HISTORICAL — pre-rebuild plan.** This Phase 1–10 roadmap predates the foundation
+> rebuild (DECISIONS D18–D27) and describes the invented model (DeviceClass, Rust
+> adapters, WIT boundaries, NetBox phase). It is superseded by the rebuild and its
+> follow-ups and is kept for history only. In particular, **Phase 1's WIT deliverables
+> were retired in #85 (D28)**: the `wit/*.wit` files were deleted, `wit-bindgen` is no
+> longer used, and the live kernel boundary is the F2/F3 JSON shapes
+> (`kernel/src/f2_types.mbt` + `f3_bom.mbt`) plus the golden tests in
+> `internal/wasmhost/golden_boundary_test.go`. See `docs/foundation-redesign.md` and
+> `ARCHITECTURE.md` for the current plan of record.
+
 Each phase produces a reviewable deliverable. No phase begins until the previous phase
 is approved. Phases 1–5 can proceed in parallel where dependencies allow.
 
 ---
 
 ## Phase 1 — WIT Interface Design
+
+> **RETIRED (D28, #85).** The WIT deliverables below were deleted; the live boundary is
+> F2/F3 JSON + golden tests. Kept for history.
 
 **Goal:** Define the WASM component boundaries before any implementation begins.
 

@@ -28,10 +28,11 @@ file is kept only as a historical pointer.
   deleted wholesale. #84 therefore removed only the dead exports and quarantined
   the rest.
 
-## The remaining follow-up → **#85**
+## The follow-up → **#85 (completed)**
 
-Deciding whether to (A) fully retire the invented WIT contract + `#38` drift guard
-(after extracting the shared JSON primitives into their own module) or (B)
-reconcile the WIT to the live F2/F3 boundary and retarget the guard is an
-architecture decision, tracked in **#85**. See that issue for the full
-option analysis; the #84 audit note captures the shared-surface entanglement.
+The architecture decision — (A) fully retire the invented WIT contract + `#38` drift
+guard, or (B) reconcile the WIT to the live F2/F3 boundary — was decided as **(A) retire**
+and **implemented in #85** (DECISIONS **D28**). The shared JSON primitives were extracted
+into `kernel/src/json_util.mbt`, the legacy WIT/types/kernel cluster and the `#38` guard
+were deleted, and the live boundary is now pinned by the golden contract tests in
+`internal/wasmhost/golden_boundary_test.go`. Nothing remains open from this follow-up.
