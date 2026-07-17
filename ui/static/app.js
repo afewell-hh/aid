@@ -4364,6 +4364,137 @@ function _M0FP25aidui3src21clone__yaml__identity(yaml, suffix) {
   }
   return out;
 }
+function _M0FP25aidui3src6id__in(ids, target) {
+  const _bind = ids.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind) {
+      const id = ids[_];
+      if (id === target) {
+        return true;
+      }
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return false;
+}
+function _M0FP25aidui3src14next__free__id(plans_json, desired) {
+  let ids;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(plans_json, 0, plans_json.length), 1024);
+      let root;
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      const out = [];
+      const _bind$2 = _M0FP25aidui3src7arr__at(root, "plans");
+      const _bind$3 = _bind$2.length;
+      let _tmp = 0;
+      while (true) {
+        const _ = _tmp;
+        if (_ < _bind$3) {
+          const p = _bind$2[_];
+          _M0MPC15array5Array4pushGsE(out, _M0FP25aidui3src7str__at(p, "id"));
+          _tmp = _ + 1 | 0;
+          continue;
+        } else {
+          break;
+        }
+      }
+      ids = out;
+      break _L;
+    }
+    ids = [];
+  }
+  if (!_M0FP25aidui3src6id__in(ids, desired)) {
+    return desired;
+  }
+  let n = 2;
+  let candidate = `${desired}-${_M0MPC13int3Int18to__string_2einner(n, 10)}`;
+  while (true) {
+    if (_M0FP25aidui3src6id__in(ids, candidate)) {
+      n = n + 1 | 0;
+      candidate = `${desired}-${_M0MPC13int3Int18to__string_2einner(n, 10)}`;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return candidate;
+}
+function _M0FP25aidui3src13strip__prefix(s, prefix) {
+  if (!_M0FP25aidui3src12starts__with(s, prefix)) {
+    return s;
+  }
+  const cs = _M0FP25aidui3src5chars(s);
+  const pl = _M0FP25aidui3src5chars(prefix).length;
+  let out = "";
+  let i = pl;
+  while (true) {
+    if (i < cs.length) {
+      out = `${out}${_M0IPC14char4CharPB4Show10to__string(_M0MPC15array5Array2atGcE(cs, i))}`;
+      i = i + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return out;
+}
+function _M0FP25aidui3src13clone__suffix(plans_json, base_id) {
+  const free = _M0FP25aidui3src14next__free__id(plans_json, `${base_id}-copy`);
+  return _M0FP25aidui3src13strip__prefix(free, base_id);
+}
+function _M0FP25aidui3src14read__case__id(yaml) {
+  const _bind = _M0FP25aidui3src12split__lines(yaml);
+  const _bind$2 = _bind.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind$2) {
+      const l = _bind[_];
+      if (_M0FP25aidui3src12starts__with(l, "  case_id:")) {
+        const cs = _M0FP25aidui3src5chars(l);
+        let i = 10;
+        while (true) {
+          if (i < cs.length && _M0MPC15array5Array2atGcE(cs, i) === 32) {
+            i = i + 1 | 0;
+            continue;
+          } else {
+            break;
+          }
+        }
+        let v = "";
+        while (true) {
+          if (i < cs.length && _M0MPC15array5Array2atGcE(cs, i) !== 13) {
+            v = `${v}${_M0IPC14char4CharPB4Show10to__string(_M0MPC15array5Array2atGcE(cs, i))}`;
+            i = i + 1 | 0;
+            continue;
+          } else {
+            break;
+          }
+        }
+        return v;
+      }
+      _tmp = _ + 1 | 0;
+      continue;
+    } else {
+      break;
+    }
+  }
+  return "";
+}
 function _M0FP25aidui3src3esc(s) {
   let out = "";
   const _bind = s.length;
@@ -4605,6 +4736,29 @@ function _M0FP25aidui3src21new__plan__form__html(templates_json) {
     }
   }
   return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">New plan</h2><button id=\"new-cancel-btn\" class=\"btn btn-sm btn-outline-secondary\">Cancel</button></div><div id=\"new-error\" class=\"mb-2\" role=\"alert\" aria-live=\"assertive\"></div><div class=\"card\"><div class=\"card-body\"><div class=\"mb-3\"><label class=\"form-label\" for=\"new-name\">Name (optional — used as a label)</label><input id=\"new-name\" class=\"form-control\" type=\"text\" placeholder=\"My fabric plan\"></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-template\">Start from</label><select id=\"new-template\" class=\"form-select\">${opts}</select><div class=\"form-text\">Pick a starter to prefill the YAML, or leave Blank to paste your own.</div></div><div class=\"mb-3\"><label class=\"form-label\" for=\"new-yaml\">Plan YAML</label><textarea id=\"new-yaml\" class=\"form-control font-monospace\" rows=\"18\" spellcheck=\"false\" placeholder=\"meta:\n  case_id: my-plan\n  name: My Plan\n...\"></textarea></div><button id=\"new-submit-btn\" class=\"btn btn-primary\">Create plan</button></div></div>`;
+}
+function _M0FP25aidui3src23new__plan__choice__html(templates_json) {
+  let count;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(templates_json, 0, templates_json.length), 1024);
+      let _tmp;
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        _tmp = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      count = _M0FP25aidui3src7arr__at(_tmp, "templates").length;
+      break _L;
+    }
+    count = 0;
+  }
+  const count_hint = count > 0 ? ` <span class=\"badge text-bg-info\">${_M0MPC13int3Int18to__string_2einner(count, 10)} available</span>` : "";
+  return `<div class=\"d-flex justify-content-between align-items-center mb-3\"><h2 class=\"h4 mb-0\">New plan</h2><button id=\"new-cancel-btn\" class=\"btn btn-sm btn-outline-secondary\">Cancel</button></div><p class=\"text-secondary\">Choose how to start. You can edit everything in the structured editor afterwards; raw YAML stays available as an expert path.</p><div class=\"row g-3\"><div class=\"col-md-6\"><div class=\"card h-100\"><div class=\"card-body d-flex flex-column\"><h3 class=\"h5 card-title\">Start from a reference topology${count_hint}</h3><p class=\"card-text text-secondary flex-grow-1\">Clone a built-in reference design (mesh or Clos) into your own editable plan, then customize it in the structured editor. Recommended for most new plans.</p><button id=\"choice-reference\" class=\"btn btn-primary mt-2 align-self-start\">Browse reference topologies</button></div></div></div><div class=\"col-md-6\"><div class=\"card h-100\"><div class=\"card-body d-flex flex-column\"><h3 class=\"h5 card-title\">Import / paste YAML</h3><p class=\"card-text text-secondary flex-grow-1\">Paste or import an existing DIET/training topology plan. For expert users authoring the YAML directly.</p><button id=\"choice-import\" class=\"btn btn-outline-secondary mt-2 align-self-start\">Paste YAML</button></div></div></div></div>`;
 }
 function _M0FP25aidui3src13library__html(catalog_json) {
   let root;
@@ -5077,13 +5231,13 @@ function _M0FP25aidui3src15select__strings(id, options, selected, aria_label) {
   }
   return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS355(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS366(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
 function _M0FP25aidui3src12topo__select(id, current, aria_label) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS355(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS355(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS366(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS366(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -5297,36 +5451,6 @@ function _M0FP25aidui3src11render__bom(target, bom_json) {
 }
 function _M0FP25aidui3src8api__get(path, cb) {
   _M0FP25aidui3src10fetch__get(`${_M0FP25aidui3src9api__base}${path}`, cb);
-}
-function _M0FP25aidui3src23prefill__from__template(template_id) {
-  if (template_id === "") {
-    _M0FP25aidui3src10set__value("new-yaml", "");
-    return undefined;
-  }
-  _M0FP25aidui3src8api__get(`/templates/${template_id}`, (ok, status, body) => {
-    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
-      _M0FP25aidui3src9set__html("new-error", _M0FP25aidui3src11error__html(status, body));
-      return undefined;
-    }
-    let root;
-    let _try_err;
-    _L: {
-      _L$2: {
-        const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
-        if (_bind.$tag === 1) {
-          const _ok = _bind;
-          root = _ok._0;
-        } else {
-          const _err = _bind;
-          _try_err = _err._0;
-          break _L$2;
-        }
-        break _L;
-      }
-      return undefined;
-    }
-    _M0FP25aidui3src10set__value("new-yaml", _M0FP25aidui3src7str__at(root, "training"));
-  });
 }
 function _M0FP25aidui3src9api__post(path, body, cb) {
   _M0FP25aidui3src11fetch__post(`${_M0FP25aidui3src9api__base}${path}`, body, cb);
@@ -5692,41 +5816,12 @@ function _M0FP25aidui3src13trigger__calc(target, plan_id) {
 function _M0FP25aidui3src13validate__raw() {
   _M0FP25aidui3src13run__validate(`{\"yaml\":\"${_M0FP25aidui3src12json__escape(_M0FP25aidui3src10get__value("edit-yaml"))}\"}`);
 }
-function _M0FP25aidui3src11load__plans(target) {
-  _M0FP25aidui3src9set__html(target, _M0FP25aidui3src13loading__html("Loading plans…"));
-  _M0FP25aidui3src8api__get("/plans", (ok, status, body) => {
-    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
-      _M0FP25aidui3src9set__html(target, _M0FP25aidui3src11error__html(status, body));
-      return undefined;
-    }
-    _M0FP25aidui3src9set__html(target, _M0FP25aidui3src16plan__list__html(body));
-    _M0FP25aidui3src16wire__plan__rows(body);
-    _M0FP25aidui3src9on__click("new-plan-btn", () => {
-      _M0FP25aidui3src21open__new__plan__form();
-    });
-  });
-}
-function _M0FP25aidui3src21open__new__plan__form() {
-  _M0FP25aidui3src8api__get("/templates", (ok, status, body) => {
-    const templates_json = ok && !_M0FP25aidui3src16body__has__error(body) ? body : "{}";
-    _M0FP25aidui3src9set__html("app", _M0FP25aidui3src21new__plan__form__html(templates_json));
-    _M0FP25aidui3src9on__click("new-cancel-btn", () => {
-      _M0FP25aidui3src11load__plans("app");
-    });
-    _M0FP25aidui3src9on__click("new-submit-btn", () => {
-      _M0FP25aidui3src17submit__new__plan();
-    });
-    _M0FP25aidui3src10on__change("new-template", () => {
-      _M0FP25aidui3src23prefill__from__template(_M0FP25aidui3src10get__value("new-template"));
-    });
-  });
-}
-function _M0FP25aidui3src17submit__new__plan() {
-  const yaml = _M0FP25aidui3src10get__value("new-yaml");
-  const template_id = _M0FP25aidui3src10get__value("new-template");
-  _M0FP25aidui3src13set__inflight("new-submit-btn", true, "Creating…");
-  _M0FP25aidui3src9api__post("/plans", yaml, (ok, status, body) => {
-    _M0FP25aidui3src13set__inflight("new-submit-btn", false, "Create plan");
+function _M0FP25aidui3src23prefill__from__template(template_id) {
+  if (template_id === "") {
+    _M0FP25aidui3src10set__value("new-yaml", "");
+    return undefined;
+  }
+  _M0FP25aidui3src8api__get(`/templates/${template_id}`, (ok, status, body) => {
     if (!ok || _M0FP25aidui3src16body__has__error(body)) {
       _M0FP25aidui3src9set__html("new-error", _M0FP25aidui3src11error__html(status, body));
       return undefined;
@@ -5748,18 +5843,143 @@ function _M0FP25aidui3src17submit__new__plan() {
       }
       return undefined;
     }
-    const new_id = _M0FP25aidui3src7str__at(root, "id");
-    if (new_id === "") {
-      _M0FP25aidui3src9set__html("new-error", _M0FP25aidui3src11error__html(0, body));
+    _M0FP25aidui3src10set__value("new-yaml", _M0FP25aidui3src7str__at(root, "training"));
+  });
+}
+function _M0FP25aidui3src11load__plans(target) {
+  _M0FP25aidui3src9set__html(target, _M0FP25aidui3src13loading__html("Loading plans…"));
+  _M0FP25aidui3src8api__get("/plans", (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html(target, _M0FP25aidui3src11error__html(status, body));
       return undefined;
     }
-    if (template_id === "") {
-      _M0FP25aidui3src12load__detail(new_id);
-      return;
+    _M0FP25aidui3src9set__html(target, _M0FP25aidui3src16plan__list__html(body));
+    _M0FP25aidui3src16wire__plan__rows(body);
+    _M0FP25aidui3src9on__click("new-plan-btn", () => {
+      _M0FP25aidui3src21open__new__plan__form();
+    });
+  });
+}
+function _M0FP25aidui3src21open__new__plan__form() {
+  _M0FP25aidui3src8api__get("/templates", (ok, status, body) => {
+    const templates_json = ok && !_M0FP25aidui3src16body__has__error(body) ? body : "{}";
+    _M0FP25aidui3src9set__html("app", _M0FP25aidui3src23new__plan__choice__html(templates_json));
+    _M0FP25aidui3src9on__click("new-cancel-btn", () => {
+      _M0FP25aidui3src11load__plans("app");
+    });
+    _M0FP25aidui3src9on__click("choice-reference", () => {
+      _M0FP25aidui3src24load__reference__gallery();
+    });
+    _M0FP25aidui3src9on__click("choice-import", () => {
+      _M0FP25aidui3src18open__import__form(templates_json);
+    });
+  });
+}
+function _M0FP25aidui3src24load__reference__gallery() {
+  _M0FP25aidui3src9set__html("app", _M0FP25aidui3src13loading__html("Loading reference topologies…"));
+  _M0FP25aidui3src8api__get("/templates", (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("app", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    _M0FP25aidui3src9set__html("app", _M0FP25aidui3src24reference__gallery__html(body));
+    _M0FP25aidui3src22wire__reference__cards(body);
+  });
+}
+function _M0FP25aidui3src22wire__reference__cards(templates_json) {
+  let root;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(templates_json, 0, templates_json.length), 1024);
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        root = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      break _L;
+    }
+    return undefined;
+  }
+  const _bind = _M0FP25aidui3src7arr__at(root, "templates");
+  const _bind$2 = _bind.length;
+  let _tmp = 0;
+  while (true) {
+    const _ = _tmp;
+    if (_ < _bind$2) {
+      const t = _bind[_];
+      const id = _M0FP25aidui3src7str__at(t, "id");
+      _M0FP25aidui3src9on__click(`use-template-${id}`, () => {
+        _M0FP25aidui3src13use__template(id);
+      });
+      _tmp = _ + 1 | 0;
+      continue;
     } else {
-      _M0FP25aidui3src25attach__template__overlay(template_id, new_id);
       return;
     }
+  }
+}
+function _M0FP25aidui3src13use__template(template_id) {
+  _M0FP25aidui3src8api__get(`/templates/${template_id}`, (ok, status, body) => {
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    let root;
+    let _try_err;
+    _L: {
+      _L$2: {
+        const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
+        if (_bind.$tag === 1) {
+          const _ok = _bind;
+          root = _ok._0;
+        } else {
+          const _err = _bind;
+          _try_err = _err._0;
+          break _L$2;
+        }
+        break _L;
+      }
+      return undefined;
+    }
+    const training = _M0FP25aidui3src7str__at(root, "training");
+    _M0FP25aidui3src8api__get("/plans", (pok, _ps, pbody) => {
+      const plans_json = pok && !_M0FP25aidui3src16body__has__error(pbody) ? pbody : "{\"plans\":[]}";
+      const base = _M0FP25aidui3src14read__case__id(training);
+      const cloned = base === "" ? training : _M0FP25aidui3src21clone__yaml__identity(training, _M0FP25aidui3src13clone__suffix(plans_json, base));
+      _M0FP25aidui3src9api__post("/plans", cloned, (ok2, status2, body2) => {
+        if (!ok2 || _M0FP25aidui3src16body__has__error(body2)) {
+          _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(status2, body2));
+          return undefined;
+        }
+        let r2;
+        let _try_err$2;
+        _L$2: {
+          _L$3: {
+            const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body2, 0, body2.length), 1024);
+            if (_bind.$tag === 1) {
+              const _ok = _bind;
+              r2 = _ok._0;
+            } else {
+              const _err = _bind;
+              _try_err$2 = _err._0;
+              break _L$3;
+            }
+            break _L$2;
+          }
+          return undefined;
+        }
+        const new_id = _M0FP25aidui3src7str__at(r2, "id");
+        if (new_id === "") {
+          _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(0, body2));
+          return undefined;
+        }
+        _M0FP25aidui3src25attach__template__overlay(template_id, new_id);
+      });
+    });
   });
 }
 function _M0FP25aidui3src25attach__template__overlay(template_id, plan_id) {
@@ -6050,6 +6270,59 @@ function _M0FP25aidui3src10save__plan(id) {
     _M0FP25aidui3src12load__detail(id);
   });
 }
+function _M0FP25aidui3src18open__import__form(templates_json) {
+  _M0FP25aidui3src9set__html("app", _M0FP25aidui3src21new__plan__form__html(templates_json));
+  _M0FP25aidui3src9on__click("new-cancel-btn", () => {
+    _M0FP25aidui3src11load__plans("app");
+  });
+  _M0FP25aidui3src9on__click("new-submit-btn", () => {
+    _M0FP25aidui3src17submit__new__plan();
+  });
+  _M0FP25aidui3src10on__change("new-template", () => {
+    _M0FP25aidui3src23prefill__from__template(_M0FP25aidui3src10get__value("new-template"));
+  });
+}
+function _M0FP25aidui3src17submit__new__plan() {
+  const yaml = _M0FP25aidui3src10get__value("new-yaml");
+  const template_id = _M0FP25aidui3src10get__value("new-template");
+  _M0FP25aidui3src13set__inflight("new-submit-btn", true, "Creating…");
+  _M0FP25aidui3src9api__post("/plans", yaml, (ok, status, body) => {
+    _M0FP25aidui3src13set__inflight("new-submit-btn", false, "Create plan");
+    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
+      _M0FP25aidui3src9set__html("new-error", _M0FP25aidui3src11error__html(status, body));
+      return undefined;
+    }
+    let root;
+    let _try_err;
+    _L: {
+      _L$2: {
+        const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
+        if (_bind.$tag === 1) {
+          const _ok = _bind;
+          root = _ok._0;
+        } else {
+          const _err = _bind;
+          _try_err = _err._0;
+          break _L$2;
+        }
+        break _L;
+      }
+      return undefined;
+    }
+    const new_id = _M0FP25aidui3src7str__at(root, "id");
+    if (new_id === "") {
+      _M0FP25aidui3src9set__html("new-error", _M0FP25aidui3src11error__html(0, body));
+      return undefined;
+    }
+    if (template_id === "") {
+      _M0FP25aidui3src12load__detail(new_id);
+      return;
+    } else {
+      _M0FP25aidui3src25attach__template__overlay(template_id, new_id);
+      return;
+    }
+  });
+}
 function _M0FP25aidui3src16wire__plan__rows(plans_json) {
   let root;
   let _try_err;
@@ -6133,32 +6406,35 @@ function _M0FP25aidui3src15duplicate__plan(id, _name) {
       return undefined;
     }
     const yaml = _M0FP25aidui3src7str__at(root, "yaml");
-    const cloned = _M0FP25aidui3src21clone__yaml__identity(yaml, "-copy");
-    _M0FP25aidui3src9api__post("/plans", cloned, (ok2, status2, body2) => {
-      if (!ok2 || _M0FP25aidui3src16body__has__error(body2)) {
-        _M0FP25aidui3src9set__html("list-error", _M0FP25aidui3src11error__html(status2, body2));
-        return undefined;
-      }
-      let r2;
-      let _try_err$2;
-      _L$2: {
-        _L$3: {
-          const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body2, 0, body2.length), 1024);
-          if (_bind.$tag === 1) {
-            const _ok = _bind;
-            r2 = _ok._0;
-          } else {
-            const _err = _bind;
-            _try_err$2 = _err._0;
-            break _L$3;
-          }
-          break _L$2;
+    _M0FP25aidui3src8api__get("/plans", (pok, _ps, pbody) => {
+      const plans_json = pok && !_M0FP25aidui3src16body__has__error(pbody) ? pbody : "{\"plans\":[]}";
+      const cloned = _M0FP25aidui3src21clone__yaml__identity(yaml, _M0FP25aidui3src13clone__suffix(plans_json, id));
+      _M0FP25aidui3src9api__post("/plans", cloned, (ok2, status2, body2) => {
+        if (!ok2 || _M0FP25aidui3src16body__has__error(body2)) {
+          _M0FP25aidui3src9set__html("list-error", _M0FP25aidui3src11error__html(status2, body2));
+          return undefined;
         }
-        _M0FP25aidui3src11load__plans("app");
-        return undefined;
-      }
-      const new_id = _M0FP25aidui3src7str__at(r2, "id");
-      _M0FP25aidui3src28copy__overlay__then__refresh(id, new_id);
+        let r2;
+        let _try_err$2;
+        _L$2: {
+          _L$3: {
+            const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body2, 0, body2.length), 1024);
+            if (_bind.$tag === 1) {
+              const _ok = _bind;
+              r2 = _ok._0;
+            } else {
+              const _err = _bind;
+              _try_err$2 = _err._0;
+              break _L$3;
+            }
+            break _L$2;
+          }
+          _M0FP25aidui3src11load__plans("app");
+          return undefined;
+        }
+        const new_id = _M0FP25aidui3src7str__at(r2, "id");
+        _M0FP25aidui3src28copy__overlay__then__refresh(id, new_id);
+      });
     });
   });
 }
@@ -6244,108 +6520,6 @@ function _M0FP25aidui3src13load__library() {
     _M0FP25aidui3src19wire__library__rows(body);
   });
 }
-function _M0FP25aidui3src13use__template(template_id) {
-  _M0FP25aidui3src8api__get(`/templates/${template_id}`, (ok, status, body) => {
-    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
-      _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(status, body));
-      return undefined;
-    }
-    let root;
-    let _try_err;
-    _L: {
-      _L$2: {
-        const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body, 0, body.length), 1024);
-        if (_bind.$tag === 1) {
-          const _ok = _bind;
-          root = _ok._0;
-        } else {
-          const _err = _bind;
-          _try_err = _err._0;
-          break _L$2;
-        }
-        break _L;
-      }
-      return undefined;
-    }
-    const training = _M0FP25aidui3src7str__at(root, "training");
-    _M0FP25aidui3src9api__post("/plans", training, (ok2, status2, body2) => {
-      if (!ok2 || _M0FP25aidui3src16body__has__error(body2)) {
-        _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(status2, body2));
-        return undefined;
-      }
-      let r2;
-      let _try_err$2;
-      _L$2: {
-        _L$3: {
-          const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(body2, 0, body2.length), 1024);
-          if (_bind.$tag === 1) {
-            const _ok = _bind;
-            r2 = _ok._0;
-          } else {
-            const _err = _bind;
-            _try_err$2 = _err._0;
-            break _L$3;
-          }
-          break _L$2;
-        }
-        return undefined;
-      }
-      const new_id = _M0FP25aidui3src7str__at(r2, "id");
-      if (new_id === "") {
-        _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(0, body2));
-        return undefined;
-      }
-      _M0FP25aidui3src25attach__template__overlay(template_id, new_id);
-    });
-  });
-}
-function _M0FP25aidui3src22wire__reference__cards(templates_json) {
-  let root;
-  let _try_err;
-  _L: {
-    _L$2: {
-      const _bind = _M0FPC14json13parse_2einner(new _M0TPC16string10StringView(templates_json, 0, templates_json.length), 1024);
-      if (_bind.$tag === 1) {
-        const _ok = _bind;
-        root = _ok._0;
-      } else {
-        const _err = _bind;
-        _try_err = _err._0;
-        break _L$2;
-      }
-      break _L;
-    }
-    return undefined;
-  }
-  const _bind = _M0FP25aidui3src7arr__at(root, "templates");
-  const _bind$2 = _bind.length;
-  let _tmp = 0;
-  while (true) {
-    const _ = _tmp;
-    if (_ < _bind$2) {
-      const t = _bind[_];
-      const id = _M0FP25aidui3src7str__at(t, "id");
-      _M0FP25aidui3src9on__click(`use-template-${id}`, () => {
-        _M0FP25aidui3src13use__template(id);
-      });
-      _tmp = _ + 1 | 0;
-      continue;
-    } else {
-      return;
-    }
-  }
-}
-function _M0FP25aidui3src24load__reference__gallery() {
-  _M0FP25aidui3src9set__html("app", _M0FP25aidui3src13loading__html("Loading reference topologies…"));
-  _M0FP25aidui3src8api__get("/templates", (ok, status, body) => {
-    if (!ok || _M0FP25aidui3src16body__has__error(body)) {
-      _M0FP25aidui3src9set__html("app", _M0FP25aidui3src11error__html(status, body));
-      return undefined;
-    }
-    _M0FP25aidui3src9set__html("app", _M0FP25aidui3src24reference__gallery__html(body));
-    _M0FP25aidui3src22wire__reference__cards(body);
-  });
-}
 function _M0FP25aidui3src11main__entry() {
   _M0FP25aidui3src12console__log("AID UI starting");
   _M0FP25aidui3src9on__click("nav-home", () => {
@@ -6359,4 +6533,4 @@ function _M0FP25aidui3src11main__entry() {
   });
   _M0FP25aidui3src11load__plans("app");
 }
-export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src16validating__html as validating_html, _M0FP25aidui3src13loading__html as loading_html, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src13library__html as library_html, _M0FP25aidui3src24reference__gallery__html as reference_gallery_html, _M0FP25aidui3src22overlay__section__html as overlay_section_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src18download__bom__csv as download_bom_csv, _M0FP25aidui3src13load__overlay as load_overlay, _M0FP25aidui3src13save__overlay as save_overlay, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src16add__nic__submit as add_nic_submit, _M0FP25aidui3src26add__switch__class__submit as add_switch_class_submit, _M0FP25aidui3src17add__zone__submit as add_zone_submit, _M0FP25aidui3src13load__library as load_library, _M0FP25aidui3src24load__reference__gallery as load_reference_gallery, _M0FP25aidui3src11main__entry as main_entry }
+export { _M0FP25aidui3src21clone__yaml__identity as clone_yaml_identity, _M0FP25aidui3src14next__free__id as next_free_id, _M0FP25aidui3src16validating__html as validating_html, _M0FP25aidui3src13loading__html as loading_html, _M0FP25aidui3src21new__plan__form__html as new_plan_form_html, _M0FP25aidui3src23new__plan__choice__html as new_plan_choice_html, _M0FP25aidui3src13library__html as library_html, _M0FP25aidui3src24reference__gallery__html as reference_gallery_html, _M0FP25aidui3src22overlay__section__html as overlay_section_html, _M0FP25aidui3src23structure__editor__html as structure_editor_html, _M0FP25aidui3src18render__plan__list as render_plan_list, _M0FP25aidui3src20render__plan__detail as render_plan_detail, _M0FP25aidui3src11render__bom as render_bom, _M0FP25aidui3src18download__bom__csv as download_bom_csv, _M0FP25aidui3src13load__overlay as load_overlay, _M0FP25aidui3src13save__overlay as save_overlay, _M0FP25aidui3src20validate__structured as validate_structured, _M0FP25aidui3src16download__wiring as download_wiring, _M0FP25aidui3src13trigger__calc as trigger_calc, _M0FP25aidui3src13validate__raw as validate_raw, _M0FP25aidui3src11load__plans as load_plans, _M0FP25aidui3src24load__reference__gallery as load_reference_gallery, _M0FP25aidui3src16add__nic__submit as add_nic_submit, _M0FP25aidui3src26add__switch__class__submit as add_switch_class_submit, _M0FP25aidui3src17add__zone__submit as add_zone_submit, _M0FP25aidui3src13load__library as load_library, _M0FP25aidui3src11main__entry as main_entry }

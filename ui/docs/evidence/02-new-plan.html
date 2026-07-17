@@ -3,19 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AID — New plan (authoring)</title>
+  <title>AID — New plan (guided choice)</title>
   <link rel="stylesheet" href="../../static/bootstrap.min.css">
 </head>
 <body class="bg-body">
   <nav class="navbar navbar-expand bg-dark border-bottom border-secondary mb-3">
-    <div class="container"><span class="navbar-brand">AID — New plan (authoring)</span></div>
+    <div class="container"><span class="navbar-brand">AID — New plan (guided choice)</span></div>
   </nav>
   <main class="container">
-    <p class="text-muted small">The create surface: a name field, a starter-template picker (GET /api/templates), and the raw-YAML editor. From-template prefills the YAML and attaches the optic overlay on create.</p>
-    <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h4 mb-0">New plan</h2><button id="new-cancel-btn" class="btn btn-sm btn-outline-secondary">Cancel</button></div><div id="new-error" class="mb-2" role="alert" aria-live="assertive"></div><div class="card"><div class="card-body"><div class="mb-3"><label class="form-label" for="new-name">Name (optional — used as a label)</label><input id="new-name" class="form-control" type="text" placeholder="My fabric plan"></div><div class="mb-3"><label class="form-label" for="new-template">Start from</label><select id="new-template" class="form-select"><option value="">— Blank (paste your own YAML) —</option><option value="xoc-64-mesh">XOC-64 · 1× OPG-64 Mesh (Converged) (mesh)</option><option value="xoc-128-mesh">XOC-128 · 2× OPG-64 Mesh (Converged) (mesh)</option><option value="xoc-256-clos">XOC-256 · 2× OPG-128 Clos (clos)</option></select><div class="form-text">Pick a starter to prefill the YAML, or leave Blank to paste your own.</div></div><div class="mb-3"><label class="form-label" for="new-yaml">Plan YAML</label><textarea id="new-yaml" class="form-control font-monospace" rows="18" spellcheck="false" placeholder="meta:
-  case_id: my-plan
-  name: My Plan
-..."></textarea></div><button id="new-submit-btn" class="btn btn-primary">Create plan</button></div></div>
+    <p class="text-muted small">The guided create surface (#87): choose a starting point — clone a built-in reference topology (primary path → structured editor), or import / paste DIET YAML (the expert escape hatch). The collision-safe clone gives each new plan a distinct id so repeat clones never overwrite the seed or a prior copy.</p>
+    <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h4 mb-0">New plan</h2><button id="new-cancel-btn" class="btn btn-sm btn-outline-secondary">Cancel</button></div><p class="text-secondary">Choose how to start. You can edit everything in the structured editor afterwards; raw YAML stays available as an expert path.</p><div class="row g-3"><div class="col-md-6"><div class="card h-100"><div class="card-body d-flex flex-column"><h3 class="h5 card-title">Start from a reference topology <span class="badge text-bg-info">3 available</span></h3><p class="card-text text-secondary flex-grow-1">Clone a built-in reference design (mesh or Clos) into your own editable plan, then customize it in the structured editor. Recommended for most new plans.</p><button id="choice-reference" class="btn btn-primary mt-2 align-self-start">Browse reference topologies</button></div></div></div><div class="col-md-6"><div class="card h-100"><div class="card-body d-flex flex-column"><h3 class="h5 card-title">Import / paste YAML</h3><p class="card-text text-secondary flex-grow-1">Paste or import an existing DIET/training topology plan. For expert users authoring the YAML directly.</p><button id="choice-import" class="btn btn-outline-secondary mt-2 align-self-start">Paste YAML</button></div></div></div></div>
   </main>
 </body>
 </html>

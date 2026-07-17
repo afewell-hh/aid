@@ -101,11 +101,11 @@ async function main() {
     await captureApp());
   await screenshot("01-plan-list.png");
 
-  // 2. New-plan authoring form (GET /api/templates) — the create surface.
+  // 2. New-plan guided CHOICE surface (#87) — the create entry (GET /api/templates).
   await p.locator("#new-plan-btn").click();
-  await p.locator("#new-yaml").waitFor();
-  writeSurface("02-new-plan.html", "New plan (authoring)",
-    "The create surface: a name field, a starter-template picker (GET /api/templates), and the raw-YAML editor. From-template prefills the YAML and attaches the optic overlay on create.",
+  await p.locator("#choice-reference").waitFor();
+  writeSurface("02-new-plan.html", "New plan (guided choice)",
+    "The guided create surface (#87): choose a starting point — clone a built-in reference topology (primary path → structured editor), or import / paste DIET YAML (the expert escape hatch). The collision-safe clone gives each new plan a distinct id so repeat clones never overwrite the seed or a prior copy.",
     await captureApp());
   await screenshot("02-new-plan.png");
 

@@ -83,6 +83,95 @@ pub fn clone_yaml_identity(yaml : String, suffix : String) -> String {
   out
 }
 
+// next_free_id returns the first FREE plan id given the current /api/plans list
+// JSON and a desired id: `desired` when unused, else `desired-2`, `desired-3`, …
+// This is the shared collision primitive both clone paths (reference clone +
+// Duplicate) route through, so a repeat clone never silently overwrites an
+// existing plan (#87 — the `planstore.Create` id has no server-side existence
+// guard; that defense-in-depth is a separate follow-up). plans_json is the
+// {"plans":[{id,…}]} shape from GET /api/plans; a malformed/empty body is treated
+// as "no plans" (desired returned unchanged).
+pub fn next_free_id(plans_json : String, desired : String) -> String {
+  let ids : Array[String] = try {
+    let root = @json.parse(plans_json)
+    let out : Array[String] = []
+    for p in arr_at(root, "plans") {
+      out.push(str_at(p, "id"))
+    }
+    out
+  } catch {
+    _ => []
+  }
+  if !id_in(ids, desired) {
+    return desired
+  }
+  let mut n = 2
+  let mut candidate = desired + "-" + n.to_string()
+  while id_in(ids, candidate) {
+    n = n + 1
+    candidate = desired + "-" + n.to_string()
+  }
+  candidate
+}
+
+// id_in reports whether target is one of the ids.
+fn id_in(ids : Array[String], target : String) -> Bool {
+  for id in ids {
+    if id == target {
+      return true
+    }
+  }
+  false
+}
+
+// clone_suffix computes the id-suffix that turns base_id into the first FREE
+// clone id (`-copy`, then `-copy-2`, …) against the current plans list. Both the
+// reference-clone and Duplicate paths pass this suffix to clone_yaml_identity, so
+// they share ONE collision-aware identity policy (#87).
+fn clone_suffix(plans_json : String, base_id : String) -> String {
+  let free = next_free_id(plans_json, base_id + "-copy")
+  strip_prefix(free, base_id)
+}
+
+// strip_prefix returns s with a leading prefix removed (s unchanged if it does
+// not start with prefix). Used to recover the `-copy…` delta from a free id.
+fn strip_prefix(s : String, prefix : String) -> String {
+  if !starts_with(s, prefix) {
+    return s
+  }
+  let cs = chars(s)
+  let pl = chars(prefix).length()
+  let mut out = ""
+  let mut i = pl
+  while i < cs.length() {
+    out = out + cs[i].to_string()
+    i = i + 1
+  }
+  out
+}
+
+// read_case_id extracts meta.case_id from a plan/training YAML: the first
+// 2-space-indented `case_id:` line (the same line model clone_yaml_identity uses).
+// "" when absent — the caller then lets the store derive an id.
+fn read_case_id(yaml : String) -> String {
+  for l in split_lines(yaml) {
+    if starts_with(l, "  case_id:") {
+      let cs = chars(l)
+      let mut i = 10 // past "  case_id:"
+      while i < cs.length() && cs[i] == ' ' {
+        i = i + 1
+      }
+      let mut v = ""
+      while i < cs.length() && cs[i] != '\r' {
+        v = v + cs[i].to_string()
+        i = i + 1
+      }
+      return v
+    }
+  }
+  ""
+}
+
 // split_lines splits s on '\n' into owned Strings (avoids the StringView APIs).
 fn split_lines(s : String) -> Array[String] {
   let lines : Array[String] = []
@@ -386,6 +475,45 @@ pub fn new_plan_form_html(templates_json : String) -> String {
   "placeholder=\"meta:\n  case_id: my-plan\n  name: My Plan\n...\"></textarea></div>" +
   "<button id=\"new-submit-btn\" class=\"btn btn-primary\">Create plan</button>" +
   "</div></div>"
+}
+
+// new_plan_choice_html: the guided "New plan" CHOICE surface (#87). Instead of a
+// raw-YAML-first form, the user picks an intentional path:
+//   • primary  — start from a built-in reference topology (clone → structured edit)
+//   • expert   — import / paste DIET YAML (the D25 escape hatch)
+// templates_json (from GET /api/templates) is accepted so the primary card can
+// show how many references are available; a malformed body just omits the count.
+// The wiring (app.mbt open_new_plan_form) routes #choice-reference → the reference
+// gallery and #choice-import → new_plan_form_html.
+pub fn new_plan_choice_html(templates_json : String) -> String {
+  let count = try {
+    arr_at(@json.parse(templates_json), "templates").length()
+  } catch {
+    _ => 0
+  }
+  let count_hint = if count > 0 {
+    " <span class=\"badge text-bg-info\">\{count.to_string()} available</span>"
+  } else {
+    ""
+  }
+  "<div class=\"d-flex justify-content-between align-items-center mb-3\">" +
+  "<h2 class=\"h4 mb-0\">New plan</h2>" +
+  "<button id=\"new-cancel-btn\" class=\"btn btn-sm btn-outline-secondary\">Cancel</button></div>" +
+  "<p class=\"text-secondary\">Choose how to start. You can edit everything in the structured editor afterwards; raw YAML stays available as an expert path.</p>" +
+  "<div class=\"row g-3\">" +
+  // Primary: reference topology (the recommended golden path).
+  "<div class=\"col-md-6\"><div class=\"card h-100\"><div class=\"card-body d-flex flex-column\">" +
+  "<h3 class=\"h5 card-title\">Start from a reference topology\{count_hint}</h3>" +
+  "<p class=\"card-text text-secondary flex-grow-1\">Clone a built-in reference design (mesh or Clos) into your own editable plan, then customize it in the structured editor. Recommended for most new plans.</p>" +
+  "<button id=\"choice-reference\" class=\"btn btn-primary mt-2 align-self-start\">Browse reference topologies</button>" +
+  "</div></div></div>" +
+  // Expert: import / paste YAML (the D25 escape hatch).
+  "<div class=\"col-md-6\"><div class=\"card h-100\"><div class=\"card-body d-flex flex-column\">" +
+  "<h3 class=\"h5 card-title\">Import / paste YAML</h3>" +
+  "<p class=\"card-text text-secondary flex-grow-1\">Paste or import an existing DIET/training topology plan. For expert users authoring the YAML directly.</p>" +
+  "<button id=\"choice-import\" class=\"btn btn-outline-secondary mt-2 align-self-start\">Paste YAML</button>" +
+  "</div></div></div>" +
+  "</div>"
 }
 
 // library_html: render the read-only Library browse table from the

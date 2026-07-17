@@ -10,8 +10,11 @@
 
 import { test, expect } from "@playwright/test";
 
-// Template-created plan ids derive from meta.case_id (stable).
-const MESH_64_NAME = "Training XOC-64 1x OPG-64 Mesh Converged RO";
+// Template-created plan ids derive from meta.case_id (stable). #87: the clone is
+// now identity-mutated (collision-safe), so the created plan's name carries a
+// " (copy)" suffix and its id a "-copy" suffix — the clone no longer overwrites
+// the seeded reference plan.
+const MESH_64_NAME = "Training XOC-64 1x OPG-64 Mesh Converged RO (copy)";
 
 // Wait until the initial load_plans has SETTLED (the plan-list heading rendered),
 // not merely until #app is non-empty (true at the loading spinner). Otherwise a

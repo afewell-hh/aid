@@ -68,12 +68,28 @@ fn open_new_plan_form() -> Unit {
   api_get(templates_path(), fn(ok, status, body) {
     let templates_json = if ok && !body_has_error(body) { body } else { "{}" }
     ignore(status)
-    set_html("app", new_plan_form_html(templates_json))
+    // #87: the guided CHOICE surface is the default landing — not the raw-YAML
+    // form. Primary path clones a reference (golden path); expert path pastes
+    // YAML (D25). Both remain one click away.
+    set_html("app", new_plan_choice_html(templates_json))
     on_click("new-cancel-btn", fn() { load_plans("app") })
-    on_click("new-submit-btn", fn() { submit_new_plan() })
-    // Prefill the textarea when a template is chosen (and clear it for Blank).
-    on_change("new-template", fn() { prefill_from_template(get_value("new-template")) })
+    on_click("choice-reference", fn() { load_reference_gallery() })
+    on_click("choice-import", fn() { open_import_form(templates_json) })
   })
+}
+
+// open_import_form renders the expert import/paste form (the raw-YAML escape
+// hatch, D25) from the choice surface, wiring submit/cancel/prefill exactly as
+// the pre-#87 New-plan form did. templates_json prefills the optional starter
+// picker; Cancel returns to the choice surface.
+fn open_import_form(templates_json : String) -> Unit {
+  set_html("app", new_plan_form_html(templates_json))
+  // Cancel abandons creation and returns to the plan list (same as the pre-#87
+  // form) — a consistent "escape" from either the choice surface or this form.
+  on_click("new-cancel-btn", fn() { load_plans("app") })
+  on_click("new-submit-btn", fn() { submit_new_plan() })
+  // Prefill the textarea when a template is chosen (and clear it for Blank).
+  on_change("new-template", fn() { prefill_from_template(get_value("new-template")) })
 }
 
 // prefill_from_template: GET /api/templates/{id} and drop its training YAML into
@@ -181,22 +197,28 @@ fn duplicate_plan(id : String, _name : String) -> Unit {
       _ => return
     }
     let yaml = str_at(root, "yaml")
-    let cloned = clone_yaml_identity(yaml, "-copy")
-    api_post(plans_path(), cloned, fn(ok2, status2, body2) {
-      if (!ok2) || body_has_error(body2) {
-        set_html("list-error", error_html(status2, body2))
-        return
-      }
-      let r2 = try {
-        @json.parse(body2)
-      } catch {
-        _ => {
-          load_plans("app")
+    // Collision-safe identity (#87): pick the first FREE clone id from the
+    // current plans list (shared clone_suffix), so duplicating the same source
+    // twice yields <id>-copy then <id>-copy-2 instead of silently overwriting.
+    api_get(plans_path(), fn(pok, _ps, pbody) {
+      let plans_json = if pok && !body_has_error(pbody) { pbody } else { "{\"plans\":[]}" }
+      let cloned = clone_yaml_identity(yaml, clone_suffix(plans_json, id))
+      api_post(plans_path(), cloned, fn(ok2, status2, body2) {
+        if (!ok2) || body_has_error(body2) {
+          set_html("list-error", error_html(status2, body2))
           return
         }
-      }
-      let new_id = str_at(r2, "id")
-      copy_overlay_then_refresh(id, new_id)
+        let r2 = try {
+          @json.parse(body2)
+        } catch {
+          _ => {
+            load_plans("app")
+            return
+          }
+        }
+        let new_id = str_at(r2, "id")
+        copy_overlay_then_refresh(id, new_id)
+      })
     })
   })
 }
@@ -955,22 +977,35 @@ fn use_template(template_id : String) -> Unit {
       _ => return
     }
     let training = str_at(root, "training")
-    api_post(plans_path(), training, fn(ok2, status2, body2) {
-      if (!ok2) || body_has_error(body2) {
-        set_html("reference-error", error_html(status2, body2))
-        return
+    // Collision-safe identity (#87): derive the first FREE clone id from the
+    // current plans list so cloning the same reference twice never overwrites the
+    // seeded plan (whose id IS the reference's case_id) or a prior clone. Shares
+    // the exact clone_suffix policy used by duplicate_plan.
+    api_get(plans_path(), fn(pok, _ps, pbody) {
+      let plans_json = if pok && !body_has_error(pbody) { pbody } else { "{\"plans\":[]}" }
+      let base = read_case_id(training)
+      let cloned = if base == "" {
+        training
+      } else {
+        clone_yaml_identity(training, clone_suffix(plans_json, base))
       }
-      let r2 = try {
-        @json.parse(body2)
-      } catch {
-        _ => return
-      }
-      let new_id = str_at(r2, "id")
-      if new_id == "" {
-        set_html("reference-error", error_html(0, body2))
-        return
-      }
-      attach_template_overlay(template_id, new_id)
+      api_post(plans_path(), cloned, fn(ok2, status2, body2) {
+        if (!ok2) || body_has_error(body2) {
+          set_html("reference-error", error_html(status2, body2))
+          return
+        }
+        let r2 = try {
+          @json.parse(body2)
+        } catch {
+          _ => return
+        }
+        let new_id = str_at(r2, "id")
+        if new_id == "" {
+          set_html("reference-error", error_html(0, body2))
+          return
+        }
+        attach_template_overlay(template_id, new_id)
+      })
     })
   })
 }

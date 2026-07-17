@@ -104,6 +104,8 @@ test.describe("P1.1 structured-create (#81)", () => {
       .replace(/case_id:\s*training_xoc64_1xopg64_mesh_conv_ro/, "case_id: " + id)
       .replace(/name:\s*Training XOC-64 1x OPG-64 Mesh Converged RO/, "name: " + id);
     await page.getByRole("button", { name: "+ New plan" }).click();
+    // #87: the raw-YAML form now lives behind the choice surface's expert path.
+    await page.locator("#choice-import").click();
     await page.locator("#new-yaml").evaluate((el, v) => {
       el.value = v;
       el.dispatchEvent(new Event("input", { bubbles: true }));

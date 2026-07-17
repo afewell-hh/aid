@@ -350,8 +350,11 @@ test("new_plan_form_html: empty catalog still renders the Blank option + textare
   assert.match(html, /Blank/, "expected the Blank option");
 });
 
-// "New plan" -> form -> choose template -> textarea prefilled -> submit POSTs the
-// YAML and (template chosen) PUTs the overlay, then routes to the new detail.
+// "New plan" -> choice surface -> expert import -> choose template -> textarea
+// prefilled -> submit POSTs the YAML and (template chosen) PUTs the overlay, then
+// routes to the new detail. (#87: the raw form now lives behind the choice
+// surface's "Import / paste YAML" path; the create/prefill/overlay behavior is
+// unchanged.)
 test("create from template: prefill + POST plan + PUT overlay + route to detail", async () => {
   reset();
   const route = (url, opts) => {
@@ -367,7 +370,9 @@ test("create from template: prefill + POST plan + PUT overlay + route to detail"
   setResponder(route);
   app.main_entry();
   await flush();
-  dom["new-plan-btn"].click(); // open the form (GET /api/templates)
+  dom["new-plan-btn"].click(); // open the choice surface (GET /api/templates)
+  await flush();
+  dom["choice-import"].click(); // enter the expert import/paste form
   await flush();
   // Choose a template -> on_change prefills the textarea from GET /api/templates/{id}.
   dom["new-template"].change("xoc-64-mesh");
@@ -404,7 +409,9 @@ test("create error: malformed YAML shows the error alert, no ghost navigation", 
   setResponder(route);
   app.main_entry();
   await flush();
-  dom["new-plan-btn"].click();
+  dom["new-plan-btn"].click(); // choice surface
+  await flush();
+  dom["choice-import"].click(); // enter the expert import/paste form
   await flush();
   el("new-yaml").value = "this: : not: valid";
   dom["new-submit-btn"].click();
