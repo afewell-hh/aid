@@ -5231,13 +5231,13 @@ function _M0FP25aidui3src15select__strings(id, options, selected, aria_label) {
   }
   return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${opts}</select>`;
 }
-function _M0FP25aidui3src12topo__selectN3optS366(current, v) {
+function _M0FP25aidui3src12topo__selectN3optS364(current, v) {
   const sel = v === current ? " selected" : "";
   return `<option value=\"${v}\"${sel}>${v}</option>`;
 }
 function _M0FP25aidui3src12topo__select(id, current, aria_label) {
   const blank = current === "" ? "<option value=\"\" selected></option>" : "";
-  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS366(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS366(current, "clos")}</select>`;
+  return `<select id=\"${_M0FP25aidui3src3esc(id)}\" class=\"form-select form-select-sm\" aria-label=\"${_M0FP25aidui3src3esc(aria_label)}\">${blank}${_M0FP25aidui3src12topo__selectN3optS364(current, "mesh")}${_M0FP25aidui3src12topo__selectN3optS364(current, "clos")}</select>`;
 }
 function _M0FP25aidui3src15override__value(sw) {
   const _bind = _M0FP25aidui3src3get(sw, "override_quantity");
@@ -5946,10 +5946,13 @@ function _M0FP25aidui3src13use__template(template_id) {
       return undefined;
     }
     const training = _M0FP25aidui3src7str__at(root, "training");
-    _M0FP25aidui3src8api__get("/plans", (pok, _ps, pbody) => {
-      const plans_json = pok && !_M0FP25aidui3src16body__has__error(pbody) ? pbody : "{\"plans\":[]}";
+    _M0FP25aidui3src8api__get("/plans", (pok, ps, pbody) => {
+      if (!pok || _M0FP25aidui3src16body__has__error(pbody)) {
+        _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(ps, pbody));
+        return undefined;
+      }
       const base = _M0FP25aidui3src14read__case__id(training);
-      const cloned = base === "" ? training : _M0FP25aidui3src21clone__yaml__identity(training, _M0FP25aidui3src13clone__suffix(plans_json, base));
+      const cloned = base === "" ? training : _M0FP25aidui3src21clone__yaml__identity(training, _M0FP25aidui3src13clone__suffix(pbody, base));
       _M0FP25aidui3src9api__post("/plans", cloned, (ok2, status2, body2) => {
         if (!ok2 || _M0FP25aidui3src16body__has__error(body2)) {
           _M0FP25aidui3src9set__html("reference-error", _M0FP25aidui3src11error__html(status2, body2));
@@ -6406,9 +6409,12 @@ function _M0FP25aidui3src15duplicate__plan(id, _name) {
       return undefined;
     }
     const yaml = _M0FP25aidui3src7str__at(root, "yaml");
-    _M0FP25aidui3src8api__get("/plans", (pok, _ps, pbody) => {
-      const plans_json = pok && !_M0FP25aidui3src16body__has__error(pbody) ? pbody : "{\"plans\":[]}";
-      const cloned = _M0FP25aidui3src21clone__yaml__identity(yaml, _M0FP25aidui3src13clone__suffix(plans_json, id));
+    _M0FP25aidui3src8api__get("/plans", (pok, ps, pbody) => {
+      if (!pok || _M0FP25aidui3src16body__has__error(pbody)) {
+        _M0FP25aidui3src9set__html("list-error", _M0FP25aidui3src11error__html(ps, pbody));
+        return undefined;
+      }
+      const cloned = _M0FP25aidui3src21clone__yaml__identity(yaml, _M0FP25aidui3src13clone__suffix(pbody, id));
       _M0FP25aidui3src9api__post("/plans", cloned, (ok2, status2, body2) => {
         if (!ok2 || _M0FP25aidui3src16body__has__error(body2)) {
           _M0FP25aidui3src9set__html("list-error", _M0FP25aidui3src11error__html(status2, body2));

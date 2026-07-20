@@ -257,3 +257,62 @@ test("reference clone and Duplicate share the first-free contract (next_free_id)
   // A reference clone whose desired base collides advances identically.
   assert.equal(app.next_free_id(occupied, "p"), "p-2", "reference clone first-free");
 });
+
+// ---------------------------------------------------------------------------
+// 3. Fail CLOSED when the /api/plans occupancy probe fails (devb #87 review)
+// ---------------------------------------------------------------------------
+//
+// The collision guard reads the live /api/plans list to pick a free id. If that
+// probe fails (HTTP error / network), the code must NOT fall back to "assume no
+// plans" and POST a deterministic clone id — planstore.Create has no server-side
+// existence guard, so that would silently overwrite an existing clone. Both clone
+// paths must fail closed: surface the error and issue NO POST.
+
+test("reference clone fails CLOSED: occupancy probe 500 -> no POST, error shown", async () => {
+  reset();
+  setResponder((url, opts) => {
+    const method = opts.method || "GET";
+    if (url === "/api/templates" && method === "GET") return TEMPLATES;
+    if (url === "/api/templates/xoc-64-mesh") return TEMPLATE_64;
+    // The occupancy probe fails.
+    if (url === "/api/plans" && method === "GET")
+      return { ok: false, status: 500, body: JSON.stringify({ error: "list unavailable" }) };
+    return "{}";
+  });
+  app.load_reference_gallery();
+  await flush();
+  el("use-template-xoc-64-mesh").click();
+  await flush();
+  await flush();
+  await flush();
+  assert.ok(
+    !fetches.some((f) => f.url === "/api/plans" && f.method === "POST"),
+    `a failed occupancy probe must NOT POST a clone; got ${JSON.stringify(fetches.map((f) => f.method + " " + f.url))}`,
+  );
+  assert.match(dom["reference-error"]?.innerHTML ?? "", /alert-danger/, "expected the error surfaced on the gallery");
+});
+
+test("duplicate fails CLOSED: occupancy probe network error -> no POST, error shown", async () => {
+  reset();
+  const SRC = "clos-small";
+  // First render the list (probe succeeds) so the Duplicate control exists.
+  setResponder(() => JSON.stringify({ plans: [{ id: SRC, name: "Small Clos", status: "draft" }] }));
+  app.load_plans("app");
+  await flush();
+  // Now the source detail loads, but the occupancy probe throws (network error).
+  setResponder((url, opts) => {
+    const method = opts.method || "GET";
+    if (url === `/api/plans/${SRC}` && method === "GET")
+      return JSON.stringify({ id: SRC, name: "Small Clos", status: "draft", yaml: `meta:\n  case_id: ${SRC}\n  name: Small Clos\n` });
+    if (url === "/api/plans" && method === "GET") throw new Error("network down");
+    return "{}";
+  });
+  dom[`dup-${SRC}`].click();
+  await flush();
+  await flush();
+  assert.ok(
+    !fetches.some((f) => f.url === "/api/plans" && f.method === "POST"),
+    `a failed occupancy probe must NOT POST a clone; got ${JSON.stringify(fetches.map((f) => f.method + " " + f.url))}`,
+  );
+  assert.match(dom["list-error"]?.innerHTML ?? "", /alert-danger/, "expected the error surfaced on the list");
+});

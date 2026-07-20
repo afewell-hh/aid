@@ -200,9 +200,15 @@ fn duplicate_plan(id : String, _name : String) -> Unit {
     // Collision-safe identity (#87): pick the first FREE clone id from the
     // current plans list (shared clone_suffix), so duplicating the same source
     // twice yields <id>-copy then <id>-copy-2 instead of silently overwriting.
-    api_get(plans_path(), fn(pok, _ps, pbody) {
-      let plans_json = if pok && !body_has_error(pbody) { pbody } else { "{\"plans\":[]}" }
-      let cloned = clone_yaml_identity(yaml, clone_suffix(plans_json, id))
+    // Fail CLOSED: if the occupancy probe fails we cannot guarantee a free id
+    // (planstore.Create has no server-side existence guard), so surface the
+    // error and do NOT POST — a failed probe must never risk a silent overwrite.
+    api_get(plans_path(), fn(pok, ps, pbody) {
+      if (!pok) || body_has_error(pbody) {
+        set_html("list-error", error_html(ps, pbody))
+        return
+      }
+      let cloned = clone_yaml_identity(yaml, clone_suffix(pbody, id))
       api_post(plans_path(), cloned, fn(ok2, status2, body2) {
         if (!ok2) || body_has_error(body2) {
           set_html("list-error", error_html(status2, body2))
@@ -980,14 +986,19 @@ fn use_template(template_id : String) -> Unit {
     // Collision-safe identity (#87): derive the first FREE clone id from the
     // current plans list so cloning the same reference twice never overwrites the
     // seeded plan (whose id IS the reference's case_id) or a prior clone. Shares
-    // the exact clone_suffix policy used by duplicate_plan.
-    api_get(plans_path(), fn(pok, _ps, pbody) {
-      let plans_json = if pok && !body_has_error(pbody) { pbody } else { "{\"plans\":[]}" }
+    // the exact clone_suffix policy used by duplicate_plan, including failing
+    // CLOSED on a failed occupancy probe — surface the error, never POST a
+    // potentially colliding id (planstore.Create has no server-side guard).
+    api_get(plans_path(), fn(pok, ps, pbody) {
+      if (!pok) || body_has_error(pbody) {
+        set_html("reference-error", error_html(ps, pbody))
+        return
+      }
       let base = read_case_id(training)
       let cloned = if base == "" {
         training
       } else {
-        clone_yaml_identity(training, clone_suffix(plans_json, base))
+        clone_yaml_identity(training, clone_suffix(pbody, base))
       }
       api_post(plans_path(), cloned, fn(ok2, status2, body2) {
         if (!ok2) || body_has_error(body2) {
