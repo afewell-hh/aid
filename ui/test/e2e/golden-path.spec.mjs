@@ -400,6 +400,9 @@ test.describe("AID GUI P0.2 — create / edit / delete authoring", () => {
     await page.getByRole("button", { name: "+ New plan" }).click();
     await expect(page.getByRole("heading", { name: "New plan" })).toBeVisible();
 
+    // #87: the raw form (template picker + textarea) now lives behind the choice
+    // surface's expert "Import / paste YAML" path.
+    await page.locator("#choice-import").click();
     // Choose the xoc-64 mesh starter; the textarea prefills from GET the template.
     await page.locator("#new-template").selectOption("xoc-64-mesh");
     await expect(page.locator("#new-yaml")).toHaveValue(/case_id:\s*training_xoc64/);
@@ -449,6 +452,7 @@ test.describe("AID GUI P0.2 — create / edit / delete authoring", () => {
       .replace(/name:\s*Training XOC-64 1x OPG-64 Mesh Converged RO/, "name: E2E Edit Plan");
 
     await page.getByRole("button", { name: "+ New plan" }).click();
+    await page.locator("#choice-import").click(); // #87: expert paste path
     await setTextarea(page, "#new-yaml", yaml);
     await page.locator("#new-submit-btn").click();
     await expect(page.getByRole("heading", { name: "E2E Edit Plan" })).toBeVisible();
@@ -486,6 +490,7 @@ test.describe("AID GUI P0.2 — create / edit / delete authoring", () => {
     const yaml = tplYaml.replace(/case_id:\s*training_xoc64_1xopg64_mesh_conv_ro/, "case_id: " + id);
 
     await page.getByRole("button", { name: "+ New plan" }).click();
+    await page.locator("#choice-import").click(); // #87: expert paste path
     await setTextarea(page, "#new-yaml", yaml);
     await page.locator("#new-submit-btn").click();
     // Back to the list (via the detail Back link) to use the row Delete.
@@ -502,6 +507,7 @@ test.describe("AID GUI P0.2 — create / edit / delete authoring", () => {
     await page.goto("/");
     await waitForApp(page);
     await page.getByRole("button", { name: "+ New plan" }).click();
+    await page.locator("#choice-import").click(); // #87: expert paste path
     await page.locator("#new-yaml").fill("this: : not: valid: yaml\n  - [");
     await page.locator("#new-submit-btn").click();
 
