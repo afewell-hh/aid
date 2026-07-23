@@ -64,6 +64,8 @@ func (a *api) fail(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, planstore.ErrInvalidID), errors.Is(err, planstore.ErrInvalidPlan):
 		writeJSONError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, planstore.ErrConflict):
+		writeJSONError(w, http.StatusConflict, err.Error())
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 	}

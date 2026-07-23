@@ -386,14 +386,16 @@ test.describe("AID GUI P0.2 — create / edit / delete authoring", () => {
   // + the known quantities -> View BOM shows non-blank optic identity (the
   // template's overlay was attached, so the BOM is full, not blank optics).
   //
-  // NOTE: a template-created plan's derived id == the template's case_id, which is
-  // the SAME id as the seeded mesh-64 fixture; creating it re-writes the identical
-  // plan + overlay (idempotent). We deliberately do NOT delete here — that would
-  // remove the shared read-only fixture other tests rely on. (The dedicated delete
-  // coverage uses throwaway unique-id plans below.)
+  // NOTE (#88): a plain template-created plan derives id == the template's case_id,
+  // which is the SAME id as the seeded mesh-64 fixture — and duplicate create is
+  // now a 409 Conflict (no silent overwrite). So we rewrite the prefilled YAML to a
+  // UNIQUE case_id before submitting. The template picker stays selected, so the
+  // optic overlay still attaches to the new plan (full BOM), and the seeded fixture
+  // is left untouched.
   test("New from template (mesh) -> create -> Calculate Valid + full BOM (optics populated)", async ({
     page,
   }) => {
+    // (the describe's beforeEach already auto-accepts the delete-confirm dialog)
     await page.goto("/");
     await waitForApp(page);
 
@@ -407,10 +409,24 @@ test.describe("AID GUI P0.2 — create / edit / delete authoring", () => {
     await page.locator("#new-template").selectOption("xoc-64-mesh");
     await expect(page.locator("#new-yaml")).toHaveValue(/case_id:\s*training_xoc64/);
 
+    // #88: give the plan a UNIQUE id so create does not collide (409) with the
+    // seeded xoc-64 fixture. Keep the template picker selected so submit still
+    // attaches the optic overlay to the new id. Generate the id in Node so we can
+    // clean it up afterward (keeping the seeded count at 4 for later tests).
+    const stamp = Date.now();
+    const uniqueId = "e2e_from_tpl_" + stamp;
+    const uniqueName = "E2E From Template " + stamp;
+    await page.locator("#new-yaml").evaluate((el, ids) => {
+      el.value = el.value
+        .replace(/case_id:\s*training_xoc64_1xopg64_mesh_conv_ro/, "case_id: " + ids.id)
+        .replace(/name:\s*Training XOC-64 1x OPG-64 Mesh Converged RO/, "name: " + ids.name);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, { id: uniqueId, name: uniqueName });
+
     await page.locator("#new-submit-btn").click();
 
-    // Landed on the created plan's detail (derived id == the template's case_id).
-    await expect(page.getByRole("heading", { name: MESH_64_NAME })).toBeVisible();
+    // Landed on the created (unique-id) plan's detail.
+    await expect(page.getByRole("heading", { name: uniqueName })).toBeVisible();
     await expect(page.getByRole("button", { name: "Calculate" })).toBeVisible();
 
     // Calculate: Valid + the known mesh quantities (proves the created plan really
@@ -426,9 +442,16 @@ test.describe("AID GUI P0.2 — create / edit / delete authoring", () => {
     await page.getByRole("button", { name: "View BOM" }).click();
     await expect(result.getByRole("heading", { name: "Bill of Materials" })).toBeVisible();
     await expect(result.getByText(/400GBASE-DR4|200GBASE-SR2/).first()).toBeVisible();
-    // Still present in the list afterward (the seeded fixture remains intact).
+    // Back to the list: the seeded fixture is intact (never overwritten, #88) and
+    // the unique throwaway is present.
     await page.getByRole("button", { name: "← All plans" }).click();
     await expect(page.getByText(MESH_64_ID, { exact: true })).toBeVisible();
+    await expect(page.getByText(uniqueId, { exact: true })).toBeVisible();
+
+    // #88: clean up the throwaway so the store returns to the seeded count for the
+    // later tests (which assert exactly 4 plans).
+    await page.locator(`#del-${uniqueId}`).click();
+    await expect(page.getByText(uniqueId, { exact: true })).toHaveCount(0);
   });
 
   // (b) Edit: create a throwaway plan from pasted YAML, open it, bump a

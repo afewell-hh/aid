@@ -31,6 +31,11 @@ var ErrInvalidID = errors.New("planstore: invalid plan id")
 // usable id/name.
 var ErrInvalidPlan = errors.New("planstore: invalid plan")
 
+// ErrConflict is returned by Create when a plan with the derived id already
+// exists. Create never overwrites — Update is the explicit overwrite path. The
+// API maps this to HTTP 409 Conflict (#88 defense-in-depth).
+var ErrConflict = errors.New("planstore: plan already exists")
+
 // idPattern is the allowed id shape: it can only ever name a file inside the
 // plans dir (no separators, no dot-segments).
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
@@ -216,7 +221,21 @@ func (s *Store) Create(yamlBytes []byte) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(path, yamlBytes, 0o644); err != nil {
+	// Create never overwrites: open with O_EXCL so an existing <id>.yaml is a
+	// conflict, never a truncating write (#88). Update is the explicit overwrite
+	// path. O_EXCL makes the existence check + create atomic (no TOCTOU window).
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil, fmt.Errorf("%w: %s", ErrConflict, id)
+		}
+		return nil, err
+	}
+	if _, err := f.Write(yamlBytes); err != nil {
+		f.Close()
+		return nil, err
+	}
+	if err := f.Close(); err != nil {
 		return nil, err
 	}
 	return &Plan{ID: id, Name: meta.Name, Status: meta.Status}, nil
